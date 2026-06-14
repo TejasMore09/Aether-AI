@@ -1,0 +1,20 @@
+
+Adaptive Model Update Summary
+
+Detected Changes:
+The system identified distributional shifts in the following features:
+Years_At_Company, Training_Hours, Work_Hours_Per_Week
+
+Performance Impact:
+Baseline model F1-score: 0.000
+Adapted model F1-score: 0.108
+
+Reasoning:
+These feature shifts indicate changes in employee behavior and organizational patterns.
+As a result, the previous decision boundaries became outdated.
+
+Action Taken:
+The system automatically retrained the predictive model using recent data and class-balanced learning.
+
+Outcome:
+The adapted model demonstrates improved ability to identify resignation risk under new conditions.
