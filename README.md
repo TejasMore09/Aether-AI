@@ -1,5 +1,4 @@
-# Copy and paste this entire block into PowerShell to generate the markdown file directly
-@"
+
 # Æther AI — Autonomous Decision Intelligence & Grounded Telemetry Engine
 
 Æther AI is a self-evolving MLOps decision intelligence platform designed to move machine learning operations from passive threshold alerts to autonomous execution layers. The system evaluates data/concept drift and performance telemetry across 6 live enterprise domains simultaneously, executing cost-aware mitigation strategies and automated, human-in-the-loop retraining workflows grounded in system operational memory.
