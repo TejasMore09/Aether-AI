@@ -9,6 +9,8 @@ import time
 from sklearn.metrics import f1_score, roc_auc_score
 
 from features.build_features import build_features
+from adaptation.adaptation_engine import TARGET, encode
+from adaptation.retrain_engine import retrain_model
 from api.services.drift_service import detect_drift
 from api.services.model_service import compute_metrics
 from api.services.decision_engine import DecisionEngine
@@ -85,9 +87,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------- Load model ----------------
-model = joblib.load("models/baseline_xgb.pkl")
-encoders = joblib.load("models/encoders.pkl")
+model = joblib.load("models/domains/hr_attrition_model.pkl")
+encoders = joblib.load("models/domains/hr_attrition_encoders.pkl")
 
 windows = [
     "data/processed/window1.csv",

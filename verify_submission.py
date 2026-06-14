@@ -222,8 +222,8 @@ def _check_decision_engine_monitor():
     from api.services.decision_engine import DecisionEngine
     result = DecisionEngine.evaluate(
         "crm_churn",
-        {"f1_score": 0.78, "roc_auc": 0.81},
-        {"drift_percentage": 25.0, "drifted_features": ["monthly_charges"]},
+        {"f1_score": 0.75, "roc_auc": 0.81},
+        {"drift_percentage": 28.0, "drifted_features": ["monthly_charges"]},
         drift_threshold=0.15
     )
     assert result["action"] in ("MONITOR", "RETRAIN"), f"Unexpected action: {result['action']}"

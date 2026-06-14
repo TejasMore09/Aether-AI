@@ -52,7 +52,6 @@ def compute_metrics(domain: str = "hr_attrition"):
             return {"error": f"Model for {domain} not found. Run scripts/train_models.py"}
             
         model = joblib.load(model_path)
-        encoders = joblib.load(encoder_path)
         
         if domain == "supply_chain":
             w2_ts = w2.sort_values('timestamp').set_index('timestamp')
@@ -72,6 +71,8 @@ def compute_metrics(domain: str = "hr_attrition"):
                 "drifted_features": [],
                 "drift_percentage": 0.0
             }
+            
+        encoders = joblib.load(encoder_path)
         
         # Apply encoders for classification
         for col, le in encoders.items():

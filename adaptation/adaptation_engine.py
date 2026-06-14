@@ -10,10 +10,10 @@ from features.build_features import build_features
 # Configuration
 # ---------------------------------------------
 TARGET = "Resigned"
-BASELINE_MODEL_PATH = "models/baseline_xgb.pkl"
-ENCODER_PATH = "models/encoders.pkl"
-ADAPTED_MODEL_PATH = "models/adapted_xgb.pkl"
-ADAPTED_ENCODER_PATH = "models/adapted_encoders.pkl"
+BASELINE_MODEL_PATH = "models/domains/hr_attrition_model.pkl"
+ENCODER_PATH = "models/domains/hr_attrition_encoders.pkl"
+ADAPTED_MODEL_PATH = "models/domains/hr_attrition_model.pkl"
+ADAPTED_ENCODER_PATH = "models/domains/hr_attrition_encoders.pkl"
 mlflow.set_experiment("SelfEvolvingAI-Adaptation")
 
 # ---------------------------------------------
