@@ -88,6 +88,70 @@ def _build_semantic_query(domain: str, metrics: dict, drift: dict, decision: dic
     )
 
 
+def _generate_fallback_explanation(domain: str, metrics: dict, drift: dict, decision: dict, role: str, err: str) -> str:
+    action = decision.get("action", "UNKNOWN")
+    risk_level = decision.get("risk_level", "UNKNOWN")
+    loss = decision.get("expected_daily_loss_usd", 0.0)
+    reason = decision.get("reason", "No reason provided.")
+    drift_pct = drift.get("drift_percentage", 0.0)
+    drifted_features = drift.get("drifted_features", [])
+    
+    is_ts = domain == "supply_chain"
+    perf_details = ""
+    if is_ts:
+        mape = metrics.get("mape", 0.0)
+        rmse = metrics.get("rmse", 0.0)
+        perf_details = f"- **MAPE (Error rate):** {mape:.2f}%\n- **RMSE:** {rmse:.2f}"
+    else:
+        f1 = metrics.get("f1_score", 0.0)
+        roc = metrics.get("roc_auc", 0.0)
+        perf_details = f"- **F1 Score:** {f1:.4f}\n- **ROC-AUC:** {roc:.4f}"
+
+    features_str = ", ".join(drifted_features) if drifted_features else "None"
+
+    # Header
+    markdown = f"### ⚠️ Local Operational Fallback Analysis\n*Aether AI Decision Engine generated this report directly from local system telemetry due to an external GenAI gateway exception: {err}.*\n\n"
+    markdown += f"**Domain:** `{domain.upper()}` | **Autonomous Decision:** `{action}` | **Risk Level:** `{risk_level}`\n\n"
+
+    if role == "executive":
+        markdown += f"""#### Executive Summary
+- **Business Status:** The system is operating at **{risk_level}** risk.
+- **Action Recommendation:** The system has recommended a status of **{action}** based on active business logic.
+- **Financial Risk Exposure:** Expected daily loss is estimated at **${loss:,.2f}** if no action is taken.
+- **Strategic Impact:** {reason}
+
+> [!NOTE]
+> This model utilizes cost-aware logic comparing model degradation loss against retraining compute costs (${decision.get('retraining_cost_usd', 50.0):,.2f}).
+"""
+    elif role == "data_scientist":
+        markdown += f"""#### Technical & Statistical Diagnostic
+- **Model Type & Performance Metrics:**
+{perf_details}
+- **Drift Telemetry:**
+  - **Overall Feature Drift:** {drift_pct:.2f}% of monitored features exhibit distribution shifts.
+  - **Drifted Features:** `{features_str}`
+- **System Thresholds:** Evaluated using active decision boundary settings.
+- **Statistical Root Cause:** {reason}
+"""
+    elif role == "product_manager":
+        markdown += f"""#### Product & Operational Impact Report
+- **Service Level Status:** Model state categorized as **{risk_level}** risk.
+- **Product Action Status:** **{action}** has been registered.
+- **Customer Experience Risk:** High drift on `{features_str}` may affect prediction quality.
+- **Decision Rationale:** {reason}
+"""
+    else:  # operations
+        markdown += f"""#### Site Reliability & Operations Log
+- **System Action Triggered:** `{action}`
+- **Operational Status:** Severity level set to **{risk_level}**.
+- **Metrics Evaluated:**
+{perf_details}
+- **Data Pipeline State:** Drift rate at {drift_pct:.2f}% across `{len(drifted_features)}` features.
+- **System Log:** {reason}
+"""
+    return markdown
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def generate_ai_explanation(
@@ -178,7 +242,7 @@ Engine Reasoning:    {decision.get('reason')}
     # ── Step 5: Call GPT-4o ───────────────────────────────────────────────
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gemini-2.5-flash",
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user",   "content": user_message},
@@ -201,11 +265,5 @@ Engine Reasoning:    {decision.get('reason')}
 
     except Exception as exc:
         err = str(exc)
-        if "401" in err:
-            return (
-                "GenAI Error: OpenAI returned a 401 Unauthorized error. "
-                "The API key is incorrect, expired, or was revoked. "
-                "Please check your `.env` file."
-            )
-        logger.error("GPT-4o explain call failed: %s", err)
-        return f"GenAI Explanation Error: {err}"
+        logger.error("LLM explanation call failed: %s. Engaging fallback generator.", err)
+        return _generate_fallback_explanation(domain, metrics, drift, decision, role, err)

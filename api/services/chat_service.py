@@ -32,7 +32,7 @@ If the question is unrelated to ML or the system, politely redirect."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gemini-2.5-flash",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": question}
@@ -77,7 +77,7 @@ Format your response as:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gemini-2.5-flash",
             messages=[
                 {"role": "system", "content": "You are Aether AI, an elite enterprise MLOps reporting system."},
                 {"role": "user", "content": prompt}
