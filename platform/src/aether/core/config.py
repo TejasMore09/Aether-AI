@@ -21,6 +21,11 @@ class Settings(BaseSettings):
 
     env: str = "dev"
 
+    # Temporal (durable workflow engine) — the autonomous monitor loop.
+    temporal_address: str = "localhost:7233"
+    temporal_namespace: str = "default"
+    temporal_task_queue: str = "aether-nano"
+
 
 @lru_cache
 def get_settings() -> Settings:

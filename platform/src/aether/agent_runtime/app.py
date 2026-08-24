@@ -10,8 +10,9 @@ Run: uvicorn aether.agent_runtime.app:app --port 8200
 
 import datetime
 import uuid
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -20,15 +21,20 @@ from aether.core.db import tenant_session
 from aether.core.models import (
     ApprovalStatus,
     AuditLog,
+    Observation,
     PendingApproval,
     PolicyConfig,
     Role,
 )
 from aether.core.security import Principal
 from aether.core.tenancy import authenticated, require_role
-from aether.policy.decision_engine import PolicyParams, evaluate
+from aether.policy.decision_engine import PolicyParams
+from aether.services.evaluation import evaluate_domain, record_observation
 
 app = FastAPI(title="Aether Agent Runtime", version=__version__)
+
+# Domain keys are identifiers, not free text — reject anything else at the edge.
+DomainName = Annotated[str, Path(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9_-]*$")]
 
 
 @app.get("/")
@@ -50,7 +56,7 @@ class PolicyBody(BaseModel):
 
 @app.put("/v1/domains/{domain}/policy")
 def upsert_policy(
-    domain: str,
+    domain: DomainName,
     body: PolicyBody,
     principal: Principal = Depends(require_role(Role.operator)),
 ) -> dict:
@@ -67,63 +73,146 @@ def upsert_policy(
 
 
 @app.get("/v1/domains/{domain}/policy")
-def get_policy(domain: str, principal: Principal = Depends(authenticated)) -> dict:
+def get_policy(domain: DomainName, principal: Principal = Depends(authenticated)) -> dict:
     with tenant_session(principal.tenant_id) as db:
         cfg = db.scalar(select(PolicyConfig).where(PolicyConfig.domain == domain))
         params = cfg.params if cfg else {}
     return {"domain": domain, "params": params, "effective": vars(PolicyParams.from_dict(params))}
 
 
+# ── Telemetry inlet ───────────────────────────────────────────────────────────
+
+
+class ObservationIn(BaseModel):
+    drift_fraction: float = Field(ge=0.0, le=1.0)
+    performance: float = Field(ge=0.0, le=1.0)
+    source: str = Field(default="api", max_length=120)
+    details: dict = Field(default_factory=dict)
+    observed_at: datetime.datetime | None = None
+
+
+@app.post("/v1/domains/{domain}/observations", status_code=201)
+def push_observation(
+    domain: DomainName,
+    body: ObservationIn,
+    principal: Principal = Depends(require_role(Role.operator)),
+) -> dict:
+    obs_id = record_observation(
+        tenant_id=principal.tenant_id,
+        domain=domain,
+        drift_fraction=body.drift_fraction,
+        performance=body.performance,
+        source=body.source,
+        details=body.details,
+        observed_at=body.observed_at,
+    )
+    return {"id": str(obs_id), "domain": domain}
+
+
+@app.get("/v1/domains/{domain}/observations")
+def list_observations(
+    domain: DomainName,
+    limit: int = 20,
+    principal: Principal = Depends(authenticated),
+) -> list[dict]:
+    limit = max(1, min(limit, 200))
+    with tenant_session(principal.tenant_id) as db:
+        rows = db.scalars(
+            select(Observation)
+            .where(Observation.domain == domain)
+            .order_by(Observation.observed_at.desc())
+            .limit(limit)
+        ).all()
+        return [
+            {
+                "id": str(o.id),
+                "observed_at": o.observed_at.isoformat(),
+                "drift_fraction": o.drift_fraction,
+                "performance": o.performance,
+                "source": o.source,
+            }
+            for o in rows
+        ]
+
+
 # ── Decision loop ─────────────────────────────────────────────────────────────
 
 
-class ObservationBody(BaseModel):
-    drift_fraction: float = Field(ge=0.0, le=1.0)
-    performance: float = Field(ge=0.0, le=1.0)
+class EvaluateBody(BaseModel):
+    """Explicit values evaluate ad-hoc/what-if state. Empty body evaluates
+    the latest stored observation — the same path the autonomous loop uses."""
+
+    drift_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
+    performance: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 @app.post("/v1/domains/{domain}/evaluate")
-def evaluate_domain(
-    domain: str,
-    body: ObservationBody,
+def evaluate_domain_route(
+    domain: DomainName,
+    body: EvaluateBody | None = None,
     principal: Principal = Depends(require_role(Role.operator)),
 ) -> dict:
-    with tenant_session(principal.tenant_id) as db:
-        cfg = db.scalar(select(PolicyConfig).where(PolicyConfig.domain == domain))
-        params = PolicyParams.from_dict(cfg.params if cfg else None)
-
-        decision = evaluate(body.drift_fraction, body.performance, params)
-        result = decision.as_dict()
-
-        approval_id: uuid.UUID | None = None
-        if decision.requires_approval:
-            approval = PendingApproval(
-                tenant_id=principal.tenant_id,
-                domain=domain,
-                action=decision.action.value,
-                reason=decision.reason,
-                risk_level=decision.risk_level.value,
-                expected_loss_usd=decision.expected_daily_loss_usd,
-            )
-            db.add(approval)
-            db.flush()
-            approval_id = approval.id
-
-        db.add(
-            AuditLog(
-                tenant_id=principal.tenant_id,
-                domain=domain,
-                action=decision.action.value,
-                triggered_by=principal.email,
-                risk_level=decision.risk_level.value,
-                details=result,
-                status="pending" if decision.requires_approval else "completed",
-            )
+    body = body or EvaluateBody()
+    if (body.drift_fraction is None) != (body.performance is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide both drift_fraction and performance, or neither.",
         )
+    outcome = evaluate_domain(
+        tenant_id=principal.tenant_id,
+        domain=domain,
+        triggered_by=principal.email,
+        drift_fraction=body.drift_fraction,
+        performance=body.performance,
+    )
+    return outcome.as_dict()
 
-    if approval_id:
-        result["approval_id"] = str(approval_id)
-    return result
+
+# ── Autonomous monitoring control ─────────────────────────────────────────────
+
+
+class MonitoringBody(BaseModel):
+    interval_minutes: int = Field(ge=5, le=24 * 60)
+
+
+@app.put("/v1/domains/{domain}/monitoring")
+async def enable_monitoring(
+    domain: DomainName,
+    body: MonitoringBody,
+    principal: Principal = Depends(require_role(Role.operator)),
+) -> dict:
+    from aether.worker.schedules import ensure_monitor_schedule
+
+    try:
+        sid = await ensure_monitor_schedule(
+            principal.tenant_id, domain, body.interval_minutes
+        )
+    except Exception as exc:  # Temporal unreachable → honest 503, not a hang
+        raise HTTPException(
+            status_code=503, detail=f"Monitoring scheduler unavailable: {exc}"
+        ) from exc
+    return {
+        "domain": domain,
+        "schedule_id": sid,
+        "interval_minutes": body.interval_minutes,
+        "enabled": True,
+    }
+
+
+@app.delete("/v1/domains/{domain}/monitoring")
+async def disable_monitoring(
+    domain: DomainName,
+    principal: Principal = Depends(require_role(Role.operator)),
+) -> dict:
+    from aether.worker.schedules import delete_monitor_schedule
+
+    try:
+        existed = await delete_monitor_schedule(principal.tenant_id, domain)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail=f"Monitoring scheduler unavailable: {exc}"
+        ) from exc
+    return {"domain": domain, "enabled": False, "existed": existed}
 
 
 # ── Governance ────────────────────────────────────────────────────────────────

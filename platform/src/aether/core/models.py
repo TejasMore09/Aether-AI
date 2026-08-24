@@ -159,6 +159,24 @@ class PendingApproval(Base, TenantScoped):
     )
 
 
+class Observation(Base, TenantScoped):
+    """A point-in-time reading of one domain's health, pushed by a connector,
+    a metrics job, or the customer's own systems. The autonomous monitor loop
+    evaluates the latest observation against the tenant's policy."""
+
+    __tablename__ = "observations"
+    __table_args__ = (Index("ix_obs_tenant_domain_ts", "tenant_id", "domain", "observed_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    observed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    domain: Mapped[str] = mapped_column(String(100), index=True)
+    drift_fraction: Mapped[float] = mapped_column(Float)
+    performance: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(120), default="api")
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
 class AlertRule(Base, TenantScoped):
     __tablename__ = "alert_rules"
 
@@ -172,11 +190,12 @@ class AlertRule(Base, TenantScoped):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-# Tables that get an RLS policy in the initial migration:
+# Tables protected by an RLS policy (see migrations):
 RLS_TABLES = [
     "agent_instances",
     "policy_configs",
     "audit_logs",
     "pending_approvals",
     "alert_rules",
+    "observations",
 ]

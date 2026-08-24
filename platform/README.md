@@ -54,7 +54,26 @@ $env:AETHER_MIGRATION_DATABASE_URL="postgresql+psycopg://aether:aether_dev_only@
 ```powershell
 .venv\Scripts\uvicorn aether.control_plane.app:app --port 8100 --reload
 .venv\Scripts\uvicorn aether.agent_runtime.app:app --port 8200 --reload
+.venv\Scripts\python -m aether.worker   # Nano monitor worker (needs Temporal from compose)
 ```
+
+Temporal UI (inspect schedules/workflow runs): http://localhost:8233
+
+## The autonomous Nano loop
+
+Telemetry flows in, decisions flow out on a schedule — no request required:
+
+1. `POST /v1/domains/{domain}/observations` — connectors or the customer's
+   systems push drift/performance readings.
+2. `PUT /v1/domains/{domain}/monitoring {"interval_minutes": 60}` — creates a
+   Temporal Schedule for (tenant, domain). Overlap policy SKIP; deleting via
+   `DELETE .../monitoring`.
+3. Every interval, Temporal starts `NanoMonitorWorkflow` → the worker runs the
+   shared evaluation service: latest observation × tenant policy → decision →
+   immutable audit entry; HIGH-risk actions wait in `/v1/approvals` for a human.
+4. Stale telemetry (>24h) is refused, not acted on; missing telemetry reports
+   `no_data`. Activity retries with backoff; a crashed worker resumes where
+   Temporal left off.
 
 Try the loop end to end (control plane issues the token, agent runtime
 enforces it):
@@ -87,9 +106,9 @@ curl -s "localhost:8200/v1/approvals" -H "Authorization: Bearer <TOKEN>"
   execute directly; they create a `PendingApproval` an owner must resolve.
   Later, Mega agents get executor nodes behind these same gates.
 
-## Not in Phase 1 (by design)
+## Not built yet (by design)
 
-Temporal workflows, LangGraph agents, the LiteLLM gateway, connectors
-(Nango/Airbyte), pgvector knowledge base, frontend wiring, billing. Each
-plugs into a seam that already exists here (policies, approvals, audit,
-tenancy) — see the Aether Platform Blueprint artifact for the sequence.
+LangGraph diagnosis agents, the LiteLLM gateway, connectors (Nango/Airbyte),
+pgvector knowledge base, frontend wiring, billing. Each plugs into a seam that
+already exists here (observations, policies, approvals, audit, tenancy) — see
+the Aether Platform Blueprint artifact for the sequence.
