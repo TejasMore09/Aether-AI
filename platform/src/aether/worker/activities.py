@@ -42,6 +42,23 @@ def diagnose_approval(payload: DiagnoseInput) -> str:
     return source
 
 
+@activity.defn(name="notify_approval")
+def notify_approval(payload: DiagnoseInput) -> dict:
+    from aether.services.notifications import notify_approval_created
+
+    result = notify_approval_created(
+        tenant_id=uuid.UUID(payload.tenant_id),
+        approval_id=uuid.UUID(payload.approval_id),
+    )
+    activity.logger.info(
+        "approval notification tenant=%s approval=%s result=%s",
+        payload.tenant_id,
+        payload.approval_id,
+        result,
+    )
+    return result
+
+
 @activity.defn(name="run_evaluation")
 def run_evaluation(payload: EvalInput) -> dict:
     outcome = evaluate_domain(

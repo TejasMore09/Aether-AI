@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     # the deterministic generator instead of silently overspending.
     llm_monthly_budget_usd_per_tenant: float = 5.0
 
+    # Outbound email (notification service). Unconfigured (empty host) means
+    # notifications are recorded with status=skipped_unconfigured, never lost
+    # silently. Any SMTP provider works: SES, Resend, Mailgun, or dev Mailpit.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "alerts@aether.local"
+    smtp_starttls: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

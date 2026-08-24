@@ -215,6 +215,66 @@ async def disable_monitoring(
     return {"domain": domain, "enabled": False, "existed": existed}
 
 
+# ── Usage & spend visibility ──────────────────────────────────────────────────
+
+
+@app.get("/v1/usage/llm")
+def llm_usage(principal: Principal = Depends(authenticated)) -> dict:
+    """This tenant's AI spend for the current calendar month, against budget."""
+    from aether.core.config import get_settings
+    from aether.core.models import LLMUsage
+    from aether.llm.gateway import _month_start
+
+    budget = get_settings().llm_monthly_budget_usd_per_tenant
+    with tenant_session(principal.tenant_id) as db:
+        rows = db.scalars(
+            select(LLMUsage).where(LLMUsage.created_at >= _month_start())
+        ).all()
+        by_purpose: dict[str, dict] = {}
+        for r in rows:
+            agg = by_purpose.setdefault(
+                r.purpose, {"calls": 0, "cost_usd": 0.0, "tokens": 0}
+            )
+            agg["calls"] += 1
+            agg["cost_usd"] += r.cost_usd
+            agg["tokens"] += r.prompt_tokens + r.completion_tokens
+        spent = sum(v["cost_usd"] for v in by_purpose.values())
+    return {
+        "month_spend_usd": round(spent, 6),
+        "monthly_budget_usd": budget,
+        "budget_remaining_usd": round(max(0.0, budget - spent), 6),
+        "by_purpose": {
+            k: {**v, "cost_usd": round(v["cost_usd"], 6)} for k, v in by_purpose.items()
+        },
+    }
+
+
+@app.get("/v1/notifications")
+def list_notifications(
+    limit: int = 50, principal: Principal = Depends(authenticated)
+) -> list[dict]:
+    from aether.core.models import Notification
+
+    limit = max(1, min(limit, 200))
+    with tenant_session(principal.tenant_id) as db:
+        rows = db.scalars(
+            select(Notification).order_by(Notification.created_at.desc()).limit(limit)
+        ).all()
+        return [
+            {
+                "id": str(n.id),
+                "created_at": n.created_at.isoformat(),
+                "kind": n.kind,
+                "channel": n.channel,
+                "recipient": n.recipient,
+                "subject": n.subject,
+                "status": n.status,
+                "ref_id": str(n.ref_id) if n.ref_id else None,
+            }
+            for n in rows
+        ]
+
+
 # ── Governance ────────────────────────────────────────────────────────────────
 
 

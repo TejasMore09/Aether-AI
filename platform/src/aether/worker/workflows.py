@@ -15,6 +15,7 @@ with workflow.unsafe.imports_passed_through():
         DiagnoseInput,
         EvalInput,
         diagnose_approval,
+        notify_approval,
         run_evaluation,
     )
 
@@ -41,14 +42,29 @@ class NanoMonitorWorkflow:
         # failure here rare anyway).
         approval_id = result.get("approval_id")
         if approval_id:
+            gated = DiagnoseInput(tenant_id=payload.tenant_id, approval_id=approval_id)
             try:
                 result["diagnosis_source"] = await workflow.execute_activity(
                     diagnose_approval,
-                    DiagnoseInput(tenant_id=payload.tenant_id, approval_id=approval_id),
+                    gated,
                     start_to_close_timeout=timedelta(seconds=90),
                     retry_policy=RetryPolicy(maximum_attempts=2),
                 )
             except Exception:
                 result["diagnosis_source"] = "failed"
+
+            # Tell the tenant's owners a decision awaits them. Runs after
+            # diagnosis so the email carries the explanation; idempotent per
+            # recipient, and its failure never fails the monitor run.
+            try:
+                notified = await workflow.execute_activity(
+                    notify_approval,
+                    gated,
+                    start_to_close_timeout=timedelta(seconds=60),
+                    retry_policy=RetryPolicy(maximum_attempts=3),
+                )
+                result["notified"] = notified.get("notified", 0)
+            except Exception:
+                result["notified"] = 0
 
         return result

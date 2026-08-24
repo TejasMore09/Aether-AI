@@ -13,7 +13,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from aether.core.config import get_settings
-from aether.worker.activities import diagnose_approval, run_evaluation
+from aether.worker.activities import diagnose_approval, notify_approval, run_evaluation
 from aether.worker.workflows import NanoMonitorWorkflow
 
 logging.basicConfig(
@@ -37,7 +37,7 @@ async def main() -> None:
             client,
             task_queue=settings.temporal_task_queue,
             workflows=[NanoMonitorWorkflow],
-            activities=[run_evaluation, diagnose_approval],
+            activities=[run_evaluation, diagnose_approval, notify_approval],
             activity_executor=executor,
         )
         await worker.run()

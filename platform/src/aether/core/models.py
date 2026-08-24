@@ -211,6 +211,24 @@ class LLMUsage(Base, TenantScoped):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class Notification(Base, TenantScoped):
+    """Every outbound notification, recorded whether or not delivery worked —
+    the audit trail for 'was the human told?'"""
+
+    __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notif_tenant_ts", "tenant_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(60))  # e.g. "approval_created"
+    channel: Mapped[str] = mapped_column(String(30), default="email")
+    recipient: Mapped[str] = mapped_column(String(320))
+    subject: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(30))  # sent | failed | skipped_unconfigured
+    detail: Mapped[str] = mapped_column(Text, default="")
+    ref_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
 # Tables protected by an RLS policy (see migrations):
 RLS_TABLES = [
     "agent_instances",
@@ -220,4 +238,5 @@ RLS_TABLES = [
     "alert_rules",
     "observations",
     "llm_usage",
+    "notifications",
 ]
