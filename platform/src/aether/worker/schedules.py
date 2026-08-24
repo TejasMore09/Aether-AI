@@ -74,6 +74,31 @@ async def ensure_monitor_schedule(
     return sid
 
 
+async def run_monitor_now(
+    tenant_id: uuid.UUID, domain: str, wait_seconds: float = 25.0
+) -> dict:
+    """Run one full monitor cycle immediately, through the same workflow the
+    schedule uses — so an on-demand run diagnoses and notifies exactly like an
+    autonomous one. Waits briefly for the result; if the run outlives the wait
+    it keeps going durably and we report it as still running.
+    """
+    import asyncio
+
+    client = await get_client()
+    settings = get_settings()
+    handle = await client.start_workflow(
+        "NanoMonitorWorkflow",
+        EvalInput(tenant_id=str(tenant_id), domain=domain),
+        id=f"nano-manual-{tenant_id}-{domain}-{uuid.uuid4().hex[:8]}",
+        task_queue=settings.temporal_task_queue,
+    )
+    try:
+        result = await asyncio.wait_for(handle.result(), timeout=wait_seconds)
+    except TimeoutError:  # asyncio.TimeoutError is an alias since 3.11
+        return {"status": "running", "workflow_id": handle.id}
+    return {"status": "completed", "workflow_id": handle.id, "result": result}
+
+
 async def delete_monitor_schedule(tenant_id: uuid.UUID, domain: str) -> bool:
     client = await get_client()
     try:

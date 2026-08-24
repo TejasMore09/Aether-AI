@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from aether import __version__
 from aether.core.db import tenant_session
@@ -78,6 +78,62 @@ def get_policy(domain: DomainName, principal: Principal = Depends(authenticated)
         cfg = db.scalar(select(PolicyConfig).where(PolicyConfig.domain == domain))
         params = cfg.params if cfg else {}
     return {"domain": domain, "params": params, "effective": vars(PolicyParams.from_dict(params))}
+
+
+# ── Domain inventory ──────────────────────────────────────────────────────────
+
+
+@app.get("/v1/domains")
+def list_domains(principal: Principal = Depends(authenticated)) -> list[dict]:
+    """Every domain this tenant has data for, with its latest reading.
+
+    A domain exists once it has telemetry or a policy — there is no separate
+    registration step, so the inventory is derived rather than stored.
+    """
+    with tenant_session(principal.tenant_id) as db:
+        latest = (
+            select(
+                Observation.domain.label("domain"),
+                func.max(Observation.observed_at).label("last_seen"),
+                func.count(Observation.id).label("observation_count"),
+            )
+            .group_by(Observation.domain)
+            .subquery()
+        )
+        rows = {
+            r.domain: {
+                "domain": r.domain,
+                "last_seen": r.last_seen.isoformat() if r.last_seen else None,
+                "observation_count": int(r.observation_count),
+                "has_policy": False,
+            }
+            for r in db.execute(select(latest)).all()
+        }
+
+        for cfg in db.scalars(select(PolicyConfig)):
+            entry = rows.setdefault(
+                cfg.domain,
+                {
+                    "domain": cfg.domain,
+                    "last_seen": None,
+                    "observation_count": 0,
+                    "has_policy": True,
+                },
+            )
+            entry["has_policy"] = True
+
+        # Attach the most recent reading per domain.
+        for domain, entry in rows.items():
+            obs = db.scalars(
+                select(Observation)
+                .where(Observation.domain == domain)
+                .order_by(Observation.observed_at.desc())
+                .limit(1)
+            ).first()
+            entry["latest_drift_fraction"] = obs.drift_fraction if obs else None
+            entry["latest_performance"] = obs.performance if obs else None
+
+        return sorted(rows.values(), key=lambda e: e["domain"])
 
 
 # ── Telemetry inlet ───────────────────────────────────────────────────────────
@@ -144,6 +200,26 @@ class EvaluateBody(BaseModel):
 
     drift_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
     performance: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+@app.post("/v1/domains/{domain}/monitor-run")
+async def monitor_run(
+    domain: DomainName,
+    principal: Principal = Depends(require_role(Role.operator)),
+) -> dict:
+    """Run one full monitor cycle on demand — evaluate, diagnose, notify.
+
+    Goes through the same durable workflow as the schedule, so an on-demand
+    run is never a lesser version of an autonomous one.
+    """
+    from aether.worker.schedules import run_monitor_now
+
+    try:
+        return await run_monitor_now(principal.tenant_id, domain)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail=f"Monitor scheduler unavailable: {exc}"
+        ) from exc
 
 
 @app.post("/v1/domains/{domain}/evaluate")

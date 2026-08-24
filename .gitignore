@@ -10,3 +10,10 @@ platform/.env
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Web app
+platform/web/node_modules/
+platform/web/.next/
+platform/web/.env.local
+platform/web/next-env.d.ts
+platform/web/tsconfig.tsbuildinfo

@@ -57,6 +57,15 @@ $env:AETHER_MIGRATION_DATABASE_URL="postgresql+psycopg://aether:aether_dev_only@
 .venv\Scripts\python -m aether.worker   # Nano monitor worker (needs Temporal from compose)
 ```
 
+Then the dashboard:
+
+```powershell
+cd web
+npm install
+copy .env.example .env.local
+npm run dev                             # http://localhost:3000
+```
+
 Temporal UI (inspect schedules/workflow runs): http://localhost:8233
 
 ## The autonomous Nano loop
@@ -88,6 +97,27 @@ curl -s -X POST "localhost:8200/v1/domains/churn/evaluate" -H "Authorization: Be
 
 curl -s "localhost:8200/v1/approvals" -H "Authorization: Bearer <TOKEN>"
 ```
+
+## The dashboard (`web/`)
+
+Next.js 16 App Router, built on the **BFF pattern**: the browser never holds a
+token and never talks to the platform APIs. Sign-in is a Server Action that
+stores the JWT in an httpOnly cookie; every read happens in a Server Component
+and every mutation in a Server Action, with the token attached server-side.
+Consequences worth knowing:
+
+- No token in JavaScript (XSS cannot steal a session) and no CORS surface —
+  the APIs stay reachable only from the server.
+- `proxy.ts` (Next 16 renamed Middleware → Proxy) is an *optimistic* redirect
+  for cookieless requests only; real authorization is the API's JWT check plus
+  Postgres RLS on every query.
+- Pages: Overview, Approvals (diagnosis + approve/reject), Domains and domain
+  detail (telemetry, monitoring schedule, on-demand run), Activity (audit trail
+  + notification log), AI Usage (spend vs budget).
+
+"Evaluate now" calls `POST /v1/domains/{domain}/monitor-run`, which starts the
+*same* Temporal workflow the schedule uses — so an on-demand run diagnoses and
+notifies exactly like an autonomous one, rather than being a lesser path.
 
 ## Design notes
 
