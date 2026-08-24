@@ -27,7 +27,13 @@ _SessionLocal = None
 def get_engine():
     global _engine, _SessionLocal
     if _engine is None:
-        _engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+        # connect_timeout: an unreachable database must fail fast (seconds),
+        # never hang a request or a test run waiting on TCP.
+        _engine = create_engine(
+            get_settings().database_url,
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 5},
+        )
         _SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
     return _engine
 

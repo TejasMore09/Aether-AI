@@ -151,6 +151,14 @@ def create_agent(
     body: AgentCreate,
     principal: Principal = Depends(require_role(Role.operator)),
 ) -> AgentInfo:
+    # Product scope: only Aether Nano (monitor/diagnose/report) is offered
+    # today. The mega tier stays in the schema as the upgrade seam, but the
+    # API refuses to provision capability that doesn't exist yet.
+    if body.kind is not AgentKind.nano:
+        raise HTTPException(
+            status_code=422,
+            detail="Only 'nano' agents can be provisioned; 'mega' is not yet available.",
+        )
     with tenant_session(principal.tenant_id) as db:
         agent = AgentInstance(tenant_id=principal.tenant_id, name=body.name, kind=body.kind)
         db.add(agent)
