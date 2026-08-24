@@ -11,14 +11,19 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
-    from aether.worker.activities import EvalInput, run_evaluation
+    from aether.worker.activities import (
+        DiagnoseInput,
+        EvalInput,
+        diagnose_approval,
+        run_evaluation,
+    )
 
 
 @workflow.defn(name="NanoMonitorWorkflow")
 class NanoMonitorWorkflow:
     @workflow.run
     async def run(self, payload: EvalInput) -> dict:
-        return await workflow.execute_activity(
+        result = await workflow.execute_activity(
             run_evaluation,
             payload,
             start_to_close_timeout=timedelta(seconds=60),
@@ -29,3 +34,21 @@ class NanoMonitorWorkflow:
                 maximum_attempts=5,
             ),
         )
+
+        # A gated decision gets a diagnosis attached. Best-effort: the
+        # decision + approval already stand; a diagnosis failure must never
+        # fail the monitor run (the service's fallback text makes genuine
+        # failure here rare anyway).
+        approval_id = result.get("approval_id")
+        if approval_id:
+            try:
+                result["diagnosis_source"] = await workflow.execute_activity(
+                    diagnose_approval,
+                    DiagnoseInput(tenant_id=payload.tenant_id, approval_id=approval_id),
+                    start_to_close_timeout=timedelta(seconds=90),
+                    retry_policy=RetryPolicy(maximum_attempts=2),
+                )
+            except Exception:
+                result["diagnosis_source"] = "failed"
+
+        return result

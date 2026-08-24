@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     temporal_namespace: str = "default"
     temporal_task_queue: str = "aether-nano"
 
+    # LLM gateway (diagnosis layer). Model in LiteLLM notation; the matching
+    # provider key comes from the provider's own env var (e.g. GEMINI_API_KEY).
+    llm_model: str = "gemini/gemini-3.6-flash"  # pinned; override via AETHER_LLM_MODEL
+    llm_timeout_seconds: float = 30.0
+    llm_max_output_tokens: int = 700
+    # Hard monthly ceiling per tenant. When reached, diagnosis falls back to
+    # the deterministic generator instead of silently overspending.
+    llm_monthly_budget_usd_per_tenant: float = 5.0
+
 
 @lru_cache
 def get_settings() -> Settings:

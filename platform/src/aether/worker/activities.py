@@ -19,6 +19,29 @@ class EvalInput:
     domain: str
 
 
+@dataclass
+class DiagnoseInput:
+    tenant_id: str
+    approval_id: str
+
+
+@activity.defn(name="diagnose_approval")
+def diagnose_approval(payload: DiagnoseInput) -> str:
+    from aether.services.diagnosis import diagnose_approval as diagnose
+
+    source = diagnose(
+        tenant_id=uuid.UUID(payload.tenant_id),
+        approval_id=uuid.UUID(payload.approval_id),
+    )
+    activity.logger.info(
+        "diagnosis attached tenant=%s approval=%s source=%s",
+        payload.tenant_id,
+        payload.approval_id,
+        source,
+    )
+    return source
+
+
 @activity.defn(name="run_evaluation")
 def run_evaluation(payload: EvalInput) -> dict:
     outcome = evaluate_domain(

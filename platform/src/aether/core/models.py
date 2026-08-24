@@ -23,6 +23,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -157,6 +158,10 @@ class PendingApproval(Base, TenantScoped):
     resolved_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Grounded explanation attached by the diagnosis layer so the human
+    # deciding sees *why*, not just numbers. diagnosis_source: llm | fallback.
+    diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnosis_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class Observation(Base, TenantScoped):
@@ -190,6 +195,22 @@ class AlertRule(Base, TenantScoped):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class LLMUsage(Base, TenantScoped):
+    """Every LLM call, metered per tenant: the basis for budget enforcement
+    now and usage-based pricing later."""
+
+    __tablename__ = "llm_usage"
+    __table_args__ = (Index("ix_llm_usage_tenant_ts", "tenant_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    purpose: Mapped[str] = mapped_column(String(60))  # e.g. "diagnosis"
+    model: Mapped[str] = mapped_column(String(120))
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 # Tables protected by an RLS policy (see migrations):
 RLS_TABLES = [
     "agent_instances",
@@ -198,4 +219,5 @@ RLS_TABLES = [
     "pending_approvals",
     "alert_rules",
     "observations",
+    "llm_usage",
 ]

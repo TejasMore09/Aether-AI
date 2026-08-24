@@ -235,6 +235,8 @@ def list_approvals(principal: Principal = Depends(authenticated)) -> list[dict]:
                 "reason": i.reason,
                 "risk_level": i.risk_level,
                 "expected_loss_usd": i.expected_loss_usd,
+                "diagnosis": i.diagnosis,
+                "diagnosis_source": i.diagnosis_source,
             }
             for i in items
         ]
