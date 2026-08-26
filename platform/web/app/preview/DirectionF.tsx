@@ -1,4 +1,7 @@
+'use client'
+
 import { business, decision, health, history, metrics, quarantined } from './data'
+import { CountUp, Rise, Stagger } from './motion'
 import styles from './f.module.css'
 
 /**
@@ -9,6 +12,10 @@ import styles from './f.module.css'
  * type scale and the alignment either work or the page looks broken, which is
  * exactly why it suits a product whose content is a handful of decisive numbers.
  * The only colour in the interface is the one that means money is at risk.
+ *
+ * Motion is deliberately quieter here than in the product surface: sections
+ * arrive in sequence and the exposure figure counts up, and nothing else moves.
+ * On a page this restrained, one moving element is an emphasis; three is noise.
  */
 export function DirectionF() {
   return (
@@ -24,12 +31,13 @@ export function DirectionF() {
       </header>
 
       <main className={styles.main}>
-        <section className={styles.lede}>
+        <Stagger>
+        <Rise className={styles.lede}>
           <p className={styles.eyebrow}>{business.domainLabel} · {business.reportedAt}</p>
           <h1 className={styles.h1}>Escalate collections</h1>
           <p className={styles.exposureLine}>
             <span className={styles.exposure}>
-              ${decision.exposurePerDay.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              <CountUp to={decision.exposurePerDay} prefix="$" />
             </span>
             <span className={styles.exposureUnit}>at risk each day</span>
           </p>
@@ -39,17 +47,17 @@ export function DirectionF() {
             <button className={styles.reject} type="button">Reject</button>
             <span className={styles.source}>{decision.diagnosisSource}</span>
           </div>
-        </section>
+        </Rise>
 
-        <section className={styles.block}>
+        <Rise className={styles.block}>
           <h2 className={styles.blockTitle}>Finding</h2>
           <div className={styles.prose}>
             <p>{decision.diagnosis.split('\n\n')[0]}</p>
             <p>{decision.diagnosis.split('\n\n')[1]}</p>
           </div>
-        </section>
+        </Rise>
 
-        <section className={styles.block}>
+        <Rise className={styles.block}>
           <h2 className={styles.blockTitle}>This week</h2>
           <dl className={styles.metrics}>
             {metrics.map((m) => (
@@ -67,9 +75,9 @@ export function DirectionF() {
               <dd className={styles.metricHealthy}>88% four weeks ago</dd>
             </div>
           </dl>
-        </section>
+        </Rise>
 
-        <section className={styles.block}>
+        <Rise className={styles.block}>
           <h2 className={styles.blockTitle}>Trend</h2>
           <dl className={styles.metrics}>
             {history.map((h) => (
@@ -82,9 +90,9 @@ export function DirectionF() {
               </div>
             ))}
           </dl>
-        </section>
+        </Rise>
 
-        <section className={styles.block}>
+        <Rise className={styles.block}>
           <h2 className={styles.blockTitle}>Rejected reading</h2>
           <div className={styles.prose}>
             <p>
@@ -95,7 +103,8 @@ export function DirectionF() {
               {quarantined.message} Held back from this report entirely.
             </p>
           </div>
-        </section>
+        </Rise>
+        </Stagger>
       </main>
     </div>
   )

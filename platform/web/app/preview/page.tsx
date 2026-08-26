@@ -8,6 +8,7 @@ import { DirectionC } from './DirectionC'
 import { DirectionD } from './DirectionD'
 import { DirectionE } from './DirectionE'
 import { DirectionF } from './DirectionF'
+import { DirectionG } from './DirectionG'
 import styles from './switcher.module.css'
 
 /**
@@ -50,6 +51,12 @@ const DIRECTIONS = [
     typeface: 'Sora',
   },
   {
+    key: 'g',
+    name: 'Forge ★',
+    blurb: 'Neumorphic form · Console charcoal + copper · animated',
+    typeface: 'Manrope + JetBrains Mono',
+  },
+  {
     key: 'f',
     name: 'Minimal',
     blurb: 'No cards, no shadows · hairlines and whitespace · colour means risk',
@@ -58,7 +65,7 @@ const DIRECTIONS = [
 ] as const
 
 export default function PreviewPage() {
-  const [active, setActive] = useState<'a' | 'b' | 'c' | 'd' | 'e' | 'f'>('d')
+  const [active, setActive] = useState<'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g'>('g')
   const current = DIRECTIONS.find((d) => d.key === active)!
 
   return (
@@ -91,6 +98,7 @@ export default function PreviewPage() {
         {active === 'd' ? <DirectionD /> : null}
         {active === 'e' ? <DirectionE /> : null}
         {active === 'f' ? <DirectionF /> : null}
+        {active === 'g' ? <DirectionG /> : null}
       </div>
     </>
   )

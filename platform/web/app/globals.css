@@ -128,3 +128,12 @@ body {
     animation: none !important;
   }
 }
+
+/* Shared with the motion primitives: a bar scales in from its left edge.
+   The element keeps its true width at all times — this only animates a
+   transform — so a paused or throttled tab shows a correct full bar rather
+   than an empty one. */
+@keyframes aether-fill-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
