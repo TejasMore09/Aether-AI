@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
-import { api } from './api'
+import { api, type QualityIssue } from './api'
 import { createSession, destroySession, readSession, type Session } from './session'
 
 /**
@@ -171,6 +171,64 @@ export async function pushObservation(
 
   revalidatePath(`/domains/${domain}`)
   return null
+}
+
+export type ReadingState =
+  | { ok: true; accepted: boolean; performance?: number; issues: QualityIssue[] }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Submit a reading in the domain's own metrics. The quality gate's verdict is
+ * returned rather than swallowed: a rejected reading is a fact the person
+ * entering it needs to see immediately, along with why.
+ */
+export async function submitReading(
+  _prev: ReadingState,
+  form: FormData,
+): Promise<ReadingState> {
+  const domain = str(form, 'domain')
+  if (!/^[a-z0-9][a-z0-9_-]*$/.test(domain)) {
+    return { ok: false, error: 'Invalid domain key.' }
+  }
+
+  // Metric fields are named metric:<key> so the form can be generated from
+  // the pack without the action knowing any domain's field names.
+  const metrics: Record<string, number> = {}
+  for (const [field, raw] of form.entries()) {
+    if (!field.startsWith('metric:') || typeof raw !== 'string') continue
+    const key = field.slice('metric:'.length)
+    const trimmed = raw.trim()
+    if (trimmed === '') continue // blank means "not reported", not zero
+    const value = Number(trimmed)
+    if (!Number.isFinite(value)) {
+      return { ok: false, error: `${key} must be a number.` }
+    }
+    metrics[key] = value
+  }
+
+  if (Object.keys(metrics).length === 0) {
+    return { ok: false, error: 'Enter at least one metric.' }
+  }
+
+  const result = await api.runtime<{
+    accepted: boolean
+    performance?: number
+    issues: QualityIssue[]
+  }>(`/v1/domains/${domain}/readings`, {
+    method: 'POST',
+    body: JSON.stringify({ metrics, source: 'dashboard' }),
+  })
+  if (!result.ok) return { ok: false, error: result.message }
+
+  revalidatePath(`/domains/${domain}`)
+  revalidatePath('/domains')
+  return {
+    ok: true,
+    accepted: result.data.accepted,
+    performance: result.data.performance,
+    issues: result.data.issues ?? [],
+  }
 }
 
 export async function evaluateNow(_prev: FormState, form: FormData): Promise<FormState> {

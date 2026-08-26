@@ -153,3 +153,46 @@ def test_readings_are_tenant_isolated(db_available):
     with tenant_session(b) as db:
         rows = db.scalars(select(Observation).where(Observation.domain == "receivables")).all()
         assert all(r.source != "tenant-a" for r in rows)
+
+
+def test_quarantined_readings_are_absent_from_the_diagnosis(tenant):
+    """A rejected reading must not distort the explanation either.
+
+    Quarantined rows are stored with placeholder zeros. If the diagnosis reads
+    them, the reported trend silently includes data the decision excluded —
+    which breaks the guarantee the quarantine exists to make.
+    """
+    from aether.services.diagnosis import diagnose_approval
+
+    ingest_reading(tenant, "receivables", HEALTHY)
+    ingest_reading(tenant, "receivables", {**HEALTHY, "overdue_ratio": 42.0})  # rejected
+
+    deteriorated = {
+        **HEALTHY,
+        "dso_days": 96.0,
+        "overdue_ratio": 0.46,
+        "avg_days_past_due": 62.0,
+        "collection_effectiveness": 0.5,
+        "ar_total": 800_000.0,
+    }
+    ingest_reading(
+        tenant,
+        "receivables",
+        deteriorated,
+        observed_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=1),
+    )
+
+    outcome = evaluate_domain(tenant, "receivables", triggered_by="pytest")
+    assert outcome.approval_id is not None
+
+    diagnose_approval(tenant, outcome.approval_id)
+
+    with tenant_session(tenant) as db:
+        from aether.core.models import PendingApproval
+
+        approval = db.get(PendingApproval, outcome.approval_id)
+        assert approval.diagnosis
+
+        # Two accepted readings exist; the quarantined one must not be counted.
+        if "readings, drift moved" in approval.diagnosis:
+            assert "last 2 readings" in approval.diagnosis, approval.diagnosis

@@ -133,12 +133,42 @@ export type AuditEntry = {
   details: Record<string, unknown>
 }
 
+export type QualityIssue = {
+  metric: string | null
+  code: string
+  severity: 'error' | 'warning'
+  message: string
+}
+
 export type ObservationRow = {
   id: string
   observed_at: string
   drift_fraction: number
   performance: number
   source: string
+  status: 'accepted' | 'quarantined'
+  metrics: Record<string, number>
+  issues: QualityIssue[]
+}
+
+export type MetricSpec = {
+  key: string
+  label: string
+  unit: string
+  required: boolean
+  direction: 'lower_better' | 'higher_better' | 'neutral'
+  healthy_range: [number | null, number | null]
+  description: string
+}
+
+export type DomainPack = {
+  key: string
+  label: string
+  version: number
+  summary: string
+  reporting_window_hours: number
+  metrics: MetricSpec[]
+  actions: { slot: string; label: string; description: string }[]
 }
 
 export type UsageReport = {

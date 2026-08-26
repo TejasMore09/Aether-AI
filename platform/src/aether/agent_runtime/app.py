@@ -245,15 +245,27 @@ def push_observation(
 def list_observations(
     domain: DomainName,
     limit: int = 20,
+    status: str | None = None,
     principal: Principal = Depends(authenticated),
 ) -> list[dict]:
+    """Readings for a domain, newest first.
+
+    Quarantined readings are included by default and carry their issues, so a
+    broken feed is visible in the product rather than only in a log. Pass
+    status=accepted or status=quarantined to filter.
+    """
     limit = max(1, min(limit, 200))
+    if status not in (None, "accepted", "quarantined"):
+        raise HTTPException(
+            status_code=422, detail="status must be 'accepted' or 'quarantined'"
+        )
+
     with tenant_session(principal.tenant_id) as db:
+        query = select(Observation).where(Observation.domain == domain)
+        if status:
+            query = query.where(Observation.status == status)
         rows = db.scalars(
-            select(Observation)
-            .where(Observation.domain == domain)
-            .order_by(Observation.observed_at.desc())
-            .limit(limit)
+            query.order_by(Observation.observed_at.desc()).limit(limit)
         ).all()
         return [
             {
@@ -262,6 +274,9 @@ def list_observations(
                 "drift_fraction": o.drift_fraction,
                 "performance": o.performance,
                 "source": o.source,
+                "status": o.status,
+                "metrics": o.metrics or {},
+                "issues": (o.issues or {}).get("issues", []),
             }
             for o in rows
         ]

@@ -71,7 +71,14 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
         observations = list(
             db.scalars(
                 select(Observation)
-                .where(Observation.domain == approval.domain)
+                .where(
+                    Observation.domain == approval.domain,
+                    # Quarantined readings are stored with placeholder zeros.
+                    # They are excluded from decisions, so they must be excluded
+                    # from the explanation of a decision too — otherwise a
+                    # rejected reading silently distorts the reported trend.
+                    Observation.status == "accepted",
+                )
                 .order_by(Observation.observed_at.desc())
                 .limit(5)
             )
@@ -152,7 +159,10 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
             observations = list(
                 db.scalars(
                     select(Observation)
-                    .where(Observation.domain == approval.domain)
+                    .where(
+                        Observation.domain == approval.domain,
+                        Observation.status == "accepted",
+                    )
                     .order_by(Observation.observed_at.desc())
                     .limit(5)
                 )
