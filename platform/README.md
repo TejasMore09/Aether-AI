@@ -167,6 +167,43 @@ POST /v1/domains/{domain}/readings     submit business metrics (goes through the
 POST /v1/domains/{domain}/observations submit pre-derived signals (no pack required)
 ```
 
+## Frontend: chosen directions and deferred polish
+
+Two surfaces, chosen from `/preview` (delete that route once both are built):
+
+- **Minimal** — the public, no-signup explore surface. Calm, legible to a
+  stranger, colour reserved for money at risk.
+- **Forge** — the authenticated product. Neumorphic form on Console's warm
+  charcoal with a copper accent, Manrope + JetBrains Mono.
+
+They share the data model and differ only in treatment.
+
+### Motion rules already established
+
+These hold wherever motion is added later, and exist because breaking them
+produced real bugs (see the Forge commit):
+
+- Motion happens on **arrival and interaction only**. Nothing loops — ambient
+  looping animation is the clearest tell of a generated interface.
+- **Animation is an enhancement, never the source of a value.** `rAF` and
+  timers are frozen in a backgrounded tab, so anything that animates *toward*
+  a figure can strand it at zero. Elements carry their true value in the
+  resting style and animate a transform on top of it.
+- Every primitive collapses to a correct static render under
+  `prefers-reduced-motion`, rather than merely running faster.
+- One counting figure per view. Applied to every number it is noise.
+
+### Deferred (explicitly parked, not forgotten)
+
+- Richer interaction polish: route/page transitions, optimistic UI on approve
+  and reject, skeleton loaders shaped like their content rather than spinners
+- Charts for the trend data (currently a table); sparkline in each metric card
+- Command palette, keyboard navigation, focus management on route change
+- Composed empty and error states rather than plain text
+- Toasts for background outcomes (a scheduled run completing)
+- shadcn/ui component layer — deliberately not installed until the direction
+  was settled, so it does not have to be fought later
+
 ## Design notes
 
 - **RLS is the tenancy boundary.** The app connects as `aether_app`, a
