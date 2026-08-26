@@ -55,7 +55,7 @@ def test_push_then_evaluate_latest(clients, token):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["status"] == "evaluated"
-    assert body["action"] == "RETRAIN"
+    assert body["action"] == "INTERVENE"  # generic slot label: no pack for this domain
     assert body["requires_approval"] is True
     assert "observation_id" in body
 

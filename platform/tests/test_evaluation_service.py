@@ -49,7 +49,9 @@ def test_autonomous_run_uses_latest_observation_and_gates_high_risk(tenant):
     assert out.status == "evaluated"
     assert out.observation_id == obs_id  # newest wins
     assert out.decision is not None
-    assert out.decision["action"] == "RETRAIN"
+    # No pack for this domain, so the generic vocabulary applies.
+    assert out.decision["action"] == "INTERVENE"
+    assert out.decision["slot"] == "intervene"
     assert out.approval_id is not None
 
     with tenant_session(tenant) as db:
