@@ -181,6 +181,15 @@ class Observation(Base, TenantScoped):
     source: Mapped[str] = mapped_column(String(120), default="api")
     details: Mapped[dict] = mapped_column(JSONB, default=dict)
 
+    # Domain-native metric values as reported (e.g. dso_days, overdue_ratio).
+    # drift_fraction and performance above are derived from these by the
+    # domain pack; keeping the raw values makes every decision re-explainable.
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # accepted readings drive decisions; quarantined ones are kept visible
+    # with their reasons rather than silently dropped.
+    status: Mapped[str] = mapped_column(String(20), default="accepted", index=True)
+    issues: Mapped[dict] = mapped_column(JSONB, default=dict)
+
 
 class AlertRule(Base, TenantScoped):
     __tablename__ = "alert_rules"

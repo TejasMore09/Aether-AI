@@ -80,6 +80,82 @@ def get_policy(domain: DomainName, principal: Principal = Depends(authenticated)
     return {"domain": domain, "params": params, "effective": vars(PolicyParams.from_dict(params))}
 
 
+# ── Domain catalogue (packs) ──────────────────────────────────────────────────
+
+
+@app.get("/v1/catalogue")
+def catalogue(principal: Principal = Depends(authenticated)) -> list[dict]:
+    """Business functions the platform can watch, and what each one expects."""
+    from aether.domains.pack import list_packs
+
+    return [
+        {
+            "key": p.key,
+            "label": p.label,
+            "version": p.version,
+            "summary": p.summary,
+            "reporting_window_hours": p.max_age_hours,
+            "metrics": [
+                {
+                    "key": m.key,
+                    "label": m.label,
+                    "unit": m.unit,
+                    "required": m.required,
+                    "direction": m.direction.value,
+                    "healthy_range": [m.healthy_min, m.healthy_max],
+                    "description": m.description.strip(),
+                }
+                for m in p.metrics
+            ],
+            "actions": [
+                {"slot": slot.value, "label": spec.label, "description": spec.description.strip()}
+                for slot, spec in p.actions.items()
+            ],
+        }
+        for p in list_packs()
+    ]
+
+
+# ── Domain-native readings ────────────────────────────────────────────────────
+
+
+class ReadingIn(BaseModel):
+    """Business metrics as the client reports them, e.g. dso_days: 47."""
+
+    metrics: dict[str, float | int | None] = Field(default_factory=dict)
+    source: str = Field(default="api", max_length=120)
+    observed_at: datetime.datetime | None = None
+
+
+@app.post("/v1/domains/{domain}/readings", status_code=201)
+def push_reading(
+    domain: DomainName,
+    body: ReadingIn,
+    principal: Principal = Depends(require_role(Role.operator)),
+) -> dict:
+    """Submit a reading in the domain's own metrics.
+
+    Passes the data-quality gate first: a reading that fails is stored
+    quarantined with its reasons and never influences a decision. The response
+    says which happened and why, so a broken feed is visible immediately
+    rather than silently degrading later decisions.
+    """
+    from aether.services.ingestion import ingest_reading
+
+    try:
+        result = ingest_reading(
+            tenant_id=principal.tenant_id,
+            domain=domain,
+            metrics=dict(body.metrics),
+            source=body.source,
+            observed_at=body.observed_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return result.as_dict()
+
+
 # ── Domain inventory ──────────────────────────────────────────────────────────
 
 

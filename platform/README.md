@@ -119,6 +119,54 @@ Consequences worth knowing:
 *same* Temporal workflow the schedule uses — so an on-demand run diagnoses and
 notifies exactly like an autonomous one, rather than being a lesser path.
 
+## Domain packs — what the platform knows about a business function
+
+A pack (`src/aether/domains/packs/*.yaml`) is curated configuration: which
+metrics a business function reports, what healthy looks like, how raw metrics
+become risk signals, what actions exist, and how an explanation should read.
+
+Adding a business function means writing a pack. It must never mean editing
+agent code — that constraint is what keeps expansion cheap, and it is enforced
+by the engine reasoning in generic *action slots* (`none`, `monitor`,
+`investigate`, `intervene`) that each pack labels for its own domain. This is
+why a finance product says `ESCALATE_COLLECTIONS` and never inherits `RETRAIN`
+from the ML prototype.
+
+Shipping today: **receivables** (cash owed and whether it arrives on time).
+
+### The path a reading takes
+
+```
+raw metrics → quality gate → baseline + derivation → decision
+```
+
+- **Quality gate** (`domains/quality.py`) — accuracy is enforced here, not
+  assumed upstream. Required fields, numeric types, physical ranges, unknown
+  keys, and cross-metric contradictions (disputed cannot exceed overdue; a
+  balance cannot exist with zero invoices). A failing reading is
+  **quarantined, not dropped**: it stays visible with its reasons and never
+  reaches a decision.
+- **Derivation** (`domains/derive.py`) — health is scored per metric against
+  the pack's bands, then combined. The composite blends the weighted mean with
+  the *worst* single metric, because a mean alone lets healthy secondary
+  metrics average away a crisis in a core one. Drift is measured against the
+  tenant's own rolling median, and only movement in the unhealthy direction
+  counts. With too little history there is no baseline and drift reports zero
+  — an unknown is not a signal.
+- **Economics** — a pack picks how "what does this cost" is computed.
+  Receivables uses `exposure_scaled` (money at risk × carrying rate), which is
+  far more honest than an invented error rate. Acting is worthwhile when the
+  loss repays the one-off intervention cost inside the payback window, because
+  comparing a one-off cost to a daily loss is a category error.
+
+### Endpoints
+
+```
+GET  /v1/catalogue                     what the platform can watch, and what it expects
+POST /v1/domains/{domain}/readings     submit business metrics (goes through the gate)
+POST /v1/domains/{domain}/observations submit pre-derived signals (no pack required)
+```
+
 ## Design notes
 
 - **RLS is the tenancy boundary.** The app connects as `aether_app`, a

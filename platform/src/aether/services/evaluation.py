@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from aether.core.db import tenant_session
 from aether.core.models import AuditLog, Observation, PendingApproval, PolicyConfig
+from aether.domains.pack import get_pack
 from aether.policy.decision_engine import PolicyParams, evaluate
 
 
@@ -89,17 +90,24 @@ def evaluate_domain(
     with tenant_session(tenant_id) as db:
         observation_id = None
         observed_at = None
+        metric_values: dict[str, float] = {}
         if not explicit:
             obs = db.scalars(
                 select(Observation)
-                .where(Observation.domain == domain)
+                .where(Observation.domain == domain, Observation.status == "accepted")
                 .order_by(Observation.observed_at.desc())
                 .limit(1)
             ).first()
             if obs is None:
                 return EvaluationOutcome(status="no_data")
+            pack_for_age = get_pack(domain)
+            max_age = (
+                datetime.timedelta(hours=pack_for_age.max_age_hours)
+                if pack_for_age
+                else MAX_OBSERVATION_AGE
+            )
             age = datetime.datetime.now(datetime.UTC) - obs.observed_at
-            if age > MAX_OBSERVATION_AGE:
+            if age > max_age:
                 return EvaluationOutcome(
                     status="stale_data",
                     observation_id=obs.id,
@@ -107,14 +115,18 @@ def evaluate_domain(
                 )
             drift_fraction = obs.drift_fraction
             performance = obs.performance
+            metric_values = dict(obs.metrics or {})
             observation_id = obs.id
             observed_at = obs.observed_at.isoformat()
 
         cfg = db.scalar(select(PolicyConfig).where(PolicyConfig.domain == domain))
-        params = PolicyParams.from_dict(cfg.params if cfg else None)
+        pack = get_pack(domain)
+        params = PolicyParams.for_pack(pack, cfg.params if cfg else None)
 
         assert drift_fraction is not None and performance is not None
-        decision = evaluate(drift_fraction, performance, params)
+        decision = evaluate(
+            drift_fraction, performance, params, pack=pack, values=metric_values
+        )
         result = decision.as_dict()
 
         approval_id = None
@@ -122,7 +134,7 @@ def evaluate_domain(
             approval = PendingApproval(
                 tenant_id=tenant_id,
                 domain=domain,
-                action=decision.action.value,
+                action=decision.action,
                 reason=decision.reason,
                 risk_level=decision.risk_level.value,
                 expected_loss_usd=decision.expected_daily_loss_usd,
@@ -135,7 +147,7 @@ def evaluate_domain(
             AuditLog(
                 tenant_id=tenant_id,
                 domain=domain,
-                action=decision.action.value,
+                action=decision.action,
                 triggered_by=triggered_by,
                 risk_level=decision.risk_level.value,
                 details=result,
