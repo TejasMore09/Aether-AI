@@ -12,7 +12,10 @@ import { SESSION_COOKIE } from './lib/session'
  * validate the JWT and Postgres RLS scopes the data.
  */
 
-const PUBLIC_PATHS = ['/login', '/signup']
+// /preview is a design-review route: mock data only, no API calls, no
+// tenant data. It is public so a direction can be reviewed without the
+// backend running. Remove it along with app/preview once the design is settled.
+const PUBLIC_PATHS = ['/login', '/signup', '/preview']
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
