@@ -5,6 +5,9 @@ import { useState } from 'react'
 import { DirectionA } from './DirectionA'
 import { DirectionB } from './DirectionB'
 import { DirectionC } from './DirectionC'
+import { DirectionD } from './DirectionD'
+import { DirectionE } from './DirectionE'
+import { DirectionF } from './DirectionF'
 import styles from './switcher.module.css'
 
 /**
@@ -34,10 +37,28 @@ const DIRECTIONS = [
     blurb: 'The report as a document · serif display · figures in the margin',
     typeface: 'Fraunces + Geist',
   },
+  {
+    key: 'd',
+    name: 'Neumorphic',
+    blurb: 'Soft extruded UI · one ground tone · depth from paired shadows',
+    typeface: 'Manrope',
+  },
+  {
+    key: 'e',
+    name: 'Glass',
+    blurb: 'Frosted panels over an ambient teal mesh · solid fallback included',
+    typeface: 'Sora',
+  },
+  {
+    key: 'f',
+    name: 'Minimal',
+    blurb: 'No cards, no shadows · hairlines and whitespace · colour means risk',
+    typeface: 'Instrument Sans',
+  },
 ] as const
 
 export default function PreviewPage() {
-  const [active, setActive] = useState<'a' | 'b' | 'c'>('a')
+  const [active, setActive] = useState<'a' | 'b' | 'c' | 'd' | 'e' | 'f'>('d')
   const current = DIRECTIONS.find((d) => d.key === active)!
 
   return (
@@ -67,6 +88,9 @@ export default function PreviewPage() {
         {active === 'a' ? <DirectionA /> : null}
         {active === 'b' ? <DirectionB /> : null}
         {active === 'c' ? <DirectionC /> : null}
+        {active === 'd' ? <DirectionD /> : null}
+        {active === 'e' ? <DirectionE /> : null}
+        {active === 'f' ? <DirectionF /> : null}
       </div>
     </>
   )

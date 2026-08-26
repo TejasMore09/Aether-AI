@@ -1,4 +1,12 @@
-import { Fraunces, Geist, JetBrains_Mono, Outfit } from 'next/font/google'
+import {
+  Fraunces,
+  Geist,
+  Instrument_Sans,
+  JetBrains_Mono,
+  Manrope,
+  Outfit,
+  Sora,
+} from 'next/font/google'
 
 /**
  * Fonts are loaded with next/font, which self-hosts them and emits a CSS
@@ -34,10 +42,39 @@ const jetbrains = JetBrains_Mono({
   display: 'swap',
 })
 
+const manrope = Manrope({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-manrope',
+  display: 'swap',
+})
+
+const sora = Sora({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-sora',
+  display: 'swap',
+})
+
+const instrument = Instrument_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-instrument',
+  display: 'swap',
+})
+
 export default function PreviewLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className={`${geist.variable} ${outfit.variable} ${fraunces.variable} ${jetbrains.variable}`}
+      className={[
+        geist.variable,
+        outfit.variable,
+        fraunces.variable,
+        jetbrains.variable,
+        manrope.variable,
+        sora.variable,
+        instrument.variable,
+      ].join(' ')}
     >
       {children}
     </div>
