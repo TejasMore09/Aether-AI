@@ -1,16 +1,18 @@
 import Link from 'next/link'
 
-import { api, type Approval, type AuditEntry, type UsageReport } from '@/lib/api'
 import {
-  ActionTag,
   EmptyState,
   ErrorNote,
-  PageHeader,
+  Eyebrow,
+  Figure,
+  PageTitle,
+  Panel,
   RiskPill,
-  Stat,
-  formatUsd,
-  formatWhen,
-} from '@/components/ui'
+  SectionTitle,
+  usd,
+  whenUTC,
+} from '@/components/forge'
+import { api, type Approval, type AuditEntry, type UsageReport } from '@/lib/api'
 
 export default async function OverviewPage() {
   const [approvals, activity, usage] = await Promise.all([
@@ -27,132 +29,110 @@ export default async function OverviewPage() {
 
   return (
     <>
-      <PageHeader
-        title="Overview"
-        subtitle="What your Nano agent has decided, and what needs you."
+      <div className="mb-5">
+        <Eyebrow>Aether Nano</Eyebrow>
+      </div>
+
+      <PageTitle
+        title={
+          pending.length > 0
+            ? 'Your agent needs a decision from you.'
+            : 'Everything is tracking normally.'
+        }
+        lede={
+          pending.length > 0
+            ? 'It has already done the analysis. What remains is the judgement call it will not make on its own.'
+            : 'Your agent is watching, and will stop you only when something is worth your attention.'
+        }
       />
 
       {firstError ? (
-        <div style={{ marginBottom: 24 }}>
+        <div className="mb-7">
           <ErrorNote message={firstError.message} />
         </div>
       ) : null}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-          gap: 16,
-          marginBottom: 36,
-        }}
-      >
-        <Stat
+      <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Figure
           label="Awaiting your decision"
           value={String(pending.length)}
-          hint={pending.length ? 'Review in Approvals' : 'Nothing gated right now'}
-          tone={pending.length ? 'high' : 'plain'}
+          note={pending.length ? 'Review in Approvals' : 'Nothing gated right now'}
+          tone={pending.length ? 'risk' : 'plain'}
         />
-        <Stat
+        <Figure
           label="Exposure if unaddressed"
-          value={formatUsd(exposure)}
-          hint="Sum of estimated daily loss"
-          tone={exposure > 0 ? 'high' : 'plain'}
+          value={usd(exposure, 0)}
+          note="summed across gated decisions, per day"
+          tone={exposure > 0 ? 'risk' : 'plain'}
         />
-        <Stat
+        <Figure
           label="AI spend this month"
-          value={usage.ok ? formatUsd(usage.data.month_spend_usd) : '—'}
-          hint={
-            usage.ok
-              ? `of ${formatUsd(usage.data.monthly_budget_usd)} budget`
-              : 'Unavailable'
+          value={usage.ok ? usd(usage.data.month_spend_usd, 2) : '—'}
+          note={usage.ok ? `of ${usd(usage.data.monthly_budget_usd, 0)} budget` : 'Unavailable'}
+          tone="copper"
+          gauge={
+            usage.ok && usage.data.monthly_budget_usd > 0
+              ? {
+                  pct: (usage.data.month_spend_usd / usage.data.monthly_budget_usd) * 100,
+                  tone: 'copper',
+                }
+              : undefined
           }
-          tone="accent"
         />
       </div>
 
       <section>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            marginBottom: 12,
-          }}
-        >
-          <h2 className="label">Recent agent activity</h2>
-          <Link href="/activity" className="mono" style={{ fontSize: 11, color: 'var(--color-accent)' }}>
-            VIEW ALL
+        <div className="mb-4 flex items-baseline justify-between">
+          <SectionTitle>Recent agent activity</SectionTitle>
+          <Link
+            href="/activity"
+            className="text-[13px] transition-colors duration-200"
+            style={{ color: 'var(--color-copper)' }}
+          >
+            View all
           </Link>
         </div>
 
         {!activity.ok || activity.data.length === 0 ? (
           <EmptyState
-            title="No activity yet"
-            body="Once telemetry arrives and monitoring is enabled, every decision your agent makes is recorded here."
+            title="Nothing recorded yet"
+            body="Once telemetry arrives and monitoring is on, every decision your agent makes is written here permanently, with what triggered it."
           />
         ) : (
-          <div className="card" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  {['When', 'Domain', 'Action', 'Risk', 'Triggered by'].map((h) => (
-                    <th
-                      key={h}
-                      className="label"
-                      style={{
-                        textAlign: 'left',
-                        padding: '11px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        background: 'var(--color-surface-raised)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {activity.data.map((entry) => (
-                  <tr key={entry.id}>
-                    <td
-                      className="mono"
-                      style={{
-                        padding: '11px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        color: 'var(--color-ink-muted)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {formatWhen(entry.created_at)}
-                    </td>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                      <Link href={`/domains/${entry.domain}`} style={{ color: 'var(--color-ink)' }}>
-                        {entry.domain}
-                      </Link>
-                    </td>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                      <ActionTag action={entry.action} />
-                    </td>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                      <RiskPill level={entry.risk_level} />
-                    </td>
-                    <td
-                      className="mono"
-                      style={{
-                        padding: '11px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        color: 'var(--color-ink-faint)',
-                        fontSize: 12,
-                      }}
-                    >
-                      {entry.triggered_by}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Panel className="!p-2">
+            {activity.data.map((entry) => (
+              <div
+                key={entry.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-[13px] px-4 py-[13px] sm:grid-cols-[150px_minmax(0,1fr)_auto_auto]"
+              >
+                <span
+                  className="tnum text-[12.5px]"
+                  style={{ color: 'var(--color-ink-faint)' }}
+                >
+                  {whenUTC(entry.created_at)}
+                </span>
+                <Link
+                  href={`/domains/${entry.domain}`}
+                  className="truncate text-[14px] font-medium transition-colors duration-200 hover:text-[var(--color-copper)]"
+                >
+                  {entry.action.replace(/_/g, ' ').toLowerCase()}
+                  <span
+                    className="ml-2 text-[13px] font-normal"
+                    style={{ color: 'var(--color-ink-faint)' }}
+                  >
+                    {entry.domain}
+                  </span>
+                </Link>
+                <RiskPill level={entry.risk_level} />
+                <span
+                  className="hidden text-[12px] sm:block"
+                  style={{ color: 'var(--color-ink-faint)' }}
+                >
+                  {entry.status}
+                </span>
+              </div>
+            ))}
+          </Panel>
         )}
       </section>
     </>

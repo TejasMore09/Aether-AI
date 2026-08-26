@@ -85,30 +85,39 @@ export async function logout(): Promise<void> {
   redirect('/login')
 }
 
+export type ResolveState =
+  | { ok: true; decision: 'approved' | 'rejected'; action: string }
+  | { ok: false; error: string }
+  | null
+
 export async function resolveApproval(
-  _prev: FormState,
+  _prev: ResolveState,
   form: FormData,
-): Promise<FormState> {
+): Promise<ResolveState> {
   const id = str(form, 'approval_id')
   const decision = str(form, 'decision')
+  const label = str(form, 'action_label') || 'Action'
   if (!id || (decision !== 'approved' && decision !== 'rejected')) {
-    return { error: 'Invalid approval decision.' }
+    return { ok: false, error: 'Invalid approval decision.' }
   }
 
   const session = await readSession()
   if (session?.role !== 'owner') {
-    return { error: 'Only an owner can resolve approvals.' }
+    return { ok: false, error: 'Only an owner can resolve approvals.' }
   }
 
   const result = await api.runtime(`/v1/approvals/${id}/resolve`, {
     method: 'POST',
     body: JSON.stringify({ decision }),
   })
-  if (!result.ok) return { error: result.message }
+  if (!result.ok) return { ok: false, error: result.message }
 
   revalidatePath('/approvals')
   revalidatePath('/')
-  return null
+  revalidatePath('/activity')
+  // Revalidation removes this card from the list, so the confirmation cannot
+  // live in the card itself — the caller raises a toast from this result.
+  return { ok: true, decision, action: label }
 }
 
 export async function setMonitoring(

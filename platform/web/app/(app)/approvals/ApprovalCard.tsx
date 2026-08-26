@@ -1,12 +1,29 @@
 'use client'
 
-import { useActionState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { useState } from 'react'
+import { toast } from 'sonner'
 
+import { Inset, RiskPill, usd, whenUTC } from '@/components/forge'
 import { resolveApproval } from '@/lib/actions'
-import { SubmitButton } from '@/components/SubmitButton'
-import { ErrorNote, RiskPill, formatUsd, formatWhen } from '@/components/ui'
 import type { Approval } from '@/lib/api'
 
+const EASE = [0.16, 1, 0.3, 1] as const
+
+/**
+ * One gated decision, and the two buttons that resolve it.
+ *
+ * The action is called as a promise from the click handler rather than through
+ * useActionState. That is deliberate: resolving revalidates the list, which
+ * unmounts this card, and a useEffect in an unmounting component never runs —
+ * so a confirmation raised from an effect is silently lost. A promise
+ * continuation is not tied to the component lifecycle and still fires.
+ *
+ * The confirmation itself is a toast rather than an in-card state, because the
+ * card is legitimately gone once the decision is made. Without it the operator
+ * clicks Approve on a money decision and the row simply vanishes, with no
+ * signal that the click was taken.
+ */
 export function ApprovalCard({
   approval,
   canResolve,
@@ -14,140 +31,141 @@ export function ApprovalCard({
   approval: Approval
   canResolve: boolean
 }) {
-  const [state, action] = useActionState(resolveApproval, null)
+  const [pending, setPending] = useState<null | 'approved' | 'rejected'>(null)
+  const reduced = useReducedMotion()
+  const label = approval.action.replace(/_/g, ' ').toLowerCase()
+
+  async function decide(decision: 'approved' | 'rejected') {
+    setPending(decision)
+
+    const form = new FormData()
+    form.set('approval_id', approval.id)
+    form.set('decision', decision)
+    form.set('action_label', label)
+
+    const result = await resolveApproval(null, form)
+
+    if (result?.ok) {
+      toast.success(`${result.action} ${result.decision}`, {
+        description: 'Recorded in the audit trail against your account.',
+      })
+      return // the card is being removed by revalidation; leave it pending
+    }
+
+    // Failed: restore the buttons rather than leave a false confirmation.
+    setPending(null)
+    toast.error(result?.ok === false ? result.error : 'That could not be recorded.')
+  }
 
   return (
-    <article className="card" style={{ padding: 0 }}>
-      <div
-        style={{
-          padding: '16px 20px',
-          borderBottom: '1px solid var(--color-line)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: 20,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>
-              {approval.action.replace(/_/g, ' ')}
-            </span>
-            <RiskPill level={approval.risk_level} />
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginTop: 6 }}>
-            Domain <span className="mono" style={{ color: 'var(--color-ink)' }}>{approval.domain}</span>
-            {' · gated '}
-            {formatWhen(approval.created_at)}
-          </div>
-        </div>
-
-        <div style={{ textAlign: 'right' }}>
-          <div className="label">Estimated daily loss</div>
-          <div
-            className="mono"
-            style={{ fontSize: 20, color: 'var(--color-risk-high)', marginTop: 4 }}
-          >
-            {formatUsd(approval.expected_loss_usd)}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-line)' }}>
-        <div className="label">Engine reasoning</div>
-        <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginTop: 6 }}>
-          {approval.reason}
-        </p>
-      </div>
-
-      <div style={{ padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="label">Diagnosis</span>
-          {approval.diagnosis_source ? (
-            <span
-              className="mono"
-              style={{
-                fontSize: 9,
-                letterSpacing: '0.1em',
-                padding: '2px 6px',
-                color:
-                  approval.diagnosis_source === 'llm'
-                    ? 'var(--color-accent)'
-                    : 'var(--color-ink-faint)',
-                border: `1px solid ${
-                  approval.diagnosis_source === 'llm'
-                    ? 'var(--color-accent-dim)'
-                    : 'var(--color-line-strong)'
-                }`,
-              }}
-              title={
-                approval.diagnosis_source === 'llm'
-                  ? 'Written by the diagnosis model from your telemetry'
-                  : 'Generated locally from the numbers — the model was unavailable or over budget'
-              }
-            >
-              {approval.diagnosis_source === 'llm' ? 'AI ANALYSIS' : 'LOCAL FALLBACK'}
-            </span>
-          ) : null}
-        </div>
-
-        <div
+    <motion.article
+      initial={reduced ? false : { opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: EASE }}
+      className="rounded-[20px] p-7"
+      style={{
+        background: 'var(--color-raised)',
+        boxShadow: 'var(--raise)',
+        borderLeft: '3px solid var(--color-risk)',
+      }}
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <span
+          className="h-[9px] w-[9px] rounded-full"
           style={{
-            fontSize: 13.5,
-            lineHeight: 1.65,
-            color: 'var(--color-ink)',
-            marginTop: 10,
-            whiteSpace: 'pre-wrap',
+            background: 'var(--color-risk)',
+            boxShadow: '0 0 0 4px rgba(217,112,92,0.16)',
           }}
+          aria-hidden="true"
+        />
+        <h2 className="text-xl font-bold tracking-[-0.025em]">{label}</h2>
+        <RiskPill level={approval.risk_level} />
+        <span
+          className="ml-auto text-xs"
+          style={{ color: 'var(--color-ink-faint)' }}
+          title="How this explanation was produced"
         >
-          {approval.diagnosis ?? (
-            <span style={{ color: 'var(--color-ink-faint)' }}>
-              Diagnosis pending — the agent is still analysing this decision.
-            </span>
-          )}
-        </div>
+          {approval.diagnosis_source === 'llm'
+            ? 'AI analysis'
+            : approval.diagnosis_source === 'fallback'
+              ? 'Local summary'
+              : 'Analysing…'}
+        </span>
       </div>
 
-      <form
-        action={action}
-        style={{
-          padding: '14px 20px',
-          borderTop: '1px solid var(--color-line)',
-          background: 'var(--color-surface-raised)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-        }}
-      >
-        {state?.error ? <ErrorNote message={state.error} /> : null}
-        <input type="hidden" name="approval_id" value={approval.id} />
+      <div className="mb-5 flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <span
+          data-figure
+          className="text-[34px] font-bold leading-none tracking-[-0.035em]"
+          style={{ color: 'var(--color-risk)' }}
+        >
+          {usd(approval.expected_loss_usd)}
+        </span>
+        <span className="text-[13px]" style={{ color: 'var(--color-ink-faint)' }}>
+          at risk each day · {approval.domain} · gated {whenUTC(approval.created_at)}
+        </span>
+      </div>
 
-        {canResolve ? (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <SubmitButton
-              name="decision"
-              value="approved"
-              pendingLabel="Approving…"
-              variant="primary"
-            >
-              Approve
-            </SubmitButton>
-            <SubmitButton
-              name="decision"
-              value="rejected"
-              pendingLabel="Rejecting…"
-              variant="danger"
-            >
-              Reject
-            </SubmitButton>
-          </div>
-        ) : (
-          <p style={{ fontSize: 12, color: 'var(--color-ink-faint)' }}>
-            Only an organization owner can approve or reject this action.
-          </p>
-        )}
-      </form>
-    </article>
+      <Inset className="mb-5">
+        <span
+          className="font-mono text-[12.5px] leading-[1.7]"
+          style={{ color: 'var(--color-ink-soft)' }}
+        >
+          {approval.reason}
+        </span>
+      </Inset>
+
+      <p
+        className="max-w-[68ch] whitespace-pre-wrap text-[15px] leading-[1.65]"
+        style={{ color: 'var(--color-ink-soft)' }}
+      >
+        {approval.diagnosis ?? 'The agent is still analysing this decision.'}
+      </p>
+
+      {canResolve ? (
+        <div className="mt-6 flex flex-wrap gap-3">
+          <PressButton
+            tone="primary"
+            disabled={pending !== null}
+            onClick={() => decide('approved')}
+          >
+            {pending === 'approved' ? 'Recording…' : 'Approve'}
+          </PressButton>
+          <PressButton
+            tone="ghost"
+            disabled={pending !== null}
+            onClick={() => decide('rejected')}
+          >
+            {pending === 'rejected' ? 'Recording…' : 'Reject'}
+          </PressButton>
+        </div>
+      ) : (
+        <p className="mt-6 text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+          Only an organization owner can resolve this.
+        </p>
+      )}
+    </motion.article>
+  )
+}
+
+/** Neumorphic button that presses inward. The affordance is physical. */
+function PressButton({
+  children,
+  tone,
+  ...rest
+}: React.ComponentProps<'button'> & { tone: 'primary' | 'ghost' }) {
+  return (
+    <button
+      type="button"
+      className="rounded-[14px] px-6 py-3 text-sm font-semibold transition-[box-shadow,color] duration-200 ease-[var(--ease-forge)] active:shadow-[var(--press)] disabled:cursor-not-allowed disabled:opacity-60"
+      style={{
+        background: 'var(--color-raised)',
+        boxShadow: 'var(--raise-sm)',
+        color: tone === 'primary' ? 'var(--color-copper)' : 'var(--color-ink-soft)',
+      }}
+      {...rest}
+    >
+      {children}
+    </button>
   )
 }

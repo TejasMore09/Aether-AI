@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { NavLink } from '@/components/NavLink'
 import { api, type TenantInfo } from '@/lib/api'
 import { logout } from '@/lib/actions'
 import { readSession } from '@/lib/session'
@@ -11,7 +12,7 @@ const NAV = [
   { href: '/domains', label: 'Domains' },
   { href: '/catalogue', label: 'Catalogue' },
   { href: '/activity', label: 'Activity' },
-  { href: '/usage', label: 'AI Usage' },
+  { href: '/usage', label: 'AI usage' },
 ]
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -22,84 +23,80 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const orgName = tenant.ok ? tenant.data.name : 'Organization'
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <nav
+    <div className="relative min-h-dvh overflow-x-hidden">
+      {/* A single still copper bloom. Static by design — ambient looping
+          motion is the clearest tell of a generated interface. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed -right-40 -top-56 -z-10 h-[620px] w-[620px] rounded-full"
         style={{
-          width: 232,
-          flexShrink: 0,
-          borderRight: '1px solid var(--color-line)',
-          background: 'var(--color-surface)',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
+          background:
+            'radial-gradient(circle, rgba(201,138,75,0.13), transparent 68%)',
         }}
-      >
-        <div style={{ padding: '22px 20px', borderBottom: '1px solid var(--color-line)' }}>
-          <div className="label" style={{ color: 'var(--color-accent)' }}>
-            Aether Nano
-          </div>
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 600,
-              marginTop: 8,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-            title={orgName}
+      />
+
+      <header className="flex flex-wrap items-center gap-6 px-6 py-5 md:px-11">
+        <Link href="/" className="flex items-center gap-3" aria-label="Aether home">
+          <span
+            className="relative grid h-[30px] w-[30px] place-items-center rounded-[10px]"
+            style={{ background: 'var(--color-raised)', boxShadow: 'var(--raise-sm)' }}
+            aria-hidden="true"
           >
-            {orgName}
-          </div>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--color-ink-faint)', marginTop: 2 }}>
-            {session.role}
-          </div>
-        </div>
-
-        <div style={{ flex: 1, padding: '12px 0' }}>
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="mono"
+            <span
+              className="block h-3 w-3 rounded-[3px]"
               style={{
-                display: 'block',
-                padding: '11px 20px',
-                fontSize: 12,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--color-ink-muted)',
+                background:
+                  'linear-gradient(145deg, var(--color-copper), var(--color-copper-dim))',
               }}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+            />
+          </span>
+          <span className="text-base font-bold tracking-[-0.015em]">Aether</span>
+        </Link>
 
-        <div style={{ padding: 20, borderTop: '1px solid var(--color-line)' }}>
-          <div
+        <nav className="flex flex-1 flex-wrap gap-2" aria-label="Main">
+          {NAV.map((item) => (
+            <NavLink key={item.href} href={item.href}>
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          <span
+            className="flex items-center gap-[9px] rounded-[12px] px-[15px] py-2 text-[13.5px]"
             style={{
-              fontSize: 12,
-              color: 'var(--color-ink-faint)',
-              marginBottom: 12,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              background: 'var(--color-raised)',
+              boxShadow: 'var(--raise-sm)',
+              color: 'var(--color-ink-soft)',
             }}
             title={session.email}
           >
-            {session.email}
-          </div>
+            <span
+              className="h-[7px] w-[7px] rounded-full"
+              style={{ background: 'var(--color-good)' }}
+              aria-hidden="true"
+            />
+            {orgName}
+          </span>
           <form action={logout}>
-            <button type="submit" className="btn btn-ghost" style={{ width: '100%' }}>
+            <button
+              type="submit"
+              className="rounded-[12px] px-4 py-2 text-[13.5px] font-medium transition-colors duration-200"
+              style={{
+                background: 'var(--color-raised)',
+                boxShadow: 'var(--raise-sm)',
+                color: 'var(--color-ink-faint)',
+              }}
+            >
               Sign out
             </button>
           </form>
         </div>
-      </nav>
+      </header>
 
-      <main style={{ flex: 1, padding: '36px 40px', maxWidth: 1180 }}>{children}</main>
+      <main className="mx-auto w-full max-w-[1180px] px-6 pb-28 pt-2 md:px-11">
+        {children}
+      </main>
     </div>
   )
 }
