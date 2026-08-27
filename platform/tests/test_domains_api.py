@@ -39,9 +39,7 @@ def _new_org(cp) -> tuple[uuid.UUID, dict]:
         },
     )
     assert r.status_code == 201, r.text
-    return uuid.UUID(r.json()["tenant_id"]), {
-        "Authorization": f"Bearer {r.json()['access_token']}"
-    }
+    return uuid.UUID(r.json()["tenant_id"]), {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
 def test_inventory_is_derived_from_telemetry_and_policy(clients):

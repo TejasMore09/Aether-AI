@@ -16,17 +16,13 @@ from aether.core.config import get_settings
 from aether.worker.activities import diagnose_approval, notify_approval, run_evaluation
 from aether.worker.workflows import NanoMonitorWorkflow
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("aether.worker")
 
 
 async def main() -> None:
     settings = get_settings()
-    client = await Client.connect(
-        settings.temporal_address, namespace=settings.temporal_namespace
-    )
+    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
     logger.info(
         "Nano worker connected to Temporal at %s (queue=%s)",
         settings.temporal_address,

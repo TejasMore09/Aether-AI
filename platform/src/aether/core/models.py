@@ -220,6 +220,39 @@ class LLMUsage(Base, TenantScoped):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class ApiKey(Base, TenantScoped):
+    """A credential an unattended system uses to push readings.
+
+    Only a hash is stored — the key itself is shown once at creation and is
+    unrecoverable afterwards, so a database disclosure does not hand an
+    attacker working credentials.
+
+    Deliberately ingest-scoped: a leaked key can submit readings but cannot
+    approve a decision, read the audit trail, or see a diagnosis. The blast
+    radius of a credential that lives in someone else's cron job should be as
+    small as the job's actual job.
+    """
+
+    __tablename__ = "api_keys"
+    __table_args__ = (Index("ix_apikey_hash", "key_hash"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    name: Mapped[str] = mapped_column(String(120))
+    # Lookup is by hash, so it is unique across the whole table rather than
+    # per tenant — two tenants must never be able to hold the same secret.
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # First few characters, kept in clear so a person can tell their keys apart.
+    key_prefix: Mapped[str] = mapped_column(String(20))
+    created_by: Mapped[str] = mapped_column(String(320))
+    last_used_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class Notification(Base, TenantScoped):
     """Every outbound notification, recorded whether or not delivery worked —
     the audit trail for 'was the human told?'"""
@@ -248,4 +281,5 @@ RLS_TABLES = [
     "observations",
     "llm_usage",
     "notifications",
+    "api_keys",
 ]

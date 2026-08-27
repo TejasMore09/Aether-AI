@@ -65,9 +65,7 @@ def test_autonomous_run_uses_latest_observation_and_gates_high_risk(tenant):
 
 def test_stale_observation_refused(tenant):
     old = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=3)
-    record_observation(
-        tenant, "churn", drift_fraction=0.9, performance=0.2, observed_at=old
-    )
+    record_observation(tenant, "churn", drift_fraction=0.9, performance=0.2, observed_at=old)
     out = evaluate_domain(tenant, "churn", triggered_by="nano-monitor:churn")
     assert out.status == "stale_data"
     assert out.decision is None  # no decision, no audit spam on dead telemetry
@@ -90,8 +88,6 @@ def test_tenant_policy_changes_autonomous_decision(tenant):
 
 
 def test_explicit_values_bypass_observations(tenant):
-    out = evaluate_domain(
-        tenant, "fresh", triggered_by="test", drift_fraction=0.2, performance=0.9
-    )
+    out = evaluate_domain(tenant, "fresh", triggered_by="test", drift_fraction=0.2, performance=0.9)
     assert out.status == "evaluated"
     assert out.observation_id is None

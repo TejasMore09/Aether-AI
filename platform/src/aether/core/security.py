@@ -9,6 +9,7 @@ middleware and the Principal contract stay identical.
 import datetime
 import uuid
 from dataclasses import dataclass
+from enum import StrEnum
 
 import bcrypt
 import jwt
@@ -28,6 +29,18 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
+class PrincipalKind(StrEnum):
+    """What kind of caller this is.
+
+    Carried on the Principal so least privilege is enforced by the type rather
+    than by each route remembering: an api_key principal simply cannot reach a
+    route whose dependency demands a user.
+    """
+
+    user = "user"
+    api_key = "api_key"
+
+
 @dataclass(frozen=True)
 class Principal:
     """The authenticated caller, as seen by every route handler."""
@@ -36,6 +49,7 @@ class Principal:
     email: str
     tenant_id: uuid.UUID
     role: Role
+    kind: PrincipalKind = PrincipalKind.user
 
 
 class TokenError(Exception):

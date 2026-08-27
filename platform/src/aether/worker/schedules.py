@@ -39,9 +39,7 @@ def schedule_id(tenant_id: uuid.UUID, domain: str) -> str:
     return f"nano-monitor-{tenant_id}-{domain}"
 
 
-async def ensure_monitor_schedule(
-    tenant_id: uuid.UUID, domain: str, interval_minutes: int
-) -> str:
+async def ensure_monitor_schedule(tenant_id: uuid.UUID, domain: str, interval_minutes: int) -> str:
     """Create or replace the monitor schedule for (tenant, domain)."""
     client = await get_client()
     sid = schedule_id(tenant_id, domain)
@@ -74,9 +72,7 @@ async def ensure_monitor_schedule(
     return sid
 
 
-async def run_monitor_now(
-    tenant_id: uuid.UUID, domain: str, wait_seconds: float = 25.0
-) -> dict:
+async def run_monitor_now(tenant_id: uuid.UUID, domain: str, wait_seconds: float = 25.0) -> dict:
     """Run one full monitor cycle immediately, through the same workflow the
     schedule uses — so an on-demand run diagnoses and notifies exactly like an
     autonomous one. Waits briefly for the result; if the run outlives the wait

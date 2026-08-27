@@ -72,9 +72,7 @@ def test_evaluate_without_data_reports_no_data(clients, token):
 
 def test_half_specified_values_rejected(clients, token):
     _, rt = clients
-    r = rt.post(
-        "/v1/domains/revenue/evaluate", json={"drift_fraction": 0.5}, headers=token
-    )
+    r = rt.post("/v1/domains/revenue/evaluate", json={"drift_fraction": 0.5}, headers=token)
     assert r.status_code == 422
 
 

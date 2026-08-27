@@ -124,9 +124,7 @@ def evaluate_domain(
         params = PolicyParams.for_pack(pack, cfg.params if cfg else None)
 
         assert drift_fraction is not None and performance is not None
-        decision = evaluate(
-            drift_fraction, performance, params, pack=pack, values=metric_values
-        )
+        decision = evaluate(drift_fraction, performance, params, pack=pack, values=metric_values)
         result = decision.as_dict()
 
         approval_id = None

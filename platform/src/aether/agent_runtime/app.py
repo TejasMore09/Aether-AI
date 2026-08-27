@@ -27,7 +27,7 @@ from aether.core.models import (
     Role,
 )
 from aether.core.security import Principal
-from aether.core.tenancy import authenticated, require_role
+from aether.core.tenancy import authenticated, ingest_principal, require_role
 from aether.policy.decision_engine import PolicyParams
 from aether.services.evaluation import evaluate_domain, record_observation
 
@@ -66,9 +66,7 @@ def upsert_policy(
         if existing:
             existing.params = body.params
         else:
-            db.add(
-                PolicyConfig(tenant_id=principal.tenant_id, domain=domain, params=body.params)
-            )
+            db.add(PolicyConfig(tenant_id=principal.tenant_id, domain=domain, params=body.params))
     return {"domain": domain, "params": body.params}
 
 
@@ -131,7 +129,7 @@ class ReadingIn(BaseModel):
 def push_reading(
     domain: DomainName,
     body: ReadingIn,
-    principal: Principal = Depends(require_role(Role.operator)),
+    principal: Principal = Depends(ingest_principal),
 ) -> dict:
     """Submit a reading in the domain's own metrics.
 
@@ -227,7 +225,7 @@ class ObservationIn(BaseModel):
 def push_observation(
     domain: DomainName,
     body: ObservationIn,
-    principal: Principal = Depends(require_role(Role.operator)),
+    principal: Principal = Depends(ingest_principal),
 ) -> dict:
     obs_id = record_observation(
         tenant_id=principal.tenant_id,
@@ -256,17 +254,13 @@ def list_observations(
     """
     limit = max(1, min(limit, 200))
     if status not in (None, "accepted", "quarantined"):
-        raise HTTPException(
-            status_code=422, detail="status must be 'accepted' or 'quarantined'"
-        )
+        raise HTTPException(status_code=422, detail="status must be 'accepted' or 'quarantined'")
 
     with tenant_session(principal.tenant_id) as db:
         query = select(Observation).where(Observation.domain == domain)
         if status:
             query = query.where(Observation.status == status)
-        rows = db.scalars(
-            query.order_by(Observation.observed_at.desc()).limit(limit)
-        ).all()
+        rows = db.scalars(query.order_by(Observation.observed_at.desc()).limit(limit)).all()
         return [
             {
                 "id": str(o.id),
@@ -351,9 +345,7 @@ async def enable_monitoring(
     from aether.worker.schedules import ensure_monitor_schedule
 
     try:
-        sid = await ensure_monitor_schedule(
-            principal.tenant_id, domain, body.interval_minutes
-        )
+        sid = await ensure_monitor_schedule(principal.tenant_id, domain, body.interval_minutes)
     except Exception as exc:  # Temporal unreachable → honest 503, not a hang
         raise HTTPException(
             status_code=503, detail=f"Monitoring scheduler unavailable: {exc}"
@@ -394,14 +386,10 @@ def llm_usage(principal: Principal = Depends(authenticated)) -> dict:
 
     budget = get_settings().llm_monthly_budget_usd_per_tenant
     with tenant_session(principal.tenant_id) as db:
-        rows = db.scalars(
-            select(LLMUsage).where(LLMUsage.created_at >= _month_start())
-        ).all()
+        rows = db.scalars(select(LLMUsage).where(LLMUsage.created_at >= _month_start())).all()
         by_purpose: dict[str, dict] = {}
         for r in rows:
-            agg = by_purpose.setdefault(
-                r.purpose, {"calls": 0, "cost_usd": 0.0, "tokens": 0}
-            )
+            agg = by_purpose.setdefault(r.purpose, {"calls": 0, "cost_usd": 0.0, "tokens": 0})
             agg["calls"] += 1
             agg["cost_usd"] += r.cost_usd
             agg["tokens"] += r.prompt_tokens + r.completion_tokens
@@ -503,14 +491,10 @@ def resolve_approval(
 
 
 @app.get("/v1/audit-logs")
-def audit_logs(
-    limit: int = 50, principal: Principal = Depends(authenticated)
-) -> list[dict]:
+def audit_logs(limit: int = 50, principal: Principal = Depends(authenticated)) -> list[dict]:
     limit = max(1, min(limit, 200))
     with tenant_session(principal.tenant_id) as db:
-        logs = db.scalars(
-            select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
-        ).all()
+        logs = db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)).all()
         return [
             {
                 "id": str(entry.id),

@@ -80,9 +80,7 @@ def test_llm_diagnosis_attached_and_metered(tenant, gated_approval, monkeypatch)
 def test_diagnosis_idempotent_no_double_spend(tenant, gated_approval, monkeypatch):
     import litellm
 
-    monkeypatch.setattr(
-        litellm, "completion", lambda **kw: _fake_litellm_response("analysis")
-    )
+    monkeypatch.setattr(litellm, "completion", lambda **kw: _fake_litellm_response("analysis"))
     monkeypatch.setattr(litellm, "completion_cost", lambda completion_response: 0.001)
 
     assert diagnose_approval(tenant, gated_approval) == "llm"
