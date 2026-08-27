@@ -1,7 +1,15 @@
 import Link from 'next/link'
 
+import {
+  EmptyState,
+  ErrorNote,
+  Eyebrow,
+  Gauge,
+  PageTitle,
+  Panel,
+  whenUTC,
+} from '@/components/forge'
 import { api } from '@/lib/api'
-import { EmptyState, ErrorNote, PageHeader, formatWhen } from '@/components/ui'
 
 type DomainSummary = {
   domain: string
@@ -12,17 +20,13 @@ type DomainSummary = {
   latest_performance: number | null
 }
 
-function pct(value: number | null): string {
-  return value === null ? '—' : `${Math.round(value * 100)}%`
-}
-
 export default async function DomainsPage() {
   const domains = await api.runtime<DomainSummary[]>('/v1/domains')
 
   if (!domains.ok) {
     return (
       <>
-        <PageHeader title="Domains" />
+        <PageTitle title="Domains" />
         <ErrorNote message={domains.message} />
       </>
     )
@@ -30,124 +34,71 @@ export default async function DomainsPage() {
 
   return (
     <>
-      <PageHeader
+      <div className="mb-5">
+        <Eyebrow>What your agent watches</Eyebrow>
+      </div>
+
+      <PageTitle
         title="Domains"
-        subtitle="Each area of your operation the agent watches — finance, HR, sales, whatever you feed it."
+        lede="Each area of the business your agent tracks. A domain exists as soon as it has readings — there is nothing to register."
       />
 
       {domains.data.length === 0 ? (
         <EmptyState
           title="No domains yet"
-          body="A domain appears as soon as it has telemetry. Push your first reading from a domain page, or point a connector at the observations endpoint."
+          body="Send a first reading from any domain page, or point a connector at its readings endpoint. Visit /domains/receivables to start with cash collection."
         />
       ) : (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr>
-                {['Domain', 'Latest drift', 'Latest performance', 'Readings', 'Last seen'].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="label"
-                      style={{
-                        textAlign: 'left',
-                        padding: '11px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        background: 'var(--color-surface-raised)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {domains.data.map((d) => (
-                <tr key={d.domain}>
-                  <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                    <Link
-                      href={`/domains/${d.domain}`}
-                      className="mono"
-                      style={{ color: 'var(--color-accent)' }}
-                    >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {domains.data.map((d) => {
+            const health = d.latest_performance
+            const unhealthy = health !== null && health < 0.6
+            return (
+              <Link key={d.domain} href={`/domains/${d.domain}`} className="group block">
+                <Panel className="h-full !p-[22px] transition-transform duration-[240ms] ease-[var(--ease-forge)] group-hover:-translate-y-[2px]">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[15px] font-semibold tracking-[-0.015em]">
                       {d.domain}
-                    </Link>
-                  </td>
-                  <td
-                    className="mono"
-                    style={{
-                      padding: '12px 16px',
-                      borderBottom: '1px solid var(--color-line)',
-                      color:
-                        (d.latest_drift_fraction ?? 0) > 0.5
-                          ? 'var(--color-risk-high)'
-                          : 'var(--color-ink)',
-                    }}
-                  >
-                    {pct(d.latest_drift_fraction)}
-                  </td>
-                  <td
-                    className="mono"
-                    style={{
-                      padding: '12px 16px',
-                      borderBottom: '1px solid var(--color-line)',
-                      color:
-                        (d.latest_performance ?? 1) < 0.7
-                          ? 'var(--color-risk-high)'
-                          : 'var(--color-ink)',
-                    }}
-                  >
-                    {pct(d.latest_performance)}
-                  </td>
-                  <td
-                    className="mono"
-                    style={{
-                      padding: '12px 16px',
-                      borderBottom: '1px solid var(--color-line)',
-                      color: 'var(--color-ink-muted)',
-                    }}
-                  >
-                    {d.observation_count}
-                  </td>
-                  <td
-                    className="mono"
-                    style={{
-                      padding: '12px 16px',
-                      borderBottom: '1px solid var(--color-line)',
-                      color: 'var(--color-ink-faint)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {d.last_seen ? formatWhen(d.last_seen) : 'never'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </span>
+                    <span
+                      className="text-[11px] transition-colors duration-200 group-hover:text-[var(--color-copper)]"
+                      style={{ color: 'var(--color-ink-faint)' }}
+                      aria-hidden="true"
+                    >
+                      →
+                    </span>
+                  </div>
+
+                  <div className="mt-5 flex items-baseline gap-2">
+                    <span
+                      data-figure
+                      className="text-[30px] font-bold leading-none tracking-[-0.03em]"
+                      style={{ color: unhealthy ? 'var(--color-risk)' : 'var(--color-ink)' }}
+                    >
+                      {health === null ? '—' : `${Math.round(health * 100)}%`}
+                    </span>
+                    <span className="text-[12.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                      health
+                    </span>
+                  </div>
+
+                  <div className="mt-3">
+                    <Gauge
+                      pct={health === null ? 0 : health * 100}
+                      tone={unhealthy ? 'risk' : 'good'}
+                    />
+                  </div>
+
+                  <p className="mt-4 text-[12px]" style={{ color: 'var(--color-ink-faint)' }}>
+                    {d.observation_count} reading{d.observation_count === 1 ? '' : 's'} ·{' '}
+                    {d.last_seen ? whenUTC(d.last_seen).slice(0, 10) : 'never reported'}
+                  </p>
+                </Panel>
+              </Link>
+            )
+          })}
         </div>
       )}
-
-      <div style={{ marginTop: 28 }}>
-        <NewDomainHint />
-      </div>
     </>
-  )
-}
-
-function NewDomainHint() {
-  return (
-    <div className="card" style={{ padding: 20 }}>
-      <div className="label">Adding a domain</div>
-      <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', marginTop: 8, maxWidth: '68ch' }}>
-        Domains are created by sending telemetry — no setup step. Visit{' '}
-        <span className="mono" style={{ color: 'var(--color-ink)' }}>
-          /domains/&lt;name&gt;
-        </span>{' '}
-        for any lowercase name to push its first reading and enable monitoring.
-      </p>
-    </div>
   )
 }

@@ -1,19 +1,21 @@
 import Link from 'next/link'
 
-import { api, type AuditEntry, type NotificationRow } from '@/lib/api'
 import {
-  ActionTag,
   EmptyState,
   ErrorNote,
-  PageHeader,
+  Eyebrow,
+  PageTitle,
+  Panel,
   RiskPill,
-  formatWhen,
-} from '@/components/ui'
+  SectionTitle,
+  whenUTC,
+} from '@/components/forge'
+import { api, type AuditEntry, type NotificationRow } from '@/lib/api'
 
-const NOTIFICATION_STATUS_HINT: Record<string, string> = {
-  sent: 'Delivered',
-  failed: 'Delivery failed',
-  skipped_unconfigured: 'Email not configured — nothing was sent',
+const DELIVERY: Record<string, { label: string; tone: string }> = {
+  sent: { label: 'Delivered', tone: 'var(--color-good)' },
+  failed: { label: 'Delivery failed', tone: 'var(--color-risk)' },
+  skipped_unconfigured: { label: 'Email not set up', tone: 'var(--color-ink-faint)' },
 }
 
 export default async function ActivityPage() {
@@ -24,15 +26,17 @@ export default async function ActivityPage() {
 
   return (
     <>
-      <PageHeader
+      <div className="mb-5">
+        <Eyebrow>Permanent record</Eyebrow>
+      </div>
+
+      <PageTitle
         title="Activity"
-        subtitle="The immutable record of every decision, and every notification sent about one."
+        lede="Every decision your agent has made, and every notification sent about one. Entries are append-only — nothing here is edited or removed."
       />
 
-      <section style={{ marginBottom: 40 }}>
-        <h2 className="label" style={{ marginBottom: 12 }}>
-          Audit trail
-        </h2>
+      <section className="mb-11">
+        <SectionTitle>Audit trail</SectionTitle>
         {!activity.ok ? (
           <ErrorNote message={activity.message} />
         ) : activity.data.length === 0 ? (
@@ -41,144 +45,69 @@ export default async function ActivityPage() {
             body="Every evaluation your agent runs is written here permanently, with who or what triggered it."
           />
         ) : (
-          <div className="card" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  {['When', 'Domain', 'Action', 'Risk', 'Triggered by', 'Status'].map((h) => (
-                    <th
-                      key={h}
-                      className="label"
-                      style={{
-                        textAlign: 'left',
-                        padding: '11px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        background: 'var(--color-surface-raised)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {activity.data.map((entry) => (
-                  <tr key={entry.id}>
-                    <td
-                      className="mono"
-                      style={{
-                        padding: '10px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        color: 'var(--color-ink-muted)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {formatWhen(entry.created_at)}
-                    </td>
-                    <td style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                      <Link
-                        href={`/domains/${entry.domain}`}
-                        className="mono"
-                        style={{ color: 'var(--color-ink)', fontSize: 12 }}
-                      >
-                        {entry.domain}
-                      </Link>
-                    </td>
-                    <td style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                      <ActionTag action={entry.action} />
-                    </td>
-                    <td style={{ padding: '10px 16px', borderBottom: '1px solid var(--color-line)' }}>
-                      <RiskPill level={entry.risk_level} />
-                    </td>
-                    <td
-                      className="mono"
-                      style={{
-                        padding: '10px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        color: 'var(--color-ink-faint)',
-                        fontSize: 12,
-                      }}
-                    >
-                      {entry.triggered_by}
-                    </td>
-                    <td
-                      className="mono"
-                      style={{
-                        padding: '10px 16px',
-                        borderBottom: '1px solid var(--color-line)',
-                        color: 'var(--color-ink-faint)',
-                        fontSize: 12,
-                      }}
-                    >
-                      {entry.status}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Panel className="!p-2">
+            {activity.data.map((entry) => (
+              <div
+                key={entry.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[13px] px-4 py-3 sm:grid-cols-[152px_minmax(0,1fr)_auto_120px_auto]"
+              >
+                <span className="tnum text-[12.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                  {whenUTC(entry.created_at)}
+                </span>
+                <Link
+                  href={`/domains/${entry.domain}`}
+                  className="truncate text-[14px] font-medium transition-colors duration-200 hover:text-[var(--color-copper)]"
+                >
+                  {entry.action.replace(/_/g, ' ').toLowerCase()}
+                </Link>
+                <RiskPill level={entry.risk_level} />
+                <span
+                  className="hidden truncate text-[12px] sm:block"
+                  style={{ color: 'var(--color-ink-faint)' }}
+                  title={entry.triggered_by}
+                >
+                  {entry.triggered_by}
+                </span>
+                <span className="hidden text-[12px] sm:block" style={{ color: 'var(--color-ink-faint)' }}>
+                  {entry.status}
+                </span>
+              </div>
+            ))}
+          </Panel>
         )}
       </section>
 
       <section>
-        <h2 className="label" style={{ marginBottom: 12 }}>
-          Notifications
-        </h2>
+        <SectionTitle>Notifications</SectionTitle>
         {!notifications.ok ? (
           <ErrorNote message={notifications.message} />
         ) : notifications.data.length === 0 ? (
           <EmptyState
             title="No notifications yet"
-            body="When a decision is gated, every owner is emailed. Each attempt is recorded here — including attempts that could not be sent."
+            body="When a decision is gated, every owner is emailed. Each attempt is recorded here — including ones that could not be sent."
           />
         ) : (
-          <div className="card">
-            {notifications.data.map((row, index) => (
-              <div
-                key={row.id}
-                style={{
-                  padding: '12px 16px',
-                  borderBottom:
-                    index === notifications.data.length - 1
-                      ? 'none'
-                      : '1px solid var(--color-line)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 16,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13 }}>{row.subject || row.kind}</div>
-                  <div
-                    className="mono"
-                    style={{ fontSize: 11, color: 'var(--color-ink-faint)', marginTop: 4 }}
-                  >
-                    {row.recipient} · {formatWhen(row.created_at)}
-                  </div>
-                </div>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: '0.08em',
-                    alignSelf: 'center',
-                    color:
-                      row.status === 'sent'
-                        ? 'var(--color-risk-low)'
-                        : row.status === 'failed'
-                          ? 'var(--color-risk-high)'
-                          : 'var(--color-ink-faint)',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={NOTIFICATION_STATUS_HINT[row.status] ?? row.status}
+          <Panel className="!p-2">
+            {notifications.data.map((row) => {
+              const d = DELIVERY[row.status] ?? { label: row.status, tone: 'var(--color-ink-faint)' }
+              return (
+                <div
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-4 rounded-[13px] px-4 py-3"
                 >
-                  {(NOTIFICATION_STATUS_HINT[row.status] ?? row.status).toUpperCase()}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13.5px]">{row.subject || row.kind}</p>
+                    <p className="tnum mt-1 text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                      {row.recipient} · {whenUTC(row.created_at)}
+                    </p>
+                  </div>
+                  <span className="text-[12px] font-medium" style={{ color: d.tone }}>
+                    {d.label}
+                  </span>
+                </div>
+              )
+            })}
+          </Panel>
         )}
       </section>
     </>

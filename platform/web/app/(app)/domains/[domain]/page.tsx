@@ -1,25 +1,44 @@
 import { notFound } from 'next/navigation'
 
 import {
+  Bezel,
+  EmptyState,
+  ErrorNote,
+  Eyebrow,
+  Figure,
+  Gauge,
+  PageTitle,
+  Panel,
+  RiskPill,
+  SectionTitle,
+  whenUTC,
+} from '@/components/forge'
+import {
   api,
   type AuditEntry,
   type DomainPack,
+  type MetricSpec,
   type ObservationRow,
 } from '@/lib/api'
-import {
-  ActionTag,
-  EmptyState,
-  ErrorNote,
-  PageHeader,
-  RiskPill,
-  Stat,
-  formatWhen,
-} from '@/components/ui'
 
-import { EvaluateNow, MonitoringControls, PushObservation } from './Controls'
+import { MonitoringControls, RunNow } from './Controls'
 import { ReadingForm } from './ReadingForm'
 
 const DOMAIN_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
+
+function fmt(value: number, unit: string): string {
+  if (unit === 'ratio') return `${Math.round(value * 100)}%`
+  if (unit === 'currency') return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (unit === 'days') return `${value}d`
+  return String(value)
+}
+
+function breached(metric: MetricSpec, value: number): boolean {
+  const [min, max] = metric.healthy_range
+  if (max !== null && max !== undefined) return value > max
+  if (min !== null && min !== undefined) return value < min
+  return false
+}
 
 export default async function DomainPage({
   params,
@@ -40,147 +59,145 @@ export default async function DomainPage({
   const quarantined = rows.filter((r) => r.status === 'quarantined')
   const latest = accepted[0]
   const pack = catalogue.ok ? catalogue.data.find((p) => p.key === domain) : undefined
-
   const domainActivity = activity.ok
     ? activity.data.filter((e) => e.domain === domain).slice(0, 8)
     : []
 
+  const scored = pack?.metrics.filter((m) => m.direction !== 'neutral') ?? []
+  const reported = latest ? scored.filter((m) => latest.metrics?.[m.key] !== undefined) : []
+
   return (
     <>
-      <PageHeader
+      <div className="mb-5">
+        <Eyebrow>{pack ? `Pack v${pack.version}` : 'Raw signals'}</Eyebrow>
+      </div>
+
+      <PageTitle
         title={pack ? pack.label : domain}
-        subtitle={
+        lede={pack?.summary}
+        meta={
           pack
-            ? `Reported in ${pack.metrics.length} business metrics · expects a reading every ${Math.round(pack.reporting_window_hours / 24)} days`
-            : 'No domain pack — this domain reports pre-derived signals.'
+            ? `Reported in ${pack.metrics.length} metrics · expects a reading every ${Math.round(
+                pack.reporting_window_hours / 24,
+              )} days`
+            : 'This domain reports pre-derived signals.'
         }
-        right={<EvaluateNow domain={domain} />}
+        action={<RunNow domain={domain} />}
       />
 
       {!observations.ok ? (
-        <div style={{ marginBottom: 24 }}>
+        <div className="mb-7">
           <ErrorNote message={observations.message} />
         </div>
       ) : null}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-          gap: 16,
-          marginBottom: 32,
-        }}
-      >
-        <Stat
+      <div className="mb-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Figure
           label="Health"
           value={latest ? `${Math.round(latest.performance * 100)}%` : '—'}
-          hint={latest ? formatWhen(latest.observed_at) : 'no accepted readings'}
-          tone={latest && latest.performance < 0.6 ? 'high' : 'plain'}
+          note={latest ? whenUTC(latest.observed_at) : 'no accepted readings'}
+          tone={latest && latest.performance < 0.6 ? 'risk' : 'plain'}
+          gauge={
+            latest
+              ? {
+                  pct: latest.performance * 100,
+                  tone: latest.performance < 0.6 ? 'risk' : 'good',
+                }
+              : undefined
+          }
         />
-        <Stat
+        <Figure
           label="Moved vs. baseline"
           value={latest ? `${Math.round(latest.drift_fraction * 100)}%` : '—'}
-          hint="share of metrics drifting"
-          tone={latest && latest.drift_fraction > 0.4 ? 'high' : 'plain'}
+          note="share of metrics drifting"
+          tone={latest && latest.drift_fraction > 0.4 ? 'risk' : 'plain'}
         />
-        <Stat label="Accepted readings" value={String(accepted.length)} hint="most recent 25" />
-        <Stat
+        <Figure label="Accepted readings" value={String(accepted.length)} note="most recent 25" />
+        <Figure
           label="Quarantined"
           value={String(quarantined.length)}
-          hint={quarantined.length ? 'excluded from decisions' : 'none rejected'}
-          tone={quarantined.length ? 'high' : 'plain'}
+          note={quarantined.length ? 'excluded from decisions' : 'none rejected'}
+          tone={quarantined.length ? 'risk' : 'plain'}
         />
       </div>
 
-      {latest && pack ? <LatestMetrics pack={pack} row={latest} /> : null}
+      {reported.length > 0 && latest ? (
+        <section className="mb-9">
+          <SectionTitle>Latest reading, metric by metric</SectionTitle>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {reported.map((metric) => {
+              const value = latest.metrics[metric.key]
+              const bad = breached(metric, value)
+              const [min, max] = metric.healthy_range
+              return (
+                <Bezel key={metric.key} radius={18} pad={4}>
+                  <div className="px-5 py-4" title={metric.description}>
+                    <span className="text-[12.5px]" style={{ color: 'var(--color-ink-soft)' }}>
+                      {metric.label}
+                    </span>
+                    <div
+                      data-figure
+                      className="mt-2 text-[25px] font-bold leading-none tracking-[-0.03em]"
+                      style={{ color: bad ? 'var(--color-risk)' : 'var(--color-ink)' }}
+                    >
+                      {fmt(value, metric.unit)}
+                    </div>
+                    <p className="mt-2 text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                      {max !== null && max !== undefined
+                        ? `healthy below ${fmt(max, metric.unit)}`
+                        : min !== null && min !== undefined
+                          ? `healthy above ${fmt(min, metric.unit)}`
+                          : ''}
+                    </p>
+                  </div>
+                </Bezel>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: pack ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: 16,
-          marginBottom: 32,
-        }}
-      >
-        {pack ? (
-          <ReadingForm domain={domain} pack={pack} />
-        ) : (
-          <PushObservation domain={domain} />
-        )}
+      <div className="mb-9 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        {pack ? <ReadingForm domain={domain} pack={pack} /> : <div />}
         <MonitoringControls domain={domain} />
       </div>
 
       {quarantined.length > 0 ? (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="label" style={{ marginBottom: 12 }}>
-            Rejected readings
-          </h2>
-          <p
-            style={{
-              fontSize: 13,
-              color: 'var(--color-ink-muted)',
-              margin: '0 0 12px',
-              maxWidth: '72ch',
-            }}
-          >
-            These were kept but excluded from every decision. A repeating pattern here
-            usually means a feed changed upstream rather than the business changing.
+        <section className="mb-9">
+          <SectionTitle>Rejected readings</SectionTitle>
+          <p className="mb-4 max-w-[70ch] text-[13px]" style={{ color: 'var(--color-ink-soft)' }}>
+            Kept, but excluded from every decision. A pattern here usually means a feed changed
+            upstream rather than the business changing.
           </p>
-          <div className="card">
-            {quarantined.map((row, index) => (
-              <div
-                key={row.id}
-                style={{
-                  padding: '14px 18px',
-                  borderBottom:
-                    index === quarantined.length - 1 ? 'none' : '1px solid var(--color-line)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 12,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    marginBottom: 8,
-                  }}
-                >
-                  <span
-                    className="mono"
-                    style={{ fontSize: 11, color: 'var(--color-ink-faint)' }}
-                  >
-                    {formatWhen(row.observed_at)}
+          <Panel className="!p-2">
+            {quarantined.map((row) => (
+              <div key={row.id} className="rounded-[13px] px-4 py-3">
+                <div className="mb-2 flex flex-wrap items-center gap-3">
+                  <span className="tnum text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                    {whenUTC(row.observed_at)}
                   </span>
                   <span
-                    className="mono"
+                    className="rounded-full px-[9px] py-[3px] text-[10px] font-bold"
                     style={{
-                      fontSize: 9,
-                      letterSpacing: '0.1em',
-                      padding: '2px 7px',
-                      color: 'var(--color-risk-high)',
-                      background: 'var(--color-risk-high-dim)',
+                      color: 'var(--color-risk)',
+                      background: 'var(--color-ground)',
+                      boxShadow: 'var(--press-sm)',
                     }}
                   >
                     QUARANTINED
                   </span>
-                  <span
-                    className="mono"
-                    style={{ fontSize: 11, color: 'var(--color-ink-faint)' }}
-                  >
+                  <span className="text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
                     via {row.source}
                   </span>
                 </div>
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                <ul className="list-disc pl-5">
                   {row.issues
                     .filter((i) => i.severity === 'error')
                     .map((issue, i) => (
                       <li
                         key={i}
-                        style={{
-                          fontSize: 13,
-                          color: 'var(--color-ink)',
-                          marginBottom: 3,
-                        }}
+                        className="mb-1 text-[13.5px]"
+                        style={{ color: 'var(--color-ink-soft)' }}
                       >
                         {issue.message}
                       </li>
@@ -188,211 +205,88 @@ export default async function DomainPage({
                 </ul>
               </div>
             ))}
-          </div>
+          </Panel>
         </section>
       ) : null}
 
-      <section style={{ marginBottom: 32 }}>
-        <h2 className="label" style={{ marginBottom: 12 }}>
-          Reading history
-        </h2>
+      <section className="mb-9">
+        <SectionTitle>Reading history</SectionTitle>
         {accepted.length === 0 ? (
           <EmptyState
             title="No accepted readings yet"
-            body="Send one above, or point a connector at this domain's readings endpoint."
+            body="Send one above, or point a connector at this domain&rsquo;s readings endpoint."
           />
         ) : (
-          <div className="card" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  {['Observed', 'Health', 'Moved', ...headerMetrics(pack), 'Source'].map((h) => (
-                    <th
-                      key={h}
-                      className="label"
-                      style={{
-                        textAlign: 'left',
-                        padding: '11px 14px',
-                        borderBottom: '1px solid var(--color-line)',
-                        background: 'var(--color-surface-raised)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {accepted.map((row) => (
-                  <tr key={row.id}>
-                    <td style={cell({ muted: true, nowrap: true })}>
-                      {formatWhen(row.observed_at)}
-                    </td>
-                    <td style={cell({ danger: row.performance < 0.6 })}>
-                      {Math.round(row.performance * 100)}%
-                    </td>
-                    <td style={cell({ danger: row.drift_fraction > 0.4 })}>
-                      {Math.round(row.drift_fraction * 100)}%
-                    </td>
-                    {keyMetrics(pack).map((m) => (
-                      <td key={m.key} style={cell({})}>
-                        {row.metrics?.[m.key] !== undefined
-                          ? formatMetric(row.metrics[m.key], m.unit)
-                          : '—'}
-                      </td>
-                    ))}
-                    <td style={cell({ muted: true })}>{row.source}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Panel className="!p-2">
+            {accepted.map((row) => (
+              <div
+                key={row.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-[13px] px-4 py-3 sm:grid-cols-[150px_70px_70px_minmax(0,1fr)_auto]"
+              >
+                <span className="tnum text-[12.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                  {whenUTC(row.observed_at)}
+                </span>
+                <span
+                  className="tnum text-[14px] font-semibold"
+                  style={{
+                    color: row.performance < 0.6 ? 'var(--color-risk)' : 'var(--color-ink)',
+                  }}
+                >
+                  {Math.round(row.performance * 100)}%
+                </span>
+                <span
+                  className="tnum hidden text-[13px] sm:block"
+                  style={{ color: 'var(--color-ink-soft)' }}
+                >
+                  {Math.round(row.drift_fraction * 100)}%
+                </span>
+                <span className="hidden sm:block">
+                  <Gauge
+                    pct={row.performance * 100}
+                    tone={row.performance < 0.6 ? 'risk' : 'good'}
+                  />
+                </span>
+                <span className="text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+                  {row.source}
+                </span>
+              </div>
+            ))}
+          </Panel>
         )}
       </section>
 
       <section>
-        <h2 className="label" style={{ marginBottom: 12 }}>
-          Decisions for this domain
-        </h2>
+        <SectionTitle>Decisions for this domain</SectionTitle>
         {domainActivity.length === 0 ? (
           <EmptyState
             title="No decisions recorded"
-            body="Decisions appear once the agent evaluates this domain, on its schedule or via Evaluate now."
+            body="Decisions appear once the agent evaluates this domain, on its schedule or via Run now."
           />
         ) : (
-          <div className="card">
-            {domainActivity.map((entry, index) => (
+          <Panel className="!p-2">
+            {domainActivity.map((entry) => (
               <div
                 key={entry.id}
-                style={{
-                  padding: '12px 16px',
-                  borderBottom:
-                    index === domainActivity.length - 1
-                      ? 'none'
-                      : '1px solid var(--color-line)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 14,
-                  flexWrap: 'wrap',
-                }}
+                className="flex flex-wrap items-center gap-4 rounded-[13px] px-4 py-3"
               >
                 <span
-                  className="mono"
-                  style={{ fontSize: 12, color: 'var(--color-ink-faint)', minWidth: 150 }}
+                  className="tnum min-w-[150px] text-[12.5px]"
+                  style={{ color: 'var(--color-ink-faint)' }}
                 >
-                  {formatWhen(entry.created_at)}
+                  {whenUTC(entry.created_at)}
                 </span>
-                <ActionTag action={entry.action} />
+                <span className="text-[14px] font-medium">
+                  {entry.action.replace(/_/g, ' ').toLowerCase()}
+                </span>
                 <RiskPill level={entry.risk_level} />
-                <span className="mono" style={{ fontSize: 11, color: 'var(--color-ink-faint)' }}>
+                <span className="text-[12px]" style={{ color: 'var(--color-ink-faint)' }}>
                   {entry.status}
                 </span>
               </div>
             ))}
-          </div>
+          </Panel>
         )}
       </section>
     </>
-  )
-}
-
-/** The first few scored metrics, so the history table stays readable. */
-function keyMetrics(pack: DomainPack | undefined) {
-  if (!pack) return []
-  return pack.metrics.filter((m) => m.direction !== 'neutral').slice(0, 3)
-}
-
-function headerMetrics(pack: DomainPack | undefined): string[] {
-  return keyMetrics(pack).map((m) => m.label)
-}
-
-function formatMetric(value: number, unit: string): string {
-  if (unit === 'ratio') return `${Math.round(value * 100)}%`
-  if (unit === 'currency') return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
-  if (unit === 'days') return `${value}d`
-  return String(value)
-}
-
-function cell(opts: {
-  muted?: boolean
-  danger?: boolean
-  nowrap?: boolean
-}): React.CSSProperties {
-  return {
-    padding: '10px 14px',
-    borderBottom: '1px solid var(--color-line)',
-    fontFamily: 'var(--font-mono)',
-    fontVariantNumeric: 'tabular-nums',
-    whiteSpace: opts.nowrap ? 'nowrap' : undefined,
-    color: opts.danger
-      ? 'var(--color-risk-high)'
-      : opts.muted
-        ? 'var(--color-ink-faint)'
-        : 'var(--color-ink)',
-  }
-}
-
-/** Per-metric health for the newest accepted reading — where the problem is. */
-function LatestMetrics({ pack, row }: { pack: DomainPack; row: ObservationRow }) {
-  const scored = pack.metrics.filter((m) => m.direction !== 'neutral')
-  const reported = scored.filter((m) => row.metrics?.[m.key] !== undefined)
-  if (reported.length === 0) return null
-
-  return (
-    <section style={{ marginBottom: 32 }}>
-      <h2 className="label" style={{ marginBottom: 12 }}>
-        Latest reading, metric by metric
-      </h2>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 12,
-        }}
-      >
-        {reported.map((metric) => {
-          const value = row.metrics[metric.key]
-          const [min, max] = metric.healthy_range
-          const breached =
-            (max !== null && max !== undefined && value > max) ||
-            (min !== null && min !== undefined && value < min)
-          return (
-            <div
-              key={metric.key}
-              className="card"
-              style={{
-                padding: 16,
-                borderLeft: `2px solid ${
-                  breached ? 'var(--color-risk-high)' : 'var(--color-line)'
-                }`,
-              }}
-              title={metric.description}
-            >
-              <div className="label">{metric.label}</div>
-              <div
-                className="mono"
-                style={{
-                  fontSize: 21,
-                  marginTop: 8,
-                  color: breached ? 'var(--color-risk-high)' : 'var(--color-ink)',
-                }}
-              >
-                {formatMetric(value, metric.unit)}
-              </div>
-              <div
-                style={{ fontSize: 11, color: 'var(--color-ink-faint)', marginTop: 5 }}
-              >
-                {max !== null && max !== undefined
-                  ? `healthy below ${formatMetric(max, metric.unit)}`
-                  : min !== null && min !== undefined
-                    ? `healthy above ${formatMetric(min, metric.unit)}`
-                    : ''}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </section>
   )
 }
