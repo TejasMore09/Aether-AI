@@ -17,9 +17,8 @@ import { SESSION_COOKIE, parseSession } from './lib/session'
  *
  * /explore is the public surface — a worked example on mock data, no API calls
  * and no tenant data — so a stranger can judge the product without an account.
- * /preview is the design-direction comparison and goes once that is settled.
  */
-const PUBLIC_PATHS = ['/login', '/signup', '/explore', '/preview']
+const PUBLIC_PATHS = ['/login', '/signup', '/explore']
 
 /**
  * Public *and* pointless once signed in, so a session bounces away from them.

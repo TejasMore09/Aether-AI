@@ -1,10 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useReducedMotion } from 'framer-motion'
 
-import { CountUp, Rise, Stagger } from '@/app/preview/motion'
-import { business, decision, health, history, metrics, quarantined } from '@/app/preview/data'
+import { CountUp, Rise, Stagger } from '@/components/motion'
+import { business, decision, health, history, metrics, quarantined } from './data'
 
 import styles from './explore.module.css'
 
@@ -20,8 +19,6 @@ import styles from './explore.module.css'
  * data is a small lie that costs trust the moment someone notices.
  */
 export default function ExplorePage() {
-  const reduced = useReducedMotion()
-
   return (
     <div className={styles.root}>
       <header className={styles.header}>
@@ -116,11 +113,7 @@ export default function ExplorePage() {
               This is one report for one business function. Your agent watches yours on a
               schedule and only stops you when the money justifies it.
             </p>
-            <Link
-              href="/signup"
-              className={styles.ctaButton}
-              style={reduced ? undefined : undefined}
-            >
+            <Link href="/signup" className={styles.ctaButton}>
               Create an organization
             </Link>
           </Rise>
