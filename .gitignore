@@ -2,3 +2,11 @@ venv/
 __pycache__/
 .env
 *.csv
+
+# Platform
+platform/.venv/
+platform/.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

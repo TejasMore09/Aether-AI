@@ -1,0 +1,57 @@
+name: platform-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["platform/**", ".github/workflows/platform-ci.yml"]
+  pull_request:
+    paths: ["platform/**", ".github/workflows/platform-ci.yml"]
+
+defaults:
+  run:
+    working-directory: platform
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aether
+          POSTGRES_PASSWORD: aether_dev_only
+          POSTGRES_DB: aether
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aether -d aether"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Typecheck
+        run: mypy src
+
+      - name: Migrate (as owner — creates tables, roles, RLS policies)
+        env:
+          AETHER_MIGRATION_DATABASE_URL: postgresql+psycopg://aether:aether_dev_only@localhost:5433/aether
+        run: alembic upgrade head
+
+      - name: Test (app connects as non-owner aether_app so RLS is enforced)
+        env:
+          AETHER_DATABASE_URL: postgresql+psycopg://aether_app:aether_app_dev_only@localhost:5433/aether
+          AETHER_JWT_SECRET: ci-only-secret
+        run: pytest -v

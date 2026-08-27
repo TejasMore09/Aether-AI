@@ -1,0 +1,32 @@
+# Aether local development stack — free, self-hosted.
+# Postgres runs on host port 5433 because this machine already has a native
+# PostgreSQL 18 server on 5432; the platform deliberately does not touch it.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: aether-db
+    environment:
+      POSTGRES_USER: aether
+      POSTGRES_PASSWORD: aether_dev_only
+      POSTGRES_DB: aether
+    ports:
+      - "5433:5432"
+    volumes:
+      - aether_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aether -d aether"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: aether-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - aether_redis:/data
+
+volumes:
+  aether_pgdata:
+  aether_redis:
