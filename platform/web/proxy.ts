@@ -12,24 +12,39 @@ import { SESSION_COOKIE } from './lib/session'
  * validate the JWT and Postgres RLS scopes the data.
  */
 
-// /preview is a design-review route: mock data only, no API calls, no
-// tenant data. It is public so a direction can be reviewed without the
-// backend running. Remove it along with app/preview once the design is settled.
-const PUBLIC_PATHS = ['/login', '/signup', '/preview']
+/**
+ * Reachable without a session.
+ *
+ * /explore is the public surface — a worked example on mock data, no API calls
+ * and no tenant data — so a stranger can judge the product without an account.
+ * /preview is the design-direction comparison and goes once that is settled.
+ */
+const PUBLIC_PATHS = ['/login', '/signup', '/explore', '/preview']
+
+/**
+ * Public *and* pointless once signed in, so a session bounces away from them.
+ *
+ * Deliberately narrower than PUBLIC_PATHS: /explore is a demo, not a login
+ * page, and a signed-in user following a shared link to it should still see
+ * it rather than being thrown into their dashboard.
+ */
+const AUTH_PATHS = ['/login', '/signup']
+
+const matches = (paths: string[], pathname: string) =>
+  paths.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hasSession = request.cookies.has(SESSION_COOKIE)
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 
-  if (!hasSession && !isPublic) {
+  if (!hasSession && !matches(PUBLIC_PATHS, pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
     return NextResponse.redirect(url)
   }
 
-  if (hasSession && isPublic) {
+  if (hasSession && matches(AUTH_PATHS, pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     url.search = ''
