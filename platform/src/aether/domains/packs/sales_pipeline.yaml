@@ -1,0 +1,208 @@
+# Sales Pipeline — domain pack v1
+#
+# Scope: whether there is enough work coming, and whether it is actually
+# moving. Not "are we hitting target" — that is a number the business already
+# has and does not need an agent to repeat.
+#
+# This is the domain where a published band is least meaningful. A referral-led
+# consultancy closing one deal in two and an outbound business closing one in
+# twenty are both healthy; judged against one another, either looks broken. The
+# starting bands below are therefore wide and cautious, and calibration to the
+# tenant's own history does most of the real work here.
+
+key: sales_pipeline
+version: 1
+label: Sales Pipeline
+summary: >
+  Tracks how much qualified work is in play against what the business needs,
+  how much of it has gone quiet, and whether deals are slipping rather than
+  closing.
+
+# Pipeline is reviewed weekly in most small businesses. A reading a fortnight
+# old still says something useful about coverage, but not about movement.
+max_age_hours: 240
+
+# Sales is lumpy and seasonal: one large deal landing or one quiet fortnight
+# moves every ratio. A tighter tolerance reports the ordinary rhythm of a
+# small sales team as deterioration.
+drift_tolerance: 0.30
+baseline_window: 12
+
+# Metrics here compensate for one another far more than cash metrics do — a
+# modest win rate against generous coverage still lands the year. So the worst
+# single number pulls less weight than it does in the cash pack, where nothing
+# offsets not making payroll.
+severity_bias: 0.45
+
+metrics:
+  - key: pipeline_coverage
+    label: Pipeline coverage
+    unit: ratio
+    direction: higher_better
+    required: true
+    min: 0
+    max: 50
+    healthy_min: 3.0
+    critical_min: 1.5
+    weight: 2.0
+    description: >
+      Value of qualified open pipeline divided by what the business needs to
+      close this period. Below 1.0 the target cannot be reached even by winning
+      everything currently in play.
+
+  - key: stalled_ratio
+    label: Pipeline gone quiet
+    unit: ratio
+    direction: lower_better
+    required: true
+    min: 0
+    max: 1
+    healthy_max: 0.20
+    critical_max: 0.50
+    weight: 1.5
+    description: >
+      Share of open deals with no recorded contact inside their expected cycle.
+      The most portable number in this pack: a deal nobody has spoken to is
+      stalled whatever the business model, and stalled deals decay rather than
+      wait.
+
+  - key: win_rate
+    label: Win rate
+    unit: ratio
+    direction: higher_better
+    min: 0
+    max: 1
+    healthy_min: 0.25
+    critical_min: 0.08
+    weight: 1.25
+    description: >
+      Deals won as a share of deals decided. The published band here is close
+      to meaningless across businesses — referral-led firms and cold-outbound
+      firms differ by an order of magnitude — so this metric leans almost
+      entirely on the tenant's own history.
+
+  - key: slipped_ratio
+    label: Deals that moved their date
+    unit: ratio
+    direction: lower_better
+    min: 0
+    max: 1
+    healthy_max: 0.15
+    critical_max: 0.45
+    weight: 1.25
+    description: >
+      Share of open deals whose expected close date moved out this period. The
+      earliest honest warning that a forecast is going to miss, and it appears
+      well before the win rate reacts.
+
+  - key: avg_deal_age_days
+    label: Average age of open deals
+    unit: days
+    direction: lower_better
+    min: 0
+    max: 730
+    healthy_max: 60
+    critical_max: 180
+    weight: 1.0
+    description: >
+      How long open deals have been open. Rising while coverage holds usually
+      means the team is accumulating deals it is not closing rather than
+      building genuine pipeline.
+
+  # Context metrics — never scored, always available to explanations.
+  - key: pipeline_value
+    label: Open pipeline value
+    unit: currency
+    direction: neutral
+    min: 0
+    description: Total value of qualified open deals. Sets the scale of everything else.
+
+  - key: open_deal_count
+    label: Open deals
+    unit: count
+    direction: neutral
+    min: 0
+    description: >
+      Number of open deals, for context on whether the pipeline is a handful of
+      large bets or many small ones — which changes what the same ratios mean.
+
+  - key: new_pipeline_added
+    label: New pipeline added
+    unit: currency
+    direction: neutral
+    min: 0
+    description: Qualified value added this period. Context for whether coverage is being replenished.
+
+# Stalled pipeline is not carried at a financing cost; it decays. A deal nobody
+# has spoken to loses win probability every day it sits, so the exposure really
+# is being destroyed rather than merely delayed. The rate below is that decay
+# discounted by a rough gross margin — this is revenue at risk, not profit.
+#
+# The standard exposure model covers this without modification, which is the
+# point: unlike cash, this domain needed nothing new from the engine.
+economics:
+  model: exposure_scaled
+  exposure_metric: pipeline_value
+  at_risk_metric: stalled_ratio
+  exposure_noun: in open pipeline
+  daily_rate: 0.0025
+  # Sales interventions take a while to show up. A fortnight is the shortest
+  # window over which re-engaging a stalled book could honestly have paid off.
+  payback_days: 14
+  # A focused re-engagement push: a week of someone's selling time.
+  intervention_cost_usd: 900.0
+
+actions:
+  none:
+    label: NO_ACTION
+    description: Pipeline is healthy and moving. Nothing to do.
+  monitor:
+    label: MONITOR
+    description: >
+      Early signs of thinning or slowing. Worth watching through the next
+      pipeline review before changing anything.
+  investigate:
+    label: FLAG_FOR_REVIEW
+    description: >
+      The pipeline has weakened enough to be worth a proper look, but not
+      enough to justify pulling selling time away from live deals. Raise it at
+      the next pipeline review with the specific deals that moved.
+  intervene:
+    label: RE_ENGAGE_PIPELINE
+    description: >
+      Work the stalled book directly: contact every deal that has gone quiet
+      beyond its cycle, re-qualify or close out the ones that will not move,
+      and rebuild coverage from the accounts most likely to buy again.
+    requires_approval: true
+
+narrative:
+  audience: >
+    An owner or sales lead at a small business who already knows the revenue
+    number. They want to know whether what is in play is real, what has gone
+    quiet, and which conversations to have this week.
+  must_cover:
+    - whether there is enough qualified work in play for the period ahead
+    - how much of the pipeline has gone quiet, in money rather than percentages
+    - whether this is fewer deals arriving or existing deals not moving
+    - the specific action worth taking before the next review
+  avoid:
+    - machine-learning vocabulary of any kind
+    - repeating the revenue figure back, which the business already knows
+    - generic sales advice that would apply to any company
+    - treating a single lumpy period as a trend
+
+# Sales is noisy, so the gap between *noticing* and *acting* is deliberately
+# wide here — wider than in either finance pack.
+#
+# Noticing is cheap: MONITOR gates nobody, emails nobody, and costs a line in
+# the next pipeline review. So it fires early, while coverage is merely
+# thinning. Acting is expensive: RE_ENGAGE_PIPELINE pulls selling time off
+# live deals, so it needs real deterioration rather than one quiet fortnight.
+#
+# That is why perf_threshold sits high and medium_risk_score low, while
+# high_risk_score stays well clear of it.
+policy_defaults:
+  perf_threshold: 0.92
+  drift_threshold: 0.30
+  high_risk_score: 0.30
+  medium_risk_score: 0.06

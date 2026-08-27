@@ -84,6 +84,6 @@ on it.
 cd platform && .venv/Scripts/python -m pytest
 ```
 
-141 tests. Tenant isolation is proven by test rather than asserted by design,
+160 tests. Tenant isolation is proven by test rather than asserted by design,
 and the break-glass gate is mutation-checked — stubbing it to always pass
 fails five tests, so they are load-bearing rather than decorative.

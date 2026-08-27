@@ -183,7 +183,7 @@ bands, economics, action vocabulary, and how an explanation for that domain
 should read. Adding a business function must mean writing a pack, never
 editing agent code — that constraint is what keeps expansion cheap.
 
-Shipped: **Cash & Receivables**, **Cash & Runway**.
+Shipped: **Cash & Receivables**, **Cash & Runway**, **Sales Pipeline**.
 
 The engine reasons in domain-independent `ActionSlot`s — none, monitor,
 investigate, intervene — and the pack supplies each slot's label for its
@@ -200,6 +200,13 @@ vocabulary leaking out of the one abstraction built to keep domains apart.
 Both were fixed in the engine, and the receivables pack was unchanged by
 either. That is the property to preserve: a new domain should extend the
 engine, never bend it.
+
+Domain three settled the question. Sales pipeline was added as two files — one
+pack and its tests — with no new economics model, no new engine branch, and no
+change to either finance pack. It is also the hardest case for a published
+band, since a referral firm closing half its quotes and an outbound firm
+closing one in twenty are both healthy, which is precisely the work anchored
+calibration exists to do.
 
 ---
 
@@ -283,7 +290,7 @@ next improvement.
 
 ## 10. Verification
 
-141 tests. RLS isolation is proven by test rather than asserted by design, and
+160 tests. RLS isolation is proven by test rather than asserted by design, and
 the break-glass gate is mutation-checked — stubbing the grant check to always
 pass fails five tests, so they are load-bearing rather than decorative.
 

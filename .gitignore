@@ -24,3 +24,8 @@ platform/console/.env.local
 platform/console/next-env.d.ts
 platform/console/tsconfig.tsbuildinfo
 platform/web/tsconfig.tsbuildinfo
+
+# Google Drive sync scratch. This repository lives inside a synced folder, so
+# Drive writes and deletes temp files under it while git is running — which is
+# how `git add -A` once failed mid-index.
+.tmp.driveupload/
