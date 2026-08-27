@@ -27,6 +27,34 @@ services:
     volumes:
       - aether_redis:/data
 
+  # Durable workflow engine for the autonomous Nano monitor loop.
+  # auto-setup provisions its own `temporal` + `temporal_visibility` databases
+  # inside the same Postgres instance (separate DBs, not Aether's schema).
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    container_name: aether-temporal
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: aether
+      POSTGRES_PWD: aether_dev_only
+      POSTGRES_SEEDS: db
+    ports:
+      - "7233:7233"
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: aether-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "8233:8080"
+
 volumes:
   aether_pgdata:
   aether_redis:

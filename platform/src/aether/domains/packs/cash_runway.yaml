@@ -1,0 +1,205 @@
+# Cash & Runway — domain pack v1
+#
+# Scope: whether the business can pay what it owes, and for how much longer.
+# Audience: an owner-operator who checks the bank balance on a Monday morning
+# and does the arithmetic in their head.
+#
+# This is the domain where being wrong is least recoverable. A business can
+# survive a bad quarter of sales; it cannot survive missing payroll. The bands
+# below are therefore deliberately cautious, and the intervention threshold is
+# set so the agent speaks up while options still exist rather than once they
+# have closed.
+
+key: cash_runway
+version: 1
+label: Cash & Runway
+summary: >
+  Tracks cash on hand against what is committed to go out, how many months of
+  operating cost that covers, and whether the burn is steady enough for the
+  runway number to be trusted.
+
+# Cash position is meaningful weekly. A reading a fortnight old is still worth
+# acting on, but not much older — this moves faster than the receivables book.
+max_age_hours: 336
+
+# Cash is lumpy by nature: one large invoice paid or one quarterly bill lands
+# and the month looks different. A tolerance tighter than this reports normal
+# business rhythm as deterioration.
+drift_tolerance: 0.30
+baseline_window: 12
+
+# Runway is a slow-moving number and a business needs a few months of history
+# before its own normal means anything. Slightly higher than the default.
+calibration_min_readings: 10
+
+# The worst single number should dominate here more than it does elsewhere.
+# Healthy sales and healthy margins do not help a business that cannot make
+# payroll on Friday, and a composite that lets them offset it is lying.
+severity_bias: 0.6
+
+metrics:
+  - key: runway_months
+    label: Runway
+    unit: months
+    direction: higher_better
+    required: true
+    min: 0
+    max: 120
+    healthy_min: 6.0
+    critical_min: 2.0
+    weight: 2.0
+    description: >
+      Months of operating cost the current cash position covers at the recent
+      burn rate. The number the owner actually loses sleep over.
+
+  - key: payroll_cover_months
+    label: Payroll covered
+    unit: months
+    direction: higher_better
+    required: true
+    min: 0
+    max: 120
+    healthy_min: 3.0
+    critical_min: 1.0
+    weight: 2.0
+    # The one number in this pack whose breach is not a trade-off. A business
+    # under a month of payroll cover needs to act whether or not acting "pays
+    # for itself" — see MetricSpec.existential.
+    existential: true
+    description: >
+      Months of payroll the cash position covers on its own. Separated from
+      runway because payroll is the obligation a business will damage almost
+      anything else to protect, and the one whose failure is terminal.
+
+  - key: obligation_coverage
+    label: Coverage of committed outgoings
+    unit: ratio
+    direction: higher_better
+    min: 0
+    max: 10
+    healthy_min: 1.5
+    critical_min: 1.0
+    weight: 1.5
+    description: >
+      Cash available divided by what is contractually committed to leave over
+      the next 30 days. Below 1.0 the business is relying on money it has not
+      yet received in order to meet obligations it has already made.
+
+  - key: burn_volatility
+    label: Burn volatility
+    unit: ratio
+    direction: lower_better
+    min: 0
+    max: 5
+    healthy_max: 0.25
+    critical_max: 0.75
+    weight: 1.0
+    description: >
+      How much monthly net burn swings around its own average. Matters because
+      it is what makes the runway figure trustworthy or not: erratic burn means
+      the headline number is an average the business rarely actually lives.
+
+  - key: net_burn_monthly
+    label: Net monthly burn
+    unit: currency
+    direction: neutral
+    min: 0
+    description: >
+      Cash out minus cash in over the month. Context, never scored: a business
+      investing deliberately burns more, and that is a decision, not a fault.
+
+  - key: cash_balance
+    label: Cash on hand
+    unit: currency
+    direction: neutral
+    min: 0
+    description: Cash and equivalents available now. Sets the scale of everything else.
+
+  - key: committed_outflows_30d
+    label: Committed out, next 30 days
+    unit: currency
+    direction: neutral
+    min: 0
+    description: >
+      Payroll, rent, loan repayments, tax and confirmed supplier bills falling
+      due within 30 days. What the business has already promised.
+
+# Unlike receivables, the money at risk here is not a book being carried at a
+# financing cost — it is obligations the business may be unable to meet. The
+# shortfall is derived from cash against commitments, because no owner reports
+# "the fraction of my bills I cannot pay".
+#
+# The daily rate is far higher than a cost of capital and deliberately so:
+# missing an obligation costs penalty interest, supplier terms, and standing,
+# and those compound in ways a financing charge does not.
+economics:
+  model: shortfall_scaled
+  exposure_metric: committed_outflows_30d
+  cover_metric: cash_balance
+  exposure_noun: committed to go out
+  daily_rate: 0.002
+  # Cash problems get worse while you decide, so the window to justify acting
+  # is longer than the receivables default. Cutting a cost or opening a
+  # facility pays back over weeks, not days.
+  payback_days: 21
+  # Advisor time, renegotiating terms, arranging a facility.
+  intervention_cost_usd: 1200.0
+
+actions:
+  none:
+    label: NO_ACTION
+    description: Cash position is comfortable. Nothing to do.
+  monitor:
+    label: MONITOR
+    description: >
+      Runway is shortening but still ample. Re-check next cycle before
+      changing anything.
+  investigate:
+    label: REVIEW_CASH_PLAN
+    description: >
+      The position has tightened enough to be worth a proper look, but not so
+      far that emergency measures are justified. Rebuild the 13-week cash
+      forecast and confirm the committed outgoings are real.
+  intervene:
+    label: PROTECT_RUNWAY
+    description: >
+      Act while options remain: defer discretionary spend, bring forward
+      collections on the largest overdue accounts, confirm payroll is covered
+      for the next two cycles, and open a conversation about a facility before
+      the numbers make it expensive.
+    requires_approval: true
+
+narrative:
+  audience: >
+    An owner-operator who checks the balance on a Monday and does the sums in
+    their head. They are not looking for analysis; they are deciding whether
+    this week is normal or whether they need to do something.
+  must_cover:
+    - the runway figure and which direction it moved
+    - whether payroll is covered, stated plainly and separately
+    - what is actually driving it — spend rising, or money arriving slower
+    - the earliest useful action, and why acting now is cheaper than later
+  avoid:
+    - machine-learning vocabulary of any kind
+    - alarming language when the position is merely tightening
+    - understating a genuine shortfall to sound reassuring
+    - implying the business should raise finance, which is not our call
+
+# Cash decisions gate earlier than receivables ones: the cost of speaking up a
+# fortnight too early is a wasted conversation, and the cost of speaking up a
+# fortnight too late can be terminal.
+# The risk bands are lower than the receivables pack's, not copied from it.
+# At the receivables thresholds a business at 5 months runway with payroll
+# covered for 2.6 reported "nothing to see" — technically consistent with the
+# scoring, and useless to the owner, who wants to hear about that on the way
+# down rather than at the bottom.
+policy_defaults:
+  # 0.90, not the 0.72 receivables uses. The question this answers is "how
+  # impaired must cash health be before we say something", and for this domain
+  # the honest answer is "barely". A business at 74% health here — five months
+  # of runway, payroll covered for under three — is one an owner wants to hear
+  # about on the way down, not at the bottom.
+  perf_threshold: 0.90
+  drift_threshold: 0.30
+  high_risk_score: 0.25
+  medium_risk_score: 0.05

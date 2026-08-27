@@ -19,7 +19,44 @@ class Settings(BaseSettings):
     jwt_ttl_minutes: int = 60
     jwt_algorithm: str = "HS256"
 
+    # Staff tokens are signed with their own key, not jwt_secret. If the
+    # customer-facing signing key ever leaks, the blast radius is one
+    # organization's sessions -- not the ability to mint a main-brain
+    # identity with reach across the whole fleet. Sharing one secret would
+    # make those two failures the same failure.
+    staff_jwt_secret: str = "dev-only-staff-secret-do-not-deploy"
+    staff_jwt_ttl_minutes: int = 30  # shorter: staff sessions are for incidents
+
+    # Ceiling on how long one break-glass grant can last. Not a default --
+    # the requester picks a duration and this caps it. An incident that
+    # outlives this needs a fresh decision, with its own written reason.
+    break_glass_max_minutes: int = 240
+
     env: str = "dev"
+
+    # Temporal (durable workflow engine) — the autonomous monitor loop.
+    temporal_address: str = "localhost:7233"
+    temporal_namespace: str = "default"
+    temporal_task_queue: str = "aether-nano"
+
+    # LLM gateway (diagnosis layer). Model in LiteLLM notation; the matching
+    # provider key comes from the provider's own env var (e.g. GEMINI_API_KEY).
+    llm_model: str = "gemini/gemini-3.6-flash"  # pinned; override via AETHER_LLM_MODEL
+    llm_timeout_seconds: float = 30.0
+    llm_max_output_tokens: int = 700
+    # Hard monthly ceiling per tenant. When reached, diagnosis falls back to
+    # the deterministic generator instead of silently overspending.
+    llm_monthly_budget_usd_per_tenant: float = 5.0
+
+    # Outbound email (notification service). Unconfigured (empty host) means
+    # notifications are recorded with status=skipped_unconfigured, never lost
+    # silently. Any SMTP provider works: SES, Resend, Mailgun, or dev Mailpit.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "alerts@aether.local"
+    smtp_starttls: bool = True
 
 
 @lru_cache

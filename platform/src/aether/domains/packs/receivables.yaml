@@ -1,0 +1,176 @@
+# Cash & Receivables — domain pack v1
+#
+# Scope: money the business is owed, and whether it is arriving on time.
+# Audience: an owner-operator or finance lead at a small business, who feels
+# this weekly and thinks in cash, not ratios.
+#
+# Thresholds below are starting defaults for a business on ~30-day terms.
+# They are deliberately conservative: a tenant's own baseline supersedes them
+# once enough history exists, and any tenant can override via policy.
+
+key: receivables
+version: 1
+label: Cash & Receivables
+summary: >
+  Tracks how much the business is owed, how late it is arriving, and what the
+  delay costs in carrying charges and write-off risk.
+
+# Receivables are typically reported weekly, not hourly. A reading five days
+# old is still decision-grade here, unlike a live systems metric.
+max_age_hours: 192
+
+# A metric must move this much against the tenant's own baseline before it
+# counts as drifted. Receivables are seasonal and lumpy; a tighter tolerance
+# produces noise.
+drift_tolerance: 0.25
+baseline_window: 12
+
+metrics:
+  - key: dso_days
+    label: Days sales outstanding
+    unit: days
+    direction: lower_better
+    required: true
+    min: 0
+    max: 365
+    healthy_max: 45
+    critical_max: 90
+    weight: 1.5
+    description: >
+      Average days between issuing an invoice and being paid. The single
+      clearest measure of whether the business is financing its customers.
+
+  - key: overdue_ratio
+    label: Overdue share of the book
+    unit: ratio
+    direction: lower_better
+    required: true
+    min: 0
+    max: 1
+    healthy_max: 0.15
+    critical_max: 0.40
+    weight: 1.5
+    description: >
+      Fraction of outstanding receivables that is past its due date. Rising
+      here while DSO holds steady usually means a few large accounts slipping
+      rather than a general decline.
+
+  - key: avg_days_past_due
+    label: Average days past due
+    unit: days
+    direction: lower_better
+    min: 0
+    max: 365
+    healthy_max: 15
+    critical_max: 60
+    weight: 1.0
+    description: >
+      How late the overdue portion actually is. Distinguishes a book that is
+      slightly late from one that is aging toward write-off.
+
+  - key: collection_effectiveness
+    label: Collection effectiveness
+    unit: ratio
+    direction: higher_better
+    min: 0
+    max: 1
+    healthy_min: 0.80
+    critical_min: 0.55
+    weight: 1.0
+    description: >
+      Share of what was collectable in the period that was actually collected.
+      Falls when collection effort stops keeping pace with billing.
+
+  - key: top5_concentration
+    label: Top-5 customer concentration
+    unit: ratio
+    direction: lower_better
+    min: 0
+    max: 1
+    healthy_max: 0.45
+    critical_max: 0.75
+    weight: 0.75
+    description: >
+      Share of the book owed by the five largest customers. High concentration
+      turns one slow payer into a cash-flow event.
+
+  - key: disputed_ratio
+    label: Disputed share of the book
+    unit: ratio
+    direction: lower_better
+    min: 0
+    max: 1
+    healthy_max: 0.03
+    critical_max: 0.15
+    weight: 0.75
+    description: >
+      Fraction under active dispute. Disputes rarely resolve in the creditor's
+      favour at full value, so this is a leading indicator of write-offs.
+
+  # Context metrics — never scored, always available to explanations.
+  - key: ar_total
+    label: Total receivables outstanding
+    unit: currency
+    direction: neutral
+    min: 0
+    description: Total owed to the business right now. Sets the scale of everything else.
+
+  - key: invoice_count
+    label: Open invoices
+    unit: count
+    direction: neutral
+    min: 0
+    description: Number of open invoices, for context on effort per unit of cash.
+
+# Money at risk carries a real cost per day. That is a far more honest basis
+# for this domain than a decision-volume error model.
+economics:
+  model: exposure_scaled
+  exposure_metric: ar_total
+  at_risk_metric: overdue_ratio
+  daily_rate: 0.0004        # ≈15% annualised: financing cost plus write-off risk
+  intervention_cost_usd: 400.0   # a focused collections push: staff time and effort
+
+actions:
+  none:
+    label: NO_ACTION
+    description: Collections are tracking normally. Nothing to do.
+  monitor:
+    label: MONITOR
+    description: >
+      Early signs of slippage. Watch the next reporting cycle before spending
+      effort on it.
+  investigate:
+    label: FLAG_FOR_REVIEW
+    description: >
+      The book has deteriorated meaningfully, but the cash at risk does not yet
+      justify the cost of a collections push. Surface it to the finance lead.
+  intervene:
+    label: ESCALATE_COLLECTIONS
+    description: >
+      Prioritise collection effort on the overdue book: chase the largest
+      overdue accounts first, pause further credit to accounts past the
+      critical threshold, and review terms on repeat late payers.
+    requires_approval: true
+
+narrative:
+  audience: >
+    An owner-operator or finance lead at a small business. They think in cash
+    and weeks, not ratios and quarters. They want to know what moved, what it
+    is costing, and what to do on Monday.
+  must_cover:
+    - which specific metric moved, with its before and after values
+    - what the change costs in cash terms, not percentages alone
+    - whether this looks like a few large accounts or a broad decline
+    - the single most useful action to take this week
+  avoid:
+    - machine-learning vocabulary of any kind
+    - generic advice that would apply to any business
+    - recommending action the approval gate has not authorised
+
+# Starting policy for a tenant with no history. Overridable per tenant.
+policy_defaults:
+  perf_threshold: 0.72
+  drift_threshold: 0.25
+  high_risk_score: 0.40
+  medium_risk_score: 0.15

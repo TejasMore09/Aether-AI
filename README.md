@@ -1,30 +1,89 @@
+# Aether
 
-# Æther AI — Autonomous Decision Intelligence & Grounded Telemetry Engine
+Aether watches the operating numbers of a small or mid-sized business, decides
+when something is worth the owner's attention, and explains why in the
+language of the business rather than the language of the system watching it.
 
-Æther AI is a self-evolving MLOps decision intelligence platform designed to move machine learning operations from passive threshold alerts to autonomous execution layers. The system evaluates data/concept drift and performance telemetry across 6 live enterprise domains simultaneously, executing cost-aware mitigation strategies and automated, human-in-the-loop retraining workflows grounded in system operational memory.
+One isolated agent per customer. A central brain that can operate the fleet
+without being able to read inside it — except deliberately, temporarily, and
+visibly to the customer.
 
-## 🚀 Key Architectural Pillars
-
-* **Autonomous Decision Engine:** Translates raw metric fluctuations (F1-score degradation, feature drift magnitude) into a single risk score ($LOW, MEDIUM, HIGH$), mapping operational failures to real-world financial risk projections based on domain-specific impact matrices.
-* **Grounded RAG Telemetry Layer:** Features a zero-dependency, custom in-memory vector store driven by TF-IDF tokenization and Cosine Similarity. At startup, the engine dynamically constructs and indexes historical audit trails, model versions, and health snapshots to feed an LLM explanation agent with strict contextual grounding, eliminating hallucinations.
-* **Adaptive Alert Fatigue Control:** Automatically calculates a running dynamic drift threshold utilizing an overlay of the last 30 system health snapshots (base threshold + $0.5 \times$ standard deviation), adjusting dynamically to noisy baseline environments.
-* **Immutable Governance Audit Log:** Every automated action is preserved within a local SQLite schema, generating cryptographic tokens and multi-channel approvals for high-risk retrain actions.
+**Status:** pre-release. Two business domains, no connectors, nothing
+deployed. Everything below runs locally.
 
 ---
 
-## 🛠️ Project Structure
+## What it actually does
 
-```text
-Æther-AI/
-├── main.py                 # FastAPI Web Application Entry Point
-├── database/               # Core SQL Engine & 8 Database Table Schemas
-│   ├── db.py
-│   └── models.py
-├── api/services/           # Business Logic Layer (Decision, Drift, RAG, Audit, Observability)
-│   ├── decision_engine.py
-│   ├── model_service.py
-│   ├── vector_store_service.py
-│   └── explain_service.py
-├── adaptation/             # Standalone Retraining & Optimization Workflows
-├── frontend/               # Next.js 16 (App Router) Metric Dashboard
-└── models/domains/         # Serialized Multi-Domain Production Weights & Encoders
+A business reports its numbers — days sales outstanding, cash on hand, what is
+committed to go out. Its agent scores them against bands that adapt to that
+business's own history, works out what the current position is costing per
+day, and compares that against the cost of doing something about it.
+
+If acting is worth it, the agent stops and asks a named human. It never acts
+on a business system by itself.
+
+Every decision, and every explanation of one, is written to an append-only
+trail the customer can read.
+
+---
+
+## Running it
+
+Needs Docker and Python 3.12+.
+
+```bash
+cd platform
+docker compose up -d db
+python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
+.venv/Scripts/alembic upgrade head
+```
+
+Then the services, each in its own shell:
+
+```bash
+.venv/Scripts/uvicorn aether.control_plane.app:app --port 8100 --reload
+```
+
+```bash
+.venv/Scripts/uvicorn aether.agent_runtime.app:app --port 8200 --reload
+```
+
+The customer dashboard, at http://localhost:3000:
+
+```bash
+cd platform/web && npm install && npm run dev
+```
+
+`platform/README.md` covers the rest — the staff console, the monitor worker,
+domain packs, and what needs configuring before any of it is real.
+
+---
+
+## Reading the code
+
+| Where | What |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | how the system fits together, and why |
+| [platform/README.md](platform/README.md) | running it, operating it, extending it |
+| `platform/src/aether/domains/` | domain packs — the product's surface area |
+| `platform/src/aether/policy/` | the decision engine |
+| `platform/src/aether/main_brain/` | fleet control and break-glass access |
+
+The interesting decisions are documented where they were made rather than
+here: why isolation is enforced by Postgres and not by application code, why
+healthy bands adapt but only within limits, why some breaches skip the
+cost-benefit test entirely. Each has a comment next to the code that depends
+on it.
+
+---
+
+## Tests
+
+```bash
+cd platform && .venv/Scripts/python -m pytest
+```
+
+141 tests. Tenant isolation is proven by test rather than asserted by design,
+and the break-glass gate is mutation-checked — stubbing it to always pass
+fails five tests, so they are load-bearing rather than decorative.

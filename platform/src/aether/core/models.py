@@ -23,6 +23,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -157,6 +158,37 @@ class PendingApproval(Base, TenantScoped):
     resolved_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Grounded explanation attached by the diagnosis layer so the human
+    # deciding sees *why*, not just numbers. diagnosis_source: llm | fallback.
+    diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnosis_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+
+class Observation(Base, TenantScoped):
+    """A point-in-time reading of one domain's health, pushed by a connector,
+    a metrics job, or the customer's own systems. The autonomous monitor loop
+    evaluates the latest observation against the tenant's policy."""
+
+    __tablename__ = "observations"
+    __table_args__ = (Index("ix_obs_tenant_domain_ts", "tenant_id", "domain", "observed_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    observed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    domain: Mapped[str] = mapped_column(String(100), index=True)
+    drift_fraction: Mapped[float] = mapped_column(Float)
+    performance: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(120), default="api")
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+    # Domain-native metric values as reported (e.g. dso_days, overdue_ratio).
+    # drift_fraction and performance above are derived from these by the
+    # domain pack; keeping the raw values makes every decision re-explainable.
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # accepted readings drive decisions; quarantined ones are kept visible
+    # with their reasons rather than silently dropped.
+    status: Mapped[str] = mapped_column(String(20), default="accepted", index=True)
+    issues: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
 class AlertRule(Base, TenantScoped):
@@ -172,11 +204,196 @@ class AlertRule(Base, TenantScoped):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-# Tables that get an RLS policy in the initial migration:
+class LLMUsage(Base, TenantScoped):
+    """Every LLM call, metered per tenant: the basis for budget enforcement
+    now and usage-based pricing later."""
+
+    __tablename__ = "llm_usage"
+    __table_args__ = (Index("ix_llm_usage_tenant_ts", "tenant_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    purpose: Mapped[str] = mapped_column(String(60))  # e.g. "diagnosis"
+    model: Mapped[str] = mapped_column(String(120))
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class ApiKey(Base, TenantScoped):
+    """A credential an unattended system uses to push readings.
+
+    Only a hash is stored — the key itself is shown once at creation and is
+    unrecoverable afterwards, so a database disclosure does not hand an
+    attacker working credentials.
+
+    Deliberately ingest-scoped: a leaked key can submit readings but cannot
+    approve a decision, read the audit trail, or see a diagnosis. The blast
+    radius of a credential that lives in someone else's cron job should be as
+    small as the job's actual job.
+    """
+
+    __tablename__ = "api_keys"
+    __table_args__ = (Index("ix_apikey_hash", "key_hash"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    name: Mapped[str] = mapped_column(String(120))
+    # Lookup is by hash, so it is unique across the whole table rather than
+    # per tenant — two tenants must never be able to hold the same secret.
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # First few characters, kept in clear so a person can tell their keys apart.
+    key_prefix: Mapped[str] = mapped_column(String(20))
+    created_by: Mapped[str] = mapped_column(String(320))
+    last_used_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class Notification(Base, TenantScoped):
+    """Every outbound notification, recorded whether or not delivery worked —
+    the audit trail for 'was the human told?'"""
+
+    __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notif_tenant_ts", "tenant_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(60))  # e.g. "approval_created"
+    channel: Mapped[str] = mapped_column(String(30), default="email")
+    recipient: Mapped[str] = mapped_column(String(320))
+    subject: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(30))  # sent | failed | skipped_unconfigured
+    detail: Mapped[str] = mapped_column(Text, default="")
+    ref_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+# Tables protected by an RLS policy (see migrations):
+# ── Main brain: staff, and the terms on which they may look ───────────────────
+#
+# Operating a fleet means someone eventually has to debug a customer's agent.
+# The question is not whether staff can reach tenant data -- somebody always
+# can, at the database if nowhere else -- but whether reaching it is
+# deliberate, bounded, and visible to the customer afterwards. These three
+# tables exist to make the honest answer "yes" rather than "trust us".
+
+
+class StaffRole(enum.StrEnum):
+    """What a member of staff may do. Deliberately coarse.
+
+    observer  fleet health only -- counts, timestamps, error rates. Never the
+              contents of a tenant's data.
+    engineer  may additionally open a break-glass grant against one tenant,
+              with a written reason.
+    admin     may additionally manage staff and end anyone's grant.
+    """
+
+    observer = "observer"
+    engineer = "engineer"
+    admin = "admin"
+
+
+class PlatformAdmin(Base):
+    """A member of platform staff.
+
+    A separate table from User, not a flag on it. A boolean would mean one
+    errant UPDATE stands between a customer account and the whole fleet; a
+    separate table means staff access requires a row that customer-facing code
+    never writes.
+    """
+
+    __tablename__ = "platform_admins"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    role: Mapped[StaffRole] = mapped_column(Enum(StaffRole, name="staff_role"))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class GrantScope(enum.StrEnum):
+    """How far a break-glass grant reaches.
+
+    read_only is the default and covers almost every real incident: seeing
+    what the agent saw is usually enough to explain what it did. operate is
+    the rarer case where staff must change a policy or retire a stuck
+    schedule on the customer's behalf.
+    """
+
+    read_only = "read_only"
+    operate = "operate"
+
+
+class BreakGlassGrant(Base):
+    """Time-boxed, reason-bearing permission for one staff member to look
+    inside one tenant.
+
+    Expiry is stored rather than computed at use, so an abandoned session
+    closes itself. There is no "extend" -- a longer look is a new grant with
+    its own reason, which keeps the audit trail a list of decisions instead of
+    one indefinite session.
+    """
+
+    __tablename__ = "break_glass_grants"
+    __table_args__ = (Index("ix_grant_admin_active", "admin_id", "expires_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="CASCADE"), index=True
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    # Free text, required, and shown to the customer. A reason nobody reads is
+    # theatre; a reason the customer can read is a deterrent.
+    reason: Mapped[str] = mapped_column(Text)
+    scope: Mapped[GrantScope] = mapped_column(Enum(GrantScope, name="grant_scope"))
+    granted_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    ended_by: Mapped[str] = mapped_column(String(320), default="")
+
+
+class StaffAuditLog(Base):
+    """Every staff action, including reads.
+
+    Separate from the tenant audit log and never exposed to tenant APIs: it
+    spans tenants, so putting it behind RLS would either leak across
+    organizations or be unreadable. Reads are recorded as well as writes,
+    because for a platform holding other companies' operating data, looking is
+    the action that needs explaining.
+    """
+
+    __tablename__ = "staff_audit_logs"
+    __table_args__ = (Index("ix_staff_audit_ts", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    admin_email: Mapped[str] = mapped_column(String(320), index=True)
+    action: Mapped[str] = mapped_column(String(60))
+    # Null for fleet-wide actions that name no single organization.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), default=None, index=True
+    )
+    grant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
 RLS_TABLES = [
     "agent_instances",
     "policy_configs",
     "audit_logs",
     "pending_approvals",
     "alert_rules",
+    "observations",
+    "llm_usage",
+    "notifications",
+    "api_keys",
 ]

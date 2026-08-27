@@ -13,8 +13,9 @@ from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, Request
 
+from aether.core.apikeys import resolve_key, touch_key
 from aether.core.models import Role
-from aether.core.security import Principal, TokenError, verify_token
+from aether.core.security import Principal, PrincipalKind, TokenError, verify_token
 
 _ROLE_ORDER = {Role.viewer: 0, Role.operator: 1, Role.owner: 2}
 
@@ -39,3 +40,29 @@ def require_role(minimum: Role) -> Callable[..., Principal]:
         return principal
 
     return dependency
+
+
+def ingest_principal(request: Request) -> Principal:
+    """Authenticate a caller allowed to submit readings.
+
+    Accepts either a signed-in user or an API key. This is the only dependency
+    that accepts a key: everything else in the product demands a user, so a
+    leaked ingest credential can add data but can never approve a decision,
+    read an audit trail, or see a diagnosis.
+    """
+    raw_key = request.headers.get("X-API-Key")
+    if raw_key:
+        identity = resolve_key(raw_key)
+        if identity is None:
+            raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+        touch_key(identity.tenant_id, identity.key_id)
+        return Principal(
+            # A key is not a person; the id identifies the credential itself.
+            user_id=identity.key_id,
+            email=f"key:{identity.name}",
+            tenant_id=identity.tenant_id,
+            role=Role.operator,
+            kind=PrincipalKind.api_key,
+        )
+
+    return authenticated(request)

@@ -46,9 +46,7 @@ def owner_token(client):
 
 
 def test_nano_agent_provisions(client, owner_token):
-    r = client.post(
-        "/v1/agents", json={"name": "Ops Watcher", "kind": "nano"}, headers=owner_token
-    )
+    r = client.post("/v1/agents", json={"name": "Ops Watcher", "kind": "nano"}, headers=owner_token)
     assert r.status_code == 201, r.text
     assert r.json()["kind"] == "nano"
 
@@ -57,9 +55,7 @@ def test_nano_agent_provisions(client, owner_token):
 
 
 def test_mega_agent_refused_for_now(client, owner_token):
-    r = client.post(
-        "/v1/agents", json={"name": "Actor", "kind": "mega"}, headers=owner_token
-    )
+    r = client.post("/v1/agents", json={"name": "Actor", "kind": "mega"}, headers=owner_token)
     assert r.status_code == 422
     assert "not yet available" in r.json()["detail"]
 

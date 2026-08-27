@@ -170,6 +170,53 @@ def create_agent(
 def list_agents(principal: Principal = Depends(authenticated)) -> list[AgentInfo]:
     with tenant_session(principal.tenant_id) as db:
         agents = db.scalars(select(AgentInstance)).all()
-        return [
-            AgentInfo(id=a.id, name=a.name, kind=a.kind, is_active=a.is_active) for a in agents
-        ]
+        return [AgentInfo(id=a.id, name=a.name, kind=a.kind, is_active=a.is_active) for a in agents]
+
+
+# ── Ingest credentials ────────────────────────────────────────────────────────
+
+
+class KeyCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+
+@app.post("/v1/api-keys", status_code=201)
+def create_api_key(
+    body: KeyCreate,
+    principal: Principal = Depends(require_role(Role.owner)),
+) -> dict:
+    """Issue an ingest key. The secret is returned once and never again.
+
+    Owner-only: a key is a standing credential that outlives any session, so
+    minting one is a different act from using the product.
+    """
+    from aether.core.apikeys import create_key
+
+    issued = create_key(principal.tenant_id, body.name, principal.email)
+    return {
+        "id": str(issued.id),
+        "name": issued.name,
+        "prefix": issued.prefix,
+        # The only time this value exists outside the caller's own systems.
+        "secret": issued.secret,
+        "note": "Store this now. It cannot be shown again.",
+    }
+
+
+@app.get("/v1/api-keys")
+def list_api_keys(principal: Principal = Depends(authenticated)) -> list[dict]:
+    from aether.core.apikeys import list_keys
+
+    return list_keys(principal.tenant_id)
+
+
+@app.post("/v1/api-keys/{key_id}/revoke")
+def revoke_api_key(
+    key_id: uuid.UUID,
+    principal: Principal = Depends(require_role(Role.owner)),
+) -> dict:
+    from aether.core.apikeys import revoke_key
+
+    if not revoke_key(principal.tenant_id, key_id):
+        raise HTTPException(status_code=404, detail="No such active key")
+    return {"id": str(key_id), "revoked": True}
