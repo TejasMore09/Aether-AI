@@ -57,6 +57,48 @@ def _fallback_text(approval: PendingApproval, observations: list[Observation]) -
     )
 
 
+def _band_phrases(pack, observations: list[Observation]) -> list[str]:
+    """Describe the bands the engine actually scored against.
+
+    Quoting the pack's published band here would be quietly wrong for any
+    tenant whose band has been calibrated to their own history: the engine
+    judges a 60-day book against their normal of 61 days and calls it healthy,
+    while the explanation would tell them 60 exceeds a threshold of 45. A
+    customer who spots that contradiction is right to stop trusting the rest
+    of the paragraph.
+
+    So the bands come from the newest reading's stored signals, and fall back
+    to the pack only where none were recorded.
+    """
+    used: dict[str, dict] = {}
+    for o in observations:  # newest first
+        signals = (o.details or {}).get("signals") or {}
+        per_metric = signals.get("per_metric") or {}
+        if per_metric:
+            used = per_metric
+            break
+
+    phrases: list[str] = []
+    for m in pack.scored_metrics:
+        band = (used.get(m.key) or {}).get("band") or {}
+        good = band.get("good")
+        unit = f" {m.unit}".rstrip() if m.unit not in ("ratio", "") else ""
+        if good is None:
+            good = m.healthy_max if m.healthy_max is not None else m.healthy_min
+            if good is None:
+                continue
+            origin = ""
+        else:
+            origin = (
+                f" (this client's own normal, from {band.get('readings', 0)} readings)"
+                if band.get("source") == "tenant"
+                else ""
+            )
+        direction = "below" if m.healthy_max is not None else "above"
+        phrases.append(f"{m.label} healthy {direction} {good:g}{unit}{origin}")
+    return phrases
+
+
 def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
     """Attach a diagnosis to one pending approval. Returns the source used
     ('llm' | 'fallback' | 'skipped')."""
@@ -109,16 +151,7 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
 
         context = ""
         if pack:
-            bands = "; ".join(
-                f"{m.label} healthy "
-                + (
-                    f"below {m.healthy_max:g} {m.unit}".strip()
-                    if m.healthy_max is not None
-                    else f"above {m.healthy_min:g} {m.unit}".strip()
-                )
-                for m in pack.scored_metrics
-                if m.healthy_max is not None or m.healthy_min is not None
-            )
+            bands = "; ".join(_band_phrases(pack, observations))
             context = (
                 f"Business function: {pack.label}. {pack.summary}\n"
                 f"Reference bands: {bands}\n"

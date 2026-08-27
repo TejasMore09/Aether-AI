@@ -138,6 +138,14 @@ class DomainPack:
     drift_tolerance: float = 0.25  # relative move before a metric counts as drifted
     severity_bias: float = 0.4  # how much the worst single metric pulls the composite
     baseline_window: int = 12  # readings used to form the tenant's own baseline
+
+    # Per-tenant calibration of the healthy bound. See domains/calibration.py
+    # for why these are bounded rather than free: an unanchored band lets a
+    # chronically unhealthy business learn that its dysfunction is normal.
+    # Both limits are fractions of the pack's own healthy-to-critical span.
+    calibration_min_readings: int = 8
+    calibration_max_loosen: float = 0.6  # at most 60% of the way toward critical
+    calibration_max_tighten: float = 0.6
     policy_defaults: dict = field(default_factory=dict)
 
     def metric(self, key: str) -> MetricSpec | None:
@@ -238,6 +246,9 @@ def _pack_from_dict(raw: dict) -> DomainPack:
         drift_tolerance=float(raw.get("drift_tolerance", 0.25)),
         severity_bias=float(raw.get("severity_bias", 0.4)),
         baseline_window=int(raw.get("baseline_window", 12)),
+        calibration_min_readings=int(raw.get("calibration_min_readings", 8)),
+        calibration_max_loosen=float(raw.get("calibration_max_loosen", 0.6)),
+        calibration_max_tighten=float(raw.get("calibration_max_tighten", 0.6)),
         policy_defaults=dict(raw.get("policy_defaults") or {}),
     )
 

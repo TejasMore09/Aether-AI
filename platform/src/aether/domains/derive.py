@@ -16,6 +16,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass, field
 
+from aether.domains.calibration import Band, calibrate, history_for, score_against
 from aether.domains.pack import DomainPack
 
 
@@ -37,25 +38,36 @@ class DerivedSignals:
         }
 
 
-def derive_performance(pack: DomainPack, values: dict[str, float]) -> tuple[float, dict]:
+def derive_performance(
+    pack: DomainPack,
+    values: dict[str, float],
+    history: list[dict[str, float]] | None = None,
+) -> tuple[float, dict]:
     """Weighted health across the pack's scored metrics.
 
     Missing optional metrics are skipped rather than penalised — a business
     that cannot report collection effectiveness should not look unhealthy for
     it. With no scored metrics at all, performance is 1.0 and drift carries
     the decision.
+
+    Each metric is judged against this tenant's calibrated band where enough
+    history exists, and the pack's published band otherwise. The band used is
+    recorded per metric, because "why is this amber?" is a question a customer
+    is entitled to a real answer to.
     """
     total_weight = 0.0
     total_score = 0.0
     detail: dict[str, dict] = {}
+    past = history or []
 
     for spec in pack.scored_metrics:
         value = values.get(spec.key)
         if value is None:
             continue
-        score = spec.health_score(value)
-        if score is None:
+        band: Band | None = calibrate(spec, history_for(spec.key, past), pack)
+        if band is None:
             continue
+        score = score_against(spec, value, band)
         total_weight += spec.weight
         total_score += score * spec.weight
         detail[spec.key] = {
@@ -63,6 +75,7 @@ def derive_performance(pack: DomainPack, values: dict[str, float]) -> tuple[floa
             "label": spec.label,
             "unit": spec.unit,
             "health": round(score, 4),
+            "band": band.as_dict(),
         }
 
     if not total_weight:
@@ -138,7 +151,7 @@ def derive_signals(
     values: dict[str, float],
     history: list[dict[str, float]] | None = None,
 ) -> DerivedSignals:
-    performance, detail = derive_performance(pack, values)
+    performance, detail = derive_performance(pack, values, history)
     drift, drifted, baseline_used = derive_drift(pack, values, history or [])
 
     for key in drifted:
