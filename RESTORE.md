@@ -23,20 +23,34 @@ the handful of files git deliberately excludes — nothing more.
    `git status` should show nothing but ignored files. Anything uncommitted
    does not exist as far as recovery is concerned.
 
-2. **Save two environment variables somewhere that is not this machine.**
-   They live in Windows user settings and will be wiped:
+2. **Save the secrets.** These are the only things here that GitHub does not
+   have, and a format destroys all of them.
+
+   **The root `.env` file.** It is gitignored, so it exists nowhere else. It
+   currently holds:
+
+   - `OPENAI_API_KEY`, `OPENAI_BASE_URL`
+   - `GEMINI_API_KEY`
+   - `GMAIL_SENDER`, `GMAIL_APP_PASSWORD`, `ALERT_RECIPIENT`
+
+   Copy the whole file into a password manager as a secure note.
+
+   **Two Windows user environment variables**, which live outside any file:
 
    - `GEMINI_API_KEY`
    - `API_KEY_21ST`
 
-   A password manager is the right place. Not the repo — both are secrets and
-   `.gitignore` will not save you from a determined `git add -f`.
-
-   To read their current values:
-
    ```powershell
    [Environment]::GetEnvironmentVariable('GEMINI_API_KEY','User')
+   [Environment]::GetEnvironmentVariable('API_KEY_21ST','User')
    ```
+
+   A password manager, not the repo. `.gitignore` will not save you from a
+   `git add -f`, and a key committed once is in the history for good.
+
+   `GMAIL_APP_PASSWORD` is worth rotating rather than restoring — app
+   passwords are cheap to reissue and you cannot be sure where a formatted
+   disk ends up.
 
 3. **Anything else you care about?** The Postgres data is test tenants and is
    not worth preserving. If you want it anyway:
