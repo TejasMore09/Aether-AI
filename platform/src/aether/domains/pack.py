@@ -48,8 +48,19 @@ class ActionSlot(StrEnum):
 
 
 class EconomicsModel(StrEnum):
+    """How a domain turns an unhealthy reading into money per day.
+
+    Three models rather than one because business functions genuinely fail in
+    different shapes. Forcing cash-runway into the receivables model would
+    mean inventing an "at risk fraction" the customer never reports.
+    """
+
     exposure_scaled = "exposure_scaled"  # money at risk × rate
     degradation_scaled = "degradation_scaled"  # volume × error rate × unit cost
+    # Obligations that must be met, minus what is available to meet them. The
+    # shortfall is derived rather than reported: nobody records "percentage of
+    # my bills I cannot pay", they record cash and they record what is due.
+    shortfall_scaled = "shortfall_scaled"
 
 
 @dataclass(frozen=True)
@@ -67,6 +78,26 @@ class MetricSpec:
     critical_max: float | None = None
     weight: float = 1.0
     description: str = ""
+    # Some breaches are not cost-benefit decisions. Missing payroll is not a
+    # daily carrying charge that can be weighed against the cost of acting —
+    # it is terminal, and the loss model has no way to express that because a
+    # linear rate cannot represent a non-linear downside. A metric marked
+    # existential escalates on its own once past its critical bound, and the
+    # payback test is skipped rather than quietly producing a wrong answer.
+    #
+    # Use sparingly. Marking everything existential turns the economics engine
+    # off, which is the failure this flag exists to avoid in the other
+    # direction.
+    existential: bool = False
+
+    def breached_critically(self, value: float) -> bool:
+        """Past the pack's critical bound. Never the calibrated one — critical
+        is the absolute line and does not move per tenant."""
+        if self.direction is Direction.lower_better:
+            return self.critical_max is not None and value >= self.critical_max
+        if self.direction is Direction.higher_better:
+            return self.critical_min is not None and value <= self.critical_min
+        return False
 
     @property
     def scored(self) -> bool:
@@ -106,11 +137,18 @@ class ActionSpec:
 class Economics:
     model: EconomicsModel = EconomicsModel.degradation_scaled
     intervention_cost_usd: float = 250.0
-    # exposure_scaled
+    # exposure_scaled / shortfall_scaled
     exposure_metric: str | None = None
     at_risk_metric: str | None = None
+    # shortfall_scaled only: what is available to meet the exposure.
+    cover_metric: str | None = None
     daily_rate: float = 0.0004  # ~15%/yr cost of capital, per day
     payback_days: int = 7
+    # What the exposure *is*, in the domain's own words. Without this the
+    # engine's explanation of a marketing decision would talk about money
+    # "outstanding", which is receivables vocabulary leaking through the one
+    # abstraction that exists to keep domains apart.
+    exposure_noun: str = "outstanding"
     # degradation_scaled
     daily_decision_volume: int = 1000
     impact_per_error_usd: float = 1000.0
@@ -199,6 +237,7 @@ def _spec_from_dict(raw: dict) -> MetricSpec:
         critical_max=raw.get("critical_max"),
         weight=float(raw.get("weight", 1.0)),
         description=raw.get("description", ""),
+        existential=bool(raw.get("existential", False)),
     )
 
 
@@ -219,8 +258,10 @@ def _pack_from_dict(raw: dict) -> DomainPack:
         intervention_cost_usd=float(econ_raw.get("intervention_cost_usd", 250.0)),
         exposure_metric=econ_raw.get("exposure_metric"),
         at_risk_metric=econ_raw.get("at_risk_metric"),
+        cover_metric=econ_raw.get("cover_metric"),
         daily_rate=float(econ_raw.get("daily_rate", 0.0004)),
         payback_days=int(econ_raw.get("payback_days", 7)),
+        exposure_noun=str(econ_raw.get("exposure_noun", "outstanding")),
         daily_decision_volume=int(econ_raw.get("daily_decision_volume", 1000)),
         impact_per_error_usd=float(econ_raw.get("impact_per_error_usd", 1000.0)),
         error_rate_translation=float(econ_raw.get("error_rate_translation", 0.1)),

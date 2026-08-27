@@ -17,6 +17,7 @@ from aether.domains.pack import (
     _GENERIC_ACTIONS,
     ActionSlot,
     ActionSpec,
+    Direction,
     DomainPack,
     EconomicsModel,
 )
@@ -125,9 +126,28 @@ def _expected_daily_loss(
         at_risk = values.get(econ.at_risk_metric or "", 0.0) or 0.0
         loss = exposure * at_risk * params.daily_rate
         basis = (
-            f"{at_risk:.0%} of {exposure:,.0f} outstanding, carried at "
+            f"{at_risk:.0%} of {exposure:,.0f} {econ.exposure_noun}, carried at "
             f"{params.daily_rate * 365:.0%} a year"
         )
+        return loss, basis
+
+    if econ and econ.model is EconomicsModel.shortfall_scaled and values:
+        # Obligations that must be met, against what is available to meet
+        # them. Derived rather than reported: a business records its cash and
+        # records what is due, never "the fraction of my bills I cannot pay".
+        exposure = values.get(econ.exposure_metric or "", 0.0) or 0.0
+        cover = values.get(econ.cover_metric or "", 0.0) or 0.0
+        if exposure <= 0:
+            return 0.0, "no obligations reported for the period"
+        uncovered = max(0.0, 1.0 - (cover / exposure))
+        loss = exposure * uncovered * params.daily_rate
+        if uncovered == 0:
+            basis = f"{cover:,.0f} available against {exposure:,.0f} {econ.exposure_noun}"
+        else:
+            basis = (
+                f"{exposure * uncovered:,.0f} of {exposure:,.0f} {econ.exposure_noun} "
+                f"not covered by the {cover:,.0f} available"
+            )
         return loss, basis
 
     error_rate_increase = perf_degradation * params.error_rate_translation
@@ -137,6 +157,30 @@ def _expected_daily_loss(
         f"at {params.impact_per_error_usd:,.0f} each"
     )
     return loss, basis
+
+
+def _existential_breaches(
+    pack: DomainPack | None, values: dict[str, float] | None
+) -> list[tuple[str, float, float]]:
+    """Metrics whose breach is not a cost-benefit question.
+
+    Returns (label, value, critical bound) for each. See MetricSpec.existential
+    for why these bypass the payback test rather than being weighed by it.
+    """
+    if not pack or not values:
+        return []
+    breaches = []
+    for spec in pack.metrics:
+        if not spec.existential:
+            continue
+        value = values.get(spec.key)
+        if value is None or not spec.breached_critically(value):
+            continue
+        bound = spec.critical_max if spec.direction is Direction.lower_better else spec.critical_min
+        if bound is None:  # breached_critically already implies otherwise
+            continue
+        breaches.append((spec.label, value, bound))
+    return breaches
 
 
 def evaluate(
@@ -173,7 +217,24 @@ def evaluate(
 
     horizon_loss = expected_loss * params.payback_days
 
-    if risk_level is RiskLevel.high:
+    breaches = _existential_breaches(pack, values)
+
+    if breaches:
+        # Escalate regardless of the loss model. Weighing "payroll is covered
+        # for 1.4 months" against a $1,200 cost of acting is a category error:
+        # the downside is not a daily rate, so the arithmetic that works for a
+        # collections push produces a confidently wrong answer here.
+        risk_level = RiskLevel.high
+        slot = ActionSlot.intervene
+        detail = "; ".join(
+            f"{label} is {value:g}, past the {bound:g} floor" for label, value, bound in breaches
+        )
+        reason = (
+            f"{detail}. This is not a cost-benefit decision — the consequence of "
+            f"breaching it is not measured in daily carrying cost — so the "
+            f"payback test does not apply."
+        )
+    elif risk_level is RiskLevel.high:
         if horizon_loss > cost:
             slot = ActionSlot.intervene
             payback = cost / expected_loss if expected_loss > 0 else float("inf")
@@ -184,10 +245,14 @@ def evaluate(
             )
         else:
             slot = ActionSlot.investigate
+            # The basis belongs here as much as in the intervene branch —
+            # arguably more. This is the message that declines to act, so
+            # "$26.00 a day" is exactly the figure a customer will want to
+            # see the working for before they accept the conclusion.
             reason = (
                 f"Conditions have deteriorated, but ${expected_loss:,.2f} a day at risk "
-                f"would take longer than {params.payback_days} days to repay the "
-                f"${cost:,.2f} cost of acting."
+                f"— {basis} — would take longer than {params.payback_days} days to repay "
+                f"the ${cost:,.2f} cost of acting."
             )
     elif risk_level is RiskLevel.medium:
         slot = ActionSlot.monitor
