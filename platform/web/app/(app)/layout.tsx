@@ -20,6 +20,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect('/login')
 
   const tenant = await api.control<TenantInfo>('/v1/tenant')
+
+  // The token is present and unexpired but the platform will not accept it —
+  // a rotated signing secret, a revoked account. Clearing the cookie needs a
+  // Route Handler, so hand off to one rather than rendering a shell whose
+  // every panel reads "your session expired" with no way to act on it.
+  if (!tenant.ok && tenant.status === 401) redirect('/signed-out')
+
   const orgName = tenant.ok ? tenant.data.name : 'Organization'
 
   return (

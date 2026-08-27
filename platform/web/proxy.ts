@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-import { SESSION_COOKIE } from './lib/session'
+import { SESSION_COOKIE, parseSession } from './lib/session'
 
 /**
  * Next.js 16 renamed Middleware to Proxy — same mechanism, new file convention.
@@ -35,7 +35,10 @@ const matches = (paths: string[], pathname: string) =>
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const hasSession = request.cookies.has(SESSION_COOKIE)
+  // Validity, not mere presence. A cookie can outlive the token it carries;
+  // treating that as "signed in" is what previously trapped users on a
+  // dashboard whose every request 401s, with /login bouncing them back.
+  const hasSession = parseSession(request.cookies.get(SESSION_COOKIE)?.value) !== null
 
   if (!hasSession && !matches(PUBLIC_PATHS, pathname)) {
     const url = request.nextUrl.clone()
