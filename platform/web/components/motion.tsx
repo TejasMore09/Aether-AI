@@ -29,17 +29,22 @@ export const SPRING = { type: 'spring', stiffness: 420, damping: 32, mass: 0.8 }
  */
 function useCanAnimate(): boolean {
   const reduced = useReducedMotion()
-  const [visible, setVisible] = useState(
-    () => typeof document === 'undefined' || !document.hidden,
-  )
+
+  // Starts false on both the server and the first client render, then turns on
+  // in an effect. Reading document.hidden during render would make the first
+  // client paint disagree with the server's, and React would discard the
+  // difference rather than patch it -- which showed up as motion props
+  // silently missing from buttons after hydration.
+  const [canAnimate, setCanAnimate] = useState(false)
 
   useEffect(() => {
-    const onChange = () => setVisible(!document.hidden)
-    document.addEventListener('visibilitychange', onChange)
-    return () => document.removeEventListener('visibilitychange', onChange)
+    const sync = () => setCanAnimate(!document.hidden)
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => document.removeEventListener('visibilitychange', sync)
   }, [])
 
-  return !reduced && visible
+  return !reduced && canAnimate
 }
 
 /** Container that staggers its children in as they arrive. */
@@ -194,21 +199,18 @@ export function Fill({
 /** Button that physically depresses. The affordance is the point. */
 export function PressButton({
   children,
-  className,
-  onClick,
   type = 'button',
-}: {
-  children: React.ReactNode
-  className?: string
-  onClick?: () => void
-  type?: 'button' | 'submit'
-}) {
-  const reduced = !useCanAnimate()
+  disabled,
+  ...rest
+}: React.ComponentProps<typeof motion.button>) {
+  const reduced = !useCanAnimate() || disabled
   return (
     <motion.button
+      {...rest}
       type={type}
-      className={className}
-      onClick={onClick}
+      disabled={disabled}
+      // A disabled button that still springs under the cursor is lying about
+      // being pressable, so the affordance goes with the ability.
       whileHover={reduced ? undefined : { y: -1 }}
       whileTap={reduced ? undefined : { y: 1, scale: 0.985 }}
       transition={SPRING}

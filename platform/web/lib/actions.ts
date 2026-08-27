@@ -262,3 +262,73 @@ export async function evaluateNow(_prev: FormState, form: FormData): Promise<For
   }
   return null
 }
+
+export type IssueKeyState =
+  | { ok: true; id: string; name: string; prefix: string; secret: string }
+  | { ok: false; error: string }
+  | null
+
+/**
+ * Mint an ingest key and hand the secret back exactly once.
+ *
+ * The secret travels through the action result and is deliberately never
+ * revalidated into the list: the platform cannot show it again, so the only
+ * copy that will ever exist is the one now on screen. The UI is responsible
+ * for saying so plainly.
+ */
+export async function issueApiKey(
+  _prev: IssueKeyState,
+  form: FormData,
+): Promise<IssueKeyState> {
+  const name = str(form, 'name')
+  if (name.length < 2) {
+    return { ok: false, error: 'Give the key a name — you cannot tell keys apart later without one.' }
+  }
+  if (name.length > 120) {
+    return { ok: false, error: 'Keep the name under 120 characters.' }
+  }
+
+  const session = await readSession()
+  if (session?.role !== 'owner') {
+    return { ok: false, error: 'Only an owner can issue an ingest key.' }
+  }
+
+  const result = await api.control<{
+    id: string
+    name: string
+    prefix: string
+    secret: string
+  }>('/v1/api-keys', { method: 'POST', body: JSON.stringify({ name }) })
+  if (!result.ok) return { ok: false, error: result.message }
+
+  revalidatePath('/connections')
+  return {
+    ok: true,
+    id: result.data.id,
+    name: result.data.name,
+    prefix: result.data.prefix,
+    secret: result.data.secret,
+  }
+}
+
+export type RevokeKeyState = { ok: true; name: string } | { ok: false; error: string } | null
+
+export async function revokeApiKey(
+  _prev: RevokeKeyState,
+  form: FormData,
+): Promise<RevokeKeyState> {
+  const id = str(form, 'key_id')
+  const name = str(form, 'key_name') || 'That key'
+  if (!id) return { ok: false, error: 'Invalid key.' }
+
+  const session = await readSession()
+  if (session?.role !== 'owner') {
+    return { ok: false, error: 'Only an owner can revoke an ingest key.' }
+  }
+
+  const result = await api.control(`/v1/api-keys/${id}/revoke`, { method: 'POST' })
+  if (!result.ok) return { ok: false, error: result.message }
+
+  revalidatePath('/connections')
+  return { ok: true, name }
+}

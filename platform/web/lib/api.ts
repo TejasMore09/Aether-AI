@@ -178,6 +178,16 @@ export type UsageReport = {
   by_purpose: Record<string, { calls: number; cost_usd: number; tokens: number }>
 }
 
+export type ApiKeyRow = {
+  id: string
+  name: string
+  prefix: string
+  created_at: string
+  created_by: string
+  last_used_at: string | null
+  revoked: boolean
+}
+
 export type NotificationRow = {
   id: string
   created_at: string
