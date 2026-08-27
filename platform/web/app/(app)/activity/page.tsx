@@ -12,6 +12,8 @@ import {
 } from '@/components/forge'
 import { api, type AuditEntry, type NotificationRow } from '@/lib/api'
 
+import { SupportAccess } from './SupportAccess'
+
 const DELIVERY: Record<string, { label: string; tone: string }> = {
   sent: { label: 'Delivered', tone: 'var(--color-good)' },
   failed: { label: 'Delivery failed', tone: 'var(--color-risk)' },
@@ -24,6 +26,12 @@ export default async function ActivityPage() {
     api.runtime<NotificationRow[]>('/v1/notifications?limit=25'),
   ])
 
+  // Staff access is separated out rather than left inline: it is the one kind
+  // of entry here that was not made by this organization or its own agent.
+  const entries = activity.ok ? activity.data : []
+  const staffAccess = entries.filter((e) => e.action.startsWith('support_access'))
+  const agentActivity = entries.filter((e) => !e.action.startsWith('support_access'))
+
   return (
     <>
       <div className="mb-5">
@@ -35,18 +43,20 @@ export default async function ActivityPage() {
         lede="Every decision your agent has made, and every notification sent about one. Entries are append-only — nothing here is edited or removed."
       />
 
+      <SupportAccess entries={staffAccess} />
+
       <section className="mb-11">
         <SectionTitle>Audit trail</SectionTitle>
         {!activity.ok ? (
           <ErrorNote message={activity.message} />
-        ) : activity.data.length === 0 ? (
+        ) : agentActivity.length === 0 ? (
           <EmptyState
             title="Nothing recorded yet"
             body="Every evaluation your agent runs is written here permanently, with who or what triggered it."
           />
         ) : (
           <Panel className="!p-2">
-            {activity.data.map((entry) => (
+            {agentActivity.map((entry) => (
               <div
                 key={entry.id}
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[13px] px-4 py-3 sm:grid-cols-[152px_minmax(0,1fr)_auto_120px_auto]"

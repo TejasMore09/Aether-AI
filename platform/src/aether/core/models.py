@@ -272,6 +272,120 @@ class Notification(Base, TenantScoped):
 
 
 # Tables protected by an RLS policy (see migrations):
+# ── Main brain: staff, and the terms on which they may look ───────────────────
+#
+# Operating a fleet means someone eventually has to debug a customer's agent.
+# The question is not whether staff can reach tenant data -- somebody always
+# can, at the database if nowhere else -- but whether reaching it is
+# deliberate, bounded, and visible to the customer afterwards. These three
+# tables exist to make the honest answer "yes" rather than "trust us".
+
+
+class StaffRole(enum.StrEnum):
+    """What a member of staff may do. Deliberately coarse.
+
+    observer  fleet health only -- counts, timestamps, error rates. Never the
+              contents of a tenant's data.
+    engineer  may additionally open a break-glass grant against one tenant,
+              with a written reason.
+    admin     may additionally manage staff and end anyone's grant.
+    """
+
+    observer = "observer"
+    engineer = "engineer"
+    admin = "admin"
+
+
+class PlatformAdmin(Base):
+    """A member of platform staff.
+
+    A separate table from User, not a flag on it. A boolean would mean one
+    errant UPDATE stands between a customer account and the whole fleet; a
+    separate table means staff access requires a row that customer-facing code
+    never writes.
+    """
+
+    __tablename__ = "platform_admins"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    role: Mapped[StaffRole] = mapped_column(Enum(StaffRole, name="staff_role"))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class GrantScope(enum.StrEnum):
+    """How far a break-glass grant reaches.
+
+    read_only is the default and covers almost every real incident: seeing
+    what the agent saw is usually enough to explain what it did. operate is
+    the rarer case where staff must change a policy or retire a stuck
+    schedule on the customer's behalf.
+    """
+
+    read_only = "read_only"
+    operate = "operate"
+
+
+class BreakGlassGrant(Base):
+    """Time-boxed, reason-bearing permission for one staff member to look
+    inside one tenant.
+
+    Expiry is stored rather than computed at use, so an abandoned session
+    closes itself. There is no "extend" -- a longer look is a new grant with
+    its own reason, which keeps the audit trail a list of decisions instead of
+    one indefinite session.
+    """
+
+    __tablename__ = "break_glass_grants"
+    __table_args__ = (Index("ix_grant_admin_active", "admin_id", "expires_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="CASCADE"), index=True
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    # Free text, required, and shown to the customer. A reason nobody reads is
+    # theatre; a reason the customer can read is a deterrent.
+    reason: Mapped[str] = mapped_column(Text)
+    scope: Mapped[GrantScope] = mapped_column(Enum(GrantScope, name="grant_scope"))
+    granted_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    ended_by: Mapped[str] = mapped_column(String(320), default="")
+
+
+class StaffAuditLog(Base):
+    """Every staff action, including reads.
+
+    Separate from the tenant audit log and never exposed to tenant APIs: it
+    spans tenants, so putting it behind RLS would either leak across
+    organizations or be unreadable. Reads are recorded as well as writes,
+    because for a platform holding other companies' operating data, looking is
+    the action that needs explaining.
+    """
+
+    __tablename__ = "staff_audit_logs"
+    __table_args__ = (Index("ix_staff_audit_ts", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    admin_email: Mapped[str] = mapped_column(String(320), index=True)
+    action: Mapped[str] = mapped_column(String(60))
+    # Null for fleet-wide actions that name no single organization.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), default=None, index=True
+    )
+    grant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
 RLS_TABLES = [
     "agent_instances",
     "policy_configs",

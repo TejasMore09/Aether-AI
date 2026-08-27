@@ -16,7 +16,8 @@ platform/
 │   ├── core/            config, DB + tenant sessions, auth, models
 │   ├── policy/          cost-aware decision kernel (per-tenant params)
 │   ├── control_plane/   FastAPI app: signup/login, tenants, agents  (port 8100)
-│   └── agent_runtime/   FastAPI app: policies, evaluate, approvals  (port 8200)
+│   ├── agent_runtime/   FastAPI app: policies, evaluate, approvals  (port 8200)
+│   └── main_brain/      FastAPI app: fleet health, break-glass        (port 8300)
 ├── migrations/          Alembic — schema + RLS policies + app role
 ├── tests/               unit tests + the RLS isolation proof
 └── docker-compose.yml   Postgres(pgvector) on 5433 + Redis on 6379
@@ -54,6 +55,7 @@ $env:AETHER_MIGRATION_DATABASE_URL="postgresql+psycopg://aether:aether_dev_only@
 ```powershell
 .venv\Scripts\uvicorn aether.control_plane.app:app --port 8100 --reload
 .venv\Scripts\uvicorn aether.agent_runtime.app:app --port 8200 --reload
+.venv\Scripts\uvicorn aether.main_brain.app:app --port 8300 --reload   # staff only
 .venv\Scripts\python -m aether.worker   # Nano monitor worker (needs Temporal from compose)
 ```
 
@@ -118,6 +120,89 @@ Consequences worth knowing:
 "Evaluate now" calls `POST /v1/domains/{domain}/monitor-run`, which starts the
 *same* Temporal workflow the schedule uses — so an on-demand run diagnoses and
 notifies exactly like an autonomous one, rather than being a lesser path.
+
+## The main brain (`main_brain/`, port 8300)
+
+Operating a fleet of isolated agents eventually means someone has to debug one
+of them. The question is not whether staff *can* reach tenant data — at the
+database, somebody always can — but whether reaching it is deliberate,
+bounded, and visible to the customer afterwards.
+
+It is a separate ASGI app on its own port precisely so "is this endpoint
+staff-only?" is answered by which file the route lives in, rather than by
+remembering to attach the right dependency. Bind it to an internal interface.
+
+### The first admin
+
+```powershell
+.venv\Scripts\python -m aether.main_brain.bootstrap you@company.com --role admin
+```
+
+A local command, not an endpoint: a route that mints the first superuser is a
+route that has to be right forever, including on the day someone forgets to
+disable it. It refuses once any admin exists; after that, staff are added
+through `POST /v1/staff` by someone already accountable.
+
+### Two things staff can do, and the line between them
+
+**Fleet health** (`GET /v1/fleet`) is free to read. Per tenant: agent count,
+observation and quarantine counts, last reading time, pending approvals,
+active keys, month-to-date AI spend, failed notifications. Counts and
+timestamps — never a metric value, a diagnosis, or an approval reason.
+
+That restriction is structural, not a convention. `/v1/fleet` reads a database
+**view** owned by the migration role, which owns the underlying tables and so
+bypasses their row-level security; the application role is granted `SELECT` on
+the view and nothing else changes about its access to the tables. Staff code
+*cannot* read a tenant's numbers through this path, because the view does not
+select them — there is no argument to the call that would change that.
+
+**Tenant contents** require a break-glass grant: one named person, one named
+organization, a written reason of at least 12 characters, and a hard expiry
+capped by `AETHER_BREAK_GLASS_MAX_MINUTES` (default 240). Expiry is checked at
+use, so a grant dies on time even if no sweeper has run. There is no "extend" —
+a longer look is a new grant with its own reason, which keeps the trail a list
+of decisions rather than one open-ended session.
+
+```bash
+curl -X POST localhost:8300/v1/grants -H "Authorization: Bearer <STAFF_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id":"...","reason":"Nightly sync stopped after key rotation, SUP-118.","minutes":15}'
+```
+
+### Why the customer is told
+
+Opening a grant writes into **the tenant's own audit log**, and their Activity
+page shows it in a section of its own above their agent's activity: who
+looked, under what scope, the reason verbatim, and when it ends. A staff-only
+trail asks the customer to trust that we police ourselves. An entry in the log
+they already read means staff access turns up beside their own agent's
+decisions, unprompted.
+
+### What the platform records about itself
+
+Every staff action lands in `staff_audit_logs`, **reads included** — for a
+platform holding other companies' operating data, looking is the act that
+needs explaining. The table is append-only at the database: a trigger raises
+on `UPDATE` and `DELETE`, so the guarantee holds against the application
+itself, which is what an attacker who reaches the app would be holding. It
+raises rather than silently ignoring, because a swallowed `DELETE` leaves the
+caller believing it worked.
+
+The trail is readable by every staff member, not only admins — oversight only
+the powerful can see is not oversight.
+
+### Token separation
+
+Staff tokens are signed with `AETHER_STAFF_JWT_SECRET`, distinct from
+`AETHER_JWT_SECRET`, and carry issuer `aether-main-brain`. A customer's JWT
+presented to the brain, and a staff JWT presented to a tenant endpoint, each
+fail on two independent checks. If the customer-facing signing key ever leaks,
+the blast radius is one organization's sessions — not the ability to mint an
+identity with reach across the whole fleet.
+
+Staff roles: `observer` (fleet health), `engineer` (may open a grant), `admin`
+(may manage staff and end anyone's grant).
 
 ## Domain packs — what the platform knows about a business function
 

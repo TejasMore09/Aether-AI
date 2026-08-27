@@ -19,6 +19,19 @@ class Settings(BaseSettings):
     jwt_ttl_minutes: int = 60
     jwt_algorithm: str = "HS256"
 
+    # Staff tokens are signed with their own key, not jwt_secret. If the
+    # customer-facing signing key ever leaks, the blast radius is one
+    # organization's sessions -- not the ability to mint a main-brain
+    # identity with reach across the whole fleet. Sharing one secret would
+    # make those two failures the same failure.
+    staff_jwt_secret: str = "dev-only-staff-secret-do-not-deploy"
+    staff_jwt_ttl_minutes: int = 30  # shorter: staff sessions are for incidents
+
+    # Ceiling on how long one break-glass grant can last. Not a default --
+    # the requester picks a duration and this caps it. An incident that
+    # outlives this needs a fresh decision, with its own written reason.
+    break_glass_max_minutes: int = 240
+
     env: str = "dev"
 
     # Temporal (durable workflow engine) — the autonomous monitor loop.
