@@ -65,6 +65,7 @@ domain packs, and what needs configuring before any of it is real.
 | Where | What |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | how the system fits together, and why |
+| [RESTORE.md](RESTORE.md) | getting running again on a fresh machine |
 | [platform/README.md](platform/README.md) | running it, operating it, extending it |
 | `platform/src/aether/domains/` | domain packs — the product's surface area |
 | `platform/src/aether/policy/` | the decision engine |
@@ -84,6 +85,6 @@ on it.
 cd platform && .venv/Scripts/python -m pytest
 ```
 
-141 tests. Tenant isolation is proven by test rather than asserted by design,
+160 tests. Tenant isolation is proven by test rather than asserted by design,
 and the break-glass gate is mutation-checked — stubbing it to always pass
 fails five tests, so they are load-bearing rather than decorative.
