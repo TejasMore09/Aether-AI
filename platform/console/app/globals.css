@@ -1,0 +1,104 @@
+@import 'tailwindcss';
+
+/**
+ * "Instrument" — the staff console's visual language.
+ *
+ * Deliberately nothing like the customer product. Forge is warm, soft-shadowed
+ * and roomy because it is something a business owner chooses to look at. This
+ * is cold, flat and dense because it is something an engineer reads at 3am
+ * while something is broken.
+ *
+ * The difference is a safety property, not a preference: a staff member should
+ * never be a half-second unsure whether they are looking at their own console
+ * or a customer's dashboard. The surfaces do not resemble each other at a
+ * glance, so the question never comes up.
+ *
+ * Consequences of that: 4px radii instead of 20px, borders instead of shadows,
+ * tabular numerals everywhere, and no motion beyond state changes. An ops tool
+ * that animates is an ops tool that wastes the reader's attention.
+ */
+
+:root {
+  --steel-950: #0a0c0f;
+  --steel-900: #101318;
+  --steel-850: #151920;
+  --steel-800: #1b2029;
+  --steel-700: #262d38;
+  --steel-600: #38414f;
+
+  --ink: #e6eaf0;
+  --ink-soft: #98a3b3;
+  --ink-faint: #667283;
+
+  /* One accent per state, and no decorative colour at all. Colour in here
+     always means something is true, never that something is pretty. */
+  --ok: #4ba07a;
+  --attention: #c99a3f;
+  --critical: #cc5c52;
+  /* Break-glass has its own colour, used nowhere else, so an open grant is
+     never mistaken for an ordinary warning. */
+  --breach: #8b6ce0;
+
+  --line: #232a35;
+  --focus: #4a7fd4;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--steel-950);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv04';
+}
+
+/* Numbers are the whole point of this interface: they must line up in a
+   column so a wrong one is visible without being read. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.mono {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', monospace;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--focus) 45%, transparent);
+}
+
+/* A grant is open: the whole chrome changes, not a corner of it. Someone
+   inside a customer's data should not be able to forget they are. */
+@keyframes breach-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.breach-dot {
+  animation: breach-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breach-dot {
+    animation: none;
+    opacity: 1;
+  }
+}

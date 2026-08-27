@@ -16,4 +16,11 @@ platform/web/node_modules/
 platform/web/.next/
 platform/web/.env.local
 platform/web/next-env.d.ts
+
+# Staff console (same shape as web/)
+platform/console/node_modules/
+platform/console/.next/
+platform/console/.env.local
+platform/console/next-env.d.ts
+platform/console/tsconfig.tsbuildinfo
 platform/web/tsconfig.tsbuildinfo

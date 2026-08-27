@@ -4,9 +4,22 @@
     {
       "name": "aether-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000,
       "cwd": "platform/web"
+    },
+    {
+      "name": "aether-console",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3100,
+      "cwd": "platform/console"
     }
   ]
 }

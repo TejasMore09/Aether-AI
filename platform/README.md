@@ -18,6 +18,8 @@ platform/
 │   ├── control_plane/   FastAPI app: signup/login, tenants, agents  (port 8100)
 │   ├── agent_runtime/   FastAPI app: policies, evaluate, approvals  (port 8200)
 │   └── main_brain/      FastAPI app: fleet health, break-glass        (port 8300)
+├── web/                 Next.js customer dashboard                    (port 3000)
+├── console/             Next.js staff console — talks only to 8300    (port 3100)
 ├── migrations/          Alembic — schema + RLS policies + app role
 ├── tests/               unit tests + the RLS isolation proof
 └── docker-compose.yml   Postgres(pgvector) on 5433 + Redis on 6379
@@ -131,6 +133,42 @@ bounded, and visible to the customer afterwards.
 It is a separate ASGI app on its own port precisely so "is this endpoint
 staff-only?" is answered by which file the route lives in, rather than by
 remembering to attach the right dependency. Bind it to an internal interface.
+
+### The console (`console/`, port 3100)
+
+```powershell
+cd console; npm install; npm run dev
+```
+
+A separate Next.js application from `web/`, for the same reason the API is a
+separate app: if the console were a route group inside the customer
+dashboard, that deployment would hold main-brain credentials and one routing
+mistake would be a cross-boundary mistake. As it stands the customer app has
+no configuration pointing at the brain and no code that talks to it.
+
+It also looks nothing like the customer product — flat, cold and dense where
+Forge is warm and roomy. That is a safety property rather than a preference:
+staff should never be even briefly unsure whether they are looking at their
+own console or a customer's dashboard.
+
+Three surfaces:
+
+- **Fleet** opens on *needs attention*, not on everything. It scores each
+  tenant — silent agents, quarantine rates, undelivered notifications, budget,
+  waiting decisions — and sorts worst first. The distinction it works hardest
+  to keep is between an agent that has gone quiet and a tenant that never
+  started; collapsing those is how a real outage hides in a list of unused
+  accounts.
+- **Tenant** carries the break-glass form. It states the consequence in the
+  form itself: this organization will see your email and this reason, word
+  for word, immediately and permanently. Their data appears on the same page
+  once a grant is open, and nowhere until then.
+- **Staff trail** is the whole append-only record, readable by every staff
+  member.
+
+While a grant is open, a sticky bar follows you across every page in a colour
+used nowhere else in the interface, counting down and offering one click to
+end it. Friction belongs on opening access, never on closing it.
 
 ### The first admin
 
