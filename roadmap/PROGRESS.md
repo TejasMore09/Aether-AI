@@ -37,9 +37,15 @@ something names it.
 `test_business_state_db.py` for `load()`. Reasoning should not need
 infrastructure to verify — these run in under a second on any machine.
 
-**Not verified:** the database-backed tests have never run. Docker Desktop
-stopped partway through and would not restart from the command line. The pure
-tests pass; `load()` itself is unexercised.
+**Verified** once Docker was back: 13 database-backed tests pass, including
+cross-tenant isolation and the refusal to treat a quarantined reading as the
+business's current position. 170 tests overall, none skipped.
+
+One of those tests had been driving the monitoring endpoint, which needs
+Temporal, so it skipped on a machine where the feature worked fine. `silent`
+is derived from `PolicyConfig`, so it now configures a policy directly — the
+same principle that split the pure tests out in the first place: do not
+require infrastructure that is not part of what is being tested.
 
 Also fixed, unrelated: `test_garbage_keys_are_refused` had no database guard,
 so it failed where its neighbours skipped. A suite whose result depends on

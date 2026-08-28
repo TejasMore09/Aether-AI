@@ -9,11 +9,8 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 1
 
-Phase 0 complete. Phase 1 started 2026-08-28. **1.1 done; next is 1.2.**
-
-Caveat: 1.1's database-backed tests have not been run — Docker Desktop was
-down when they were written. Run `pytest tests/test_business_state_db.py`
-before building on them.
+Phase 0 complete. Phase 1 started 2026-08-28. **1.1 done and verified
+against a live database; next is 1.2.** 170 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -38,7 +35,7 @@ The multi-tenant platform everything else stands on.
 - [x] Main brain: fleet health view, break-glass grants, append-only staff trail (port 8300)
 - [x] Staff console (port 3100)
 
-160 tests. Roughly 70% of "a robust multi-tenant monitoring platform" and
+170 tests. Roughly 70% of "a robust multi-tenant monitoring platform" and
 roughly 15% of the vision in `VISION.md`.
 
 ---

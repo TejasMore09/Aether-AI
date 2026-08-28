@@ -260,13 +260,16 @@ def test_a_configured_domain_that_never_reported_is_named(clients):
     tenant_id, headers = new_org(cp)
     push(runtime, headers, "receivables", RECEIVABLES)
 
+    # Configure the domain via its policy rather than by enabling monitoring.
+    # `silent` is derived from PolicyConfig, so requiring a running workflow
+    # engine to verify it would make this test skip on a machine where the
+    # thing being tested works perfectly well.
     r = runtime.put(
-        "/v1/domains/cash_runway/monitoring",
-        json={"interval_minutes": 60},
+        "/v1/domains/cash_runway/policy",
+        json={"params": {"perf_threshold": 0.8}},
         headers=headers,
     )
-    if r.status_code >= 400:
-        pytest.skip("monitoring endpoint unavailable in this environment")
+    assert r.status_code == 200, r.text
 
     state = business_state.load(tenant_id)
     assert "cash_runway" not in state.domains
