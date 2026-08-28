@@ -64,6 +64,7 @@ domain packs, and what needs configuring before any of it is real.
 
 | Where | What |
 |---|---|
+| [roadmap/](roadmap/) | **start here** — vision, plan, current position, decisions |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | how the system fits together, and why |
 | [platform/README.md](platform/README.md) | running it, operating it, extending it |
 | `platform/src/aether/domains/` | domain packs — the product's surface area |
