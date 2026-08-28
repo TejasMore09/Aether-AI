@@ -232,3 +232,28 @@ Work happens on a branch per feature, merged promptly. This followed one
 Commit messages carry the reasoning, not just the change. They are the most
 reliable memory this project has — a future session reads them when this
 folder is not enough.
+
+---
+
+## D18 — Unvalidated claims are recorded but stay silent
+
+`relations.yaml` states how one part of a business shows up in another. Unlike
+everything else here, those are claims about the world rather than about
+software, and no test can tell you whether one is true.
+
+So each carries a confidence tier. `mechanical` is an accounting identity;
+`strong` is a direct causal mechanism a competent advisor would reach for
+first; `plausible` is a hypothesis nobody has checked against real data.
+
+**Only `mechanical` and `strong` reach a customer.** A `plausible` relation
+loads and matches, and `active(state, include_silent=True)` will return it —
+but only so it can be tested once real data exists. Nothing that renders to a
+customer may pass that flag.
+
+This is what makes it honest to write down a guess before anyone has seen a
+real company's books. Without the tier the choice would be between shipping
+untested claims and not writing them down at all, and both are worse.
+
+Every relation must also state its `mechanism` in plain business language;
+the loader raises without one. A relation nobody can explain is one nobody can
+audit, and being auditable is that file's entire value.

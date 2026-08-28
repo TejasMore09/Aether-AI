@@ -1,0 +1,138 @@
+# Cross-domain relations — how one part of a business shows up in another.
+#
+# READ THIS BEFORE ADDING ONE.
+#
+# Everything else in this codebase is a claim about software. This file is a
+# claim about how businesses actually work, and nothing in the test suite can
+# tell you whether a claim here is true. A wrong relation does not crash; it
+# quietly tells a real company that two unrelated numbers are one problem, and
+# the company believes it because the system sounds certain.
+#
+# So the bar is deliberately high, and the honest position is written into the
+# format itself:
+#
+#   confidence: mechanical  an accounting or arithmetic identity. If both legs
+#                           hold, the link is necessarily real. There is no
+#                           plausible world where it is coincidence.
+#
+#   confidence: strong      a direct causal mechanism, widely understood by
+#                           people who run businesses. Other explanations
+#                           exist, but this one is the first a competent
+#                           advisor would reach for.
+#
+#   confidence: plausible   a reasonable hypothesis nobody has validated
+#                           against real data. Recorded so it can be tested
+#                           later; DOES NOT reach a customer.
+#
+# Only `mechanical` and `strong` produce findings. `plausible` relations are
+# loaded, matched and counted so that when real data does arrive they can be
+# checked against it — but they never speak. That distinction is the whole
+# reason this file can be written honestly by someone who has not yet seen a
+# real company's books.
+#
+# Every relation must state its `mechanism` in plain business language. If the
+# mechanism cannot be written in two sentences a business owner would accept,
+# the relation is not understood well enough to ship.
+#
+# `lag_note` exists because several real relations are not simultaneous: weak
+# pipeline today becomes thin cash two quarters out. Where a link is delayed,
+# say so, and be sceptical of matching both legs at once.
+
+version: 1
+
+relations:
+  # ── Receivables and cash ────────────────────────────────────────────────────
+  # The strongest pair available, because the mechanism is close to arithmetic:
+  # cash arriving later is cash not arriving now.
+
+  - id: collections_slowing_drains_cash
+    label: Money is arriving slower, and cash is feeling it
+    confidence: strong
+    legs:
+      - domain: receivables
+        metric: dso_days
+        state: drifting
+      - domain: cash_runway
+        metric: runway_months
+        state: drifting
+    mechanism: >
+      Every extra day customers take to pay is a day the business funds their
+      purchases out of its own cash. When collection slows and runway shortens
+      in the same period, these are usually not two problems — the second is
+      the first arriving.
+    guidance: >
+      Treat the receivables book as the cash problem. Chasing the largest
+      overdue accounts is nearly always faster and cheaper than cutting costs
+      or arranging finance, and it does not require anyone's permission.
+
+  - id: overdue_book_uncovers_obligations
+    label: The overdue book is what is leaving you short
+    confidence: mechanical
+    legs:
+      - domain: receivables
+        metric: overdue_ratio
+        state: unhealthy
+      - domain: cash_runway
+        metric: obligation_coverage
+        state: unhealthy
+    mechanism: >
+      Obligation coverage is cash on hand against what is contractually due.
+      Money already invoiced and overdue is cash the business has earned and
+      not received. When a large share of the book is overdue and coverage is
+      below comfortable at the same time, the shortfall and the overdue book
+      are, to a first approximation, the same money.
+    guidance: >
+      Compare the overdue balance against the coverage gap directly. If the
+      overdue book is larger than the gap, collection alone closes it and no
+      other action is needed yet.
+
+  # ── Sales and cash ──────────────────────────────────────────────────────────
+  # Real, but delayed. Treated carefully for exactly that reason.
+
+  - id: thin_pipeline_precedes_thin_cash
+    label: The pipeline thinned first; the cash position is following it
+    confidence: strong
+    legs:
+      - domain: sales_pipeline
+        metric: pipeline_coverage
+        state: unhealthy
+      - domain: cash_runway
+        metric: runway_months
+        state: drifting
+    lag_note: >
+      This link is not simultaneous. Pipeline weakness reaches cash only after
+      a full sales cycle plus payment terms — often a quarter or more. Both
+      legs matching at once usually means the pipeline thinned some time ago
+      and the cash effect is arriving now, which makes it a diagnosis rather
+      than a warning.
+    mechanism: >
+      Cash coming in is last quarter's pipeline, converted and collected. A
+      pipeline that no longer covers what the business needs to close is a
+      cash position that will not recover on its own, however well collections
+      are run.
+    guidance: >
+      Do not treat this as a collections problem. Collections can pull forward
+      money already earned; they cannot create revenue that was never sold.
+      The action is rebuilding coverage, and it takes a cycle to work.
+
+  # ── Sales and receivables ───────────────────────────────────────────────────
+  # Recorded as a hypothesis. Does not reach a customer.
+
+  - id: pressure_to_close_buys_worse_terms
+    label: Deals may be closing on softer terms
+    confidence: plausible
+    legs:
+      - domain: sales_pipeline
+        metric: win_rate
+        state: drifting
+      - domain: receivables
+        metric: dso_days
+        state: drifting
+    mechanism: >
+      A team under pressure on conversion sometimes concedes longer payment
+      terms to win, which lands later as a slower book. Plausible, commonly
+      asserted, and not something this system has ever observed in real data.
+    guidance: >
+      Worth checking against real client data before it is ever shown to
+      anyone. If it holds, the useful action is reviewing terms granted on
+      recently won deals rather than chasing the book.

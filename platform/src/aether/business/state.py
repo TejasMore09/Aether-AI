@@ -87,6 +87,28 @@ class DomainSnapshot:
     def metric(self, key: str) -> float | None:
         return self.metrics.get(key)
 
+    def is_drifting(self, key: str) -> bool:
+        """Whether this metric moved against its own baseline, unhealthily.
+
+        Reads the flag `derive_drift` already set at ingestion rather than
+        recomputing. Two reasons: the answer must agree with the one the
+        single-domain decision used, and only ingestion has the tenant's
+        history to hand.
+
+        Note the asymmetry it inherits — movement in the *healthy* direction
+        is never drift. A business whose DSO halves has not developed a
+        problem, and a relation keyed on drift must never fire on good news.
+        """
+        return bool((self.per_metric.get(key) or {}).get("drifted"))
+
+    def health_of(self, key: str) -> float | None:
+        """This metric's 0..1 health against the band it was actually judged
+        against — the tenant's calibrated one where it exists."""
+        entry = self.per_metric.get(key)
+        if not entry or "health" not in entry:
+            return None
+        return float(entry["health"])
+
     def as_dict(self) -> dict:
         return {
             "domain": self.domain,

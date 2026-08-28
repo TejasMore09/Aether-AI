@@ -7,6 +7,46 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.2: cross-domain relations
+
+`business/relations.yaml` and `business/relations.py`. Four relations across
+the three existing domains, each stating in plain language why the link
+exists.
+
+This is the first file in the project that makes claims about how businesses
+work rather than how software should behave, and nothing in the test suite can
+tell you whether one of them is true. A wrong relation does not crash — it
+tells a real company that two unrelated numbers are one problem, and they
+believe it because the system sounds certain.
+
+The answer is confidence tiers, and the rule that **`plausible` relations
+never reach a customer**. They load, they match, and `include_silent=True`
+returns them purely so they can be checked once real data exists. See D18.
+That is what makes it honest to write a guess down rather than either shipping
+it or losing it.
+
+Relations shipped:
+
+  mechanical  overdue book uncovers obligations  (receivables ↔ cash)
+  strong      collections slowing drains cash    (receivables ↔ cash)
+  strong      thin pipeline precedes thin cash   (sales ↔ cash, lagged)
+  plausible   pressure to close buys worse terms (sales ↔ receivables) — silent
+
+The lagged one carries a `lag_note`, because pipeline weakness reaches cash a
+quarter later; treating that as simultaneous would keep diagnosing the wrong
+cause.
+
+22 tests, most of them negative — good news never fires a relation, stale data
+cannot join one, a partial match is not a weak match, and an unvalidated claim
+stays quiet. 192 overall.
+
+**Still not real:** every one of these is reasoned rather than observed. The
+mechanical one is close to arithmetic and the two strong ones would be
+uncontroversial to an accountant, but none has been checked against a company's
+actual books.
+
+---
+
 ## 2026-08-28 — Phase 1.1: the business object
 
 `aether/business/state.py`. `BusinessState` holds every domain a tenant

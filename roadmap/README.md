@@ -23,8 +23,11 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 1 — Cross-domain reasoning.** Started 2026-08-28.
 >
-> Phase 0 is complete. `1.1` (BusinessState) is done and verified against a
-> live database — 170 tests, none skipped. Next: `1.2` in [PLAN.md](PLAN.md).
+> Phase 0 is complete. `1.1` (BusinessState) and `1.2` (relations) are done —
+> 192 tests, none skipped. Next: `1.3` in [PLAN.md](PLAN.md).
+>
+> **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
+> claims about how businesses work. No test can tell you whether one is true.
 
 That block is the pointer. Update it whenever a phase starts or finishes, and
 never let it disagree with the checkboxes in `PLAN.md`.
