@@ -23,7 +23,11 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 1 — Cross-domain reasoning.** Started 2026-08-28.
 >
-> Phase 0 is complete. Next concrete task: `1.1` in [PLAN.md](PLAN.md).
+> Phase 0 is complete. `1.1` (BusinessState) is done. Next: `1.2` in
+> [PLAN.md](PLAN.md).
+>
+> **Unverified:** 1.1's database tests never ran — Docker was down. Run
+> `pytest tests/test_business_state_db.py` before trusting them.
 
 That block is the pointer. Update it whenever a phase starts or finishes, and
 never let it disagree with the checkboxes in `PLAN.md`.

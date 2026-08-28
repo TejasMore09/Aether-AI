@@ -93,7 +93,11 @@ def test_resolve_and_revoke(clients):
     assert revoke_key(tenant_id, issued.id) is False, "revoking twice is not a change"
 
 
-def test_garbage_keys_are_refused():
+def test_garbage_keys_are_refused(clients):
+    # Takes the fixture purely for its database guard. Without it this is the
+    # one test in the file that fails rather than skips when Postgres is down,
+    # which makes the whole suite's result depend on whether Docker happens to
+    # be running — the third assertion reaches the database to look the key up.
     assert resolve_key("") is None
     assert resolve_key("not-a-key") is None
     assert resolve_key(f"{KEY_PREFIX}totally-made-up") is None

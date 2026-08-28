@@ -7,6 +7,46 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.1: the business object
+
+`aether/business/state.py`. `BusinessState` holds every domain a tenant
+reports, gathered in one query; `DomainSnapshot` describes each one.
+
+Deliberately inert — it gathers and describes, and decides nothing. Keeping
+the gathering separate from the reasoning means cross-domain findings can be
+tested against a hand-built state without a database, which is exactly what
+saved this task when Docker went down mid-work.
+
+Two ideas worth keeping:
+
+  - **Severity, not raw performance.** 0.74 is comfortable against a floor of
+    0.72 and a real problem against one of 0.92, so ranking domains by
+    performance would put cash last precisely when it matters most. Severity
+    is distance below each domain's own floor, and is zero — not a small
+    number — while healthy.
+
+  - **Stale domains are excluded from impairment.** A reading too old to
+    decide on is too old to call impaired; counting it manufactures a problem
+    out of missing data.
+
+Also carries `silent`: domains a tenant configured that have never reported.
+Configured-and-silent is a setup failure and looks exactly like healthy unless
+something names it.
+
+**Tests split.** 16 pure-logic tests with no database, plus a separate
+`test_business_state_db.py` for `load()`. Reasoning should not need
+infrastructure to verify — these run in under a second on any machine.
+
+**Not verified:** the database-backed tests have never run. Docker Desktop
+stopped partway through and would not restart from the command line. The pure
+tests pass; `load()` itself is unexercised.
+
+Also fixed, unrelated: `test_garbage_keys_are_refused` had no database guard,
+so it failed where its neighbours skipped. A suite whose result depends on
+whether Docker happens to be running is a suite people stop trusting.
+
+---
+
 ## 2026-08-28 — Roadmap folder created
 
 Phase 0 assessed as complete; Phase 1 started.

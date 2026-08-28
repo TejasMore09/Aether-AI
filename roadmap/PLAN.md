@@ -9,7 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 1
 
-Phase 0 complete. Phase 1 started 2026-08-28. Next task: **1.1**.
+Phase 0 complete. Phase 1 started 2026-08-28. **1.1 done; next is 1.2.**
+
+Caveat: 1.1's database-backed tests have not been run — Docker Desktop was
+down when they were written. Run `pytest tests/test_business_state_db.py`
+before building on them.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -51,7 +55,7 @@ That gap is the difference between a metrics tool and something that
 understands a business. Every later phase assumes a business-level object
 exists to hang knowledge, sector context and forecasts on.
 
-- [ ] **1.1** `BusinessState` — one object holding every domain's latest reading, signals and decision for a tenant
+- [x] **1.1** `BusinessState` — one object holding every domain's latest reading, signals and decision for a tenant
 - [ ] **1.2** A relations file: which metrics across domains move together, and in which direction, with reasons
 - [ ] **1.3** Correlation pass — detect co-movement across domains in a tenant's own history, not just the declared relations
 - [ ] **1.4** `CrossDomainFinding` — a finding that names several domains at once, with a combined exposure figure
