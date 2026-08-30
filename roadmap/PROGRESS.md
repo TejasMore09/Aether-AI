@@ -7,6 +7,35 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.3: correlation against a tenant's own history
+
+`business/correlation.py`. Asks whether *this* company's history actually
+shows the patterns `relations.yaml` claims in general.
+
+The naive version of this feature is worse than not having it, and that shaped
+everything: a couple of hundred cross-domain pairs against a dozen readings
+will surface strong-looking noise on every run for every tenant. See D19.
+
+Output is split. `evidence()` corroborates relations declared in advance;
+`candidates()` reports undeclared patterns for a human, never a customer.
+Neither becomes a finding alone.
+
+Measured rather than asserted — on two independent trends with light noise,
+levels correlate at −0.95 to −1.00 while differences sit at −0.44 to +0.31 and
+are refused. That test runs five seeds, because one draw proves only that one
+sample behaved.
+
+Spearman and ranking written out rather than adding scipy: two short functions
+over a dozen points, and the arithmetic is worth being readable here.
+
+20 tests, no database needed. 212 overall.
+
+**Note:** Docker Desktop stopped unprompted twice today, so the 81
+database-backed tests skipped on the final run. They passed earlier in the
+session; the correlation work itself needs no database.
+
+---
+
 ## 2026-08-28 — Phase 1.2: cross-domain relations
 
 `business/relations.yaml` and `business/relations.py`. Four relations across

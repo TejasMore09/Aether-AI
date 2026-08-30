@@ -257,3 +257,36 @@ untested claims and not writing them down at all, and both are worse.
 Every relation must also state its `mechanism` in plain business language;
 the loader raises without one. A relation nobody can explain is one nobody can
 audit, and being auditable is that file's entire value.
+
+---
+
+## D19 — A discovered correlation is evidence, never a finding
+
+Three domains give a couple of hundred cross-domain metric pairs; an SME
+reports perhaps a dozen times a year. At any conventional threshold you will
+find several strong-looking correlations in pure noise, every run, for every
+tenant. A product that surfaced those would generate confident nonsense at
+scale, and would look most convincing exactly when it was most wrong.
+
+So `correlation.py` splits its output. `evidence()` returns co-movements that
+corroborate a relation declared in advance — the hypothesis was written before
+the data was examined, which is what makes finding it meaningful.
+`candidates()` returns undeclared patterns, for a human to read and
+occasionally recognise. Neither may become a finding on its own.
+
+Four defences underneath that, each load-bearing:
+
+  - **First differences, not levels.** Two metrics that both drift correlate
+    at 0.85–1.00 whether or not they are related. Measured: on the same data
+    where levels correlate at −0.95, differences sit at −0.44 to +0.31 and are
+    correctly refused.
+  - **Spearman, not Pearson.** Business series are lumpy, and one large
+    invoice can manufacture a Pearson correlation on a short series.
+  - **|rho| >= 0.7 over at least 8 pairs**, enforced after differencing
+    consumes one.
+  - **No reading is paired twice** during alignment, or one cash reading would
+    pair with six receivables readings and manufacture a correlation from a
+    single observation repeated.
+
+`spearman()` returns None rather than 0.0 on constant input: no correlation
+*exists* there, which is different from "these do not move together".
