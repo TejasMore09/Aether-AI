@@ -7,9 +7,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ---
 
-## ▶ CURRENT POSITION: Phase 1
+## ▶ CURRENT POSITION: Phase 2
 
-Phase 0 complete. Phase 1 started 2026-08-28. 
+Phases 0 and 1 complete. Phase 2 in progress: **2.1–2.3 done, next is 2.4** —
+ingesting a tenant's own history so the agent remembers what it already told
+them. 318 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 

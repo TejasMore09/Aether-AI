@@ -23,11 +23,15 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 2 — Agent knowledge base.** Phases 0 and 1 are complete.
 >
-> 306 tests, none skipped. `2.1`-`2.2` done — pgvector live with RLS, and local
-> embeddings via fastembed. Next: `2.3`, tenant-scoped retrieval.
+> 318 tests, none skipped. `2.1`–`2.3` done — pgvector with RLS, local
+> embeddings, and tenant-scoped retrieval. Next: `2.4`, ingesting a tenant's
+> own history.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
-> claims about how businesses work. No test can tell you whether one is true.
+> claims about how businesses work, and
+> `platform/src/aether/knowledge/embedding.py` records what the embedding
+> model can and cannot actually distinguish. No test can tell you whether
+> either is right.
 
 That block is the pointer. Update it whenever a phase starts or finishes, and
 never let it disagree with the checkboxes in `PLAN.md`.
