@@ -77,7 +77,7 @@ dedicated isolation test because this is where a leak would be worst.
 
 - [x] **2.1** Enable pgvector; `knowledge_chunks` table, tenant-scoped, RLS enforced
 - [x] **2.2** Embedding pipeline with a free/local model — no paid API dependency
-- [ ] **2.3** Retrieval scoped to one tenant, with an isolation test that fails loudly on any cross-tenant hit
+- [x] **2.3** Retrieval scoped to one tenant, with an isolation test that fails loudly on any cross-tenant hit
 - [ ] **2.4** Ingest a tenant's own history — past decisions, approvals, outcomes — so the agent remembers what it already told them
 - [ ] **2.5** Retrieval feeds the diagnosis prompt: prior similar situations and how they resolved
 - [ ] **2.6** Main brain can see chunk counts and freshness, never chunk contents, without break-glass

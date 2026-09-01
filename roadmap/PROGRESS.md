@@ -7,6 +7,43 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 2.3: tenant-scoped retrieval
+
+ — what the rest of the system calls. Embeds a
+question, searches one tenant, marks which results are worth quoting.
+
+**Reading and writing fail differently.** Writing without a model refuses (a
+fake vector poisons the store). Reading without one returns nothing, because
+an agent with no memory is where every tenant starts — raising would turn a
+perfectly good diagnosis into none at all over an optional enrichment.
+
+ is separate from  because search always returns
+*something*, and an agent that quotes its nearest memory regardless of how
+near it is will eventually cite an irrelevant one with total confidence.
+
+The isolation tests attack rather than assert, since a single-query check can
+pass while production leaks:
+
+  - twenty tenants, not two — two can pass by luck
+  - eight threads interleaving two tenants across a shared connection pool.
+    The case a sequential test cannot see: context is transaction-local via
+    , and if it were session-local instead every other
+    isolation test would still pass while production leaked the moment two
+    tenants were served at once
+  - thirty perfect matches belonging to a neighbour against one poor match of
+    our own, so distance cannot outrank ownership
+  - the same, with the real model, so the query genuinely resembles the
+    neighbour's memory rather than only arithmetically
+
+Those last ones also validate  on real embeddings rather than on
+chosen distance arrays: a near-duplicate is found and marked quotable, and a
+business remembering nothing like the question gets results from 
+and none from .
+
+318 tests, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 2.2: local embeddings
 
 `knowledge/embedding.py`. fastembed over ONNX with `BAAI/bge-small-en-v1.5`,
