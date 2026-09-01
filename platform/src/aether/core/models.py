@@ -272,6 +272,41 @@ class Notification(Base, TenantScoped):
 
 
 # Tables protected by an RLS policy (see migrations):
+class KnowledgeChunk(Base, TenantScoped):
+    """One remembered thing, belonging to exactly one business.
+
+    Every other tenant table holds numbers. This holds sentences — what the
+    agent decided, what the owner did about it, how it turned out — which
+    makes a cross-tenant read here a disclosure rather than a statistic. It
+    carries the same RLS policy as everything else and a dedicated isolation
+    test, because this is the table where a mistake would matter most.
+
+    The embedding column is `vector(384)` and deliberately absent from this
+    mapping: SQLAlchemy has no vector type, and nothing in the ORM layer needs
+    one. Similarity search goes through explicit SQL, which is also where the
+    tenant scoping is easiest to read.
+    """
+
+    __tablename__ = "knowledge_chunks"
+    __table_args__ = (
+        Index("ix_knowledge_tenant_time", "tenant_id", "occurred_at"),
+        Index("ix_knowledge_source", "tenant_id", "kind", "source_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # When the thing happened, not when it was indexed. Backfilling a year of
+    # history in one afternoon must not make every memory look like today.
+    occurred_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(40))
+    domain: Mapped[str | None] = mapped_column(String(100), default=None)
+    # The record this was derived from, so re-indexing updates rather than
+    # accumulates. Null for chunks with no single source.
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    body: Mapped[str] = mapped_column(Text)
+    meta: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
 # ── Main brain: staff, and the terms on which they may look ───────────────────
 #
 # Operating a fleet means someone eventually has to debug a customer's agent.
@@ -396,4 +431,5 @@ RLS_TABLES = [
     "llm_usage",
     "notifications",
     "api_keys",
+    "knowledge_chunks",
 ]

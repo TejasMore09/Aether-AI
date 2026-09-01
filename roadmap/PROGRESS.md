@@ -7,6 +7,35 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 2.1: the agent knowledge base exists
+
+Migration 0009, `core/models.py`, `knowledge/store.py`. pgvector enabled for
+the first time — it had been in the Docker image since the beginning and the
+extension was never created.
+
+`knowledge_chunks` is tenant-scoped with the same RLS discipline as every
+other tenant table, and registered in `RLS_TABLES`. It is the only tenant
+table holding sentences rather than numbers, so a cross-tenant read here would
+be a disclosure rather than a statistic — the 16 tests are the most paranoid
+in the repository, and several go underneath the store to query the table
+directly.
+
+**Measured rather than assumed:** an HNSW index would be a correctness bug
+here, not an optimisation. A 40-row tenant beside a 6,000-row neighbour, asking
+for 10 nearest memories, gets **0 rows** with the index and iterative scans
+off. Silently. See D22 for the full table. We ship an exact scan.
+
+Also D23: the store relies on RLS alone rather than adding its own tenant
+predicate, so the isolation tests prove the policy rather than the filter.
+
+Embeddings are supplied by the caller for now; the pipeline is 2.2. Dimension
+is fixed at 384, and a wrong-sized vector raises rather than being reshaped —
+padding would bury an embedding-layer bug behind plausible-looking results.
+
+293 tests, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 1.8, and Phase 1 complete
 
 `tests/test_cross_domain_e2e.py`. Readings pushed through the real API, real

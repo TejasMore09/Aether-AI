@@ -23,8 +23,8 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 2 — Agent knowledge base.** Phases 0 and 1 are complete.
 >
-> 277 tests, none skipped. Next: `2.1` in [PLAN.md](PLAN.md) — enable pgvector
-> and create the tenant-scoped `knowledge_chunks` table.
+> 293 tests, none skipped. `2.1` is done — pgvector enabled, `knowledge_chunks`
+> table live with RLS. Next: `2.2`, the embedding pipeline.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work. No test can tell you whether one is true.

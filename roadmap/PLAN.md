@@ -65,7 +65,7 @@ finding that connects them, with combined money at risk, instead of two.
 
 ---
 
-## Phase 2 — Agent knowledge base `[ ]`
+## Phase 2 — Agent knowledge base `[~]` IN PROGRESS
 
 The thing asked for in the very first vision message and still entirely
 unbuilt. `pgvector` is in the Docker image; the extension has never been
@@ -75,7 +75,7 @@ Per-agent, isolated. One business's knowledge must be unreachable from
 another's — same RLS discipline as every other tenant table, and worth a
 dedicated isolation test because this is where a leak would be worst.
 
-- [ ] **2.1** Enable pgvector; `knowledge_chunks` table, tenant-scoped, RLS enforced
+- [x] **2.1** Enable pgvector; `knowledge_chunks` table, tenant-scoped, RLS enforced
 - [ ] **2.2** Embedding pipeline with a free/local model — no paid API dependency
 - [ ] **2.3** Retrieval scoped to one tenant, with an isolation test that fails loudly on any cross-tenant hit
 - [ ] **2.4** Ingest a tenant's own history — past decisions, approvals, outcomes — so the agent remembers what it already told them

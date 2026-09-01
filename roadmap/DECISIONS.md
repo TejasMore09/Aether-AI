@@ -359,3 +359,39 @@ strongest confidence survives and names the other rather than repeating it —
 and it absorbs the other's coverage, or the notices that sibling explained
 fall through and get told separately, reintroducing exactly the duplication
 the fold removed.
+
+---
+
+## D22 — No approximate vector index, and the measurement behind that
+
+The knowledge base uses an exact scan. An HNSW index is the obvious addition
+and would currently be a correctness bug, not an optimisation.
+
+An approximate index answers "the k nearest rows in the table"; row-level
+security filters *after* that. The index walks to the global nearest
+neighbours, RLS discards everyone else's, and the query returns whatever
+survives. Measured on this schema — a 40-row tenant beside a 6,000-row
+neighbour, asking for 10 nearest:
+
+    HNSW, hnsw.iterative_scan = off             0 rows
+    HNSW, hnsw.iterative_scan = relaxed_order  10 rows
+    exact scan                                 10 rows
+
+Zero, silently. The small tenant's agent would simply have had less to say and
+nobody could have told why.
+
+At this size no index is needed: thousands of chunks per tenant, not millions.
+When volume justifies one it needs `hnsw.iterative_scan` set on every
+searching session, plus a test reproducing that table.
+
+## D23 — The knowledge store relies on RLS alone, not RLS plus a WHERE clause
+
+Every query in `knowledge/store.py` runs inside `tenant_session` and carries no
+`tenant_id` predicate of its own. Belt-and-braces looks safer and is not: a
+redundant filter in application code would make the isolation tests pass
+whether or not the database policy worked. The day someone drops the policy in
+a migration, every test stays green and the only real defence is gone.
+
+One mechanism, tested directly — including tests that go underneath the store
+and query the table, because an application-level assertion only proves the
+application agrees with itself.
