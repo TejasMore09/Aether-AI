@@ -7,6 +7,41 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 2.4: a tenant's own history, indexed
+
+`knowledge/history.py`. Gated decisions and how they were resolved become
+memories the agent can find again.
+
+Observations are deliberately not indexed. The numbers are already in the
+database and queryable; the useful memory is *"we have been here before, and
+last time you decided this"* — which lives in the approvals, not the readings.
+
+**The wording is most of the work.** This embedding model matches
+near-duplicates and little else (D25), so two similar situations have to
+*read* similarly or retrieval will never connect them. Every memory is
+therefore built from one fixed template rather than written freely — a
+constraint imposed by the tool, not a stylistic choice. A test pins it: two
+comparable decisions must share over 80% of their words.
+
+**The LLM explanation is kept but never embedded.** It is the richest thing
+attached to an approval and the worst thing to vectorise — long, variable,
+phrased differently every time, which is exactly what drowns a near-duplicate
+signal. It lives in `meta` for display.
+
+**Nothing claims to know how a decision turned out.** Outcomes are not tracked
+anywhere yet — that is Phase 9 — so a memory says what was decided and stops.
+A test asserts the sentence never contains "worked", "helped", "as a result"
+or similar, because an agent implying it knew would be inventing the most
+valuable part.
+
+Re-indexing updates rather than accumulates, since a backfill will be run
+repeatedly. Embedding is batched: loading the model dominates, so two hundred
+decisions should pay that cost once.
+
+335 tests, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 2.3: tenant-scoped retrieval
 
 `knowledge/retrieval.py` — what the rest of the system calls. Embeds a
