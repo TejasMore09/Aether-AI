@@ -395,3 +395,52 @@ a migration, every test stays green and the only real defence is gone.
 One mechanism, tested directly — including tests that go underneath the store
 and query the table, because an application-level assertion only proves the
 application agrees with itself.
+
+---
+
+## D24 — Embeddings are computed locally, and never faked
+
+**Local rather than an API**, and that is a product decision rather than a
+cost one. This system's central promise is that one business's data is
+unreachable from another's. Routing every decision, outcome and note through
+an external embedding service would put all of it through a third party —
+defensible for most products, awkward for one whose isolation story is the
+thing being sold. `fastembed` over ONNX keeps it on our own machine, and
+happens to be free and to work offline: ~50MB of runtime rather than torch's
+~2GB.
+
+**No fallback embedder.** If the model cannot load, embedding raises and the
+knowledge base goes unwritten. A hashed or random fallback would produce a
+store that answers every query confidently with nonsense, and nothing
+downstream could tell the difference. An agent citing an irrelevant memory
+with total assurance is worse than an agent with no memory at all.
+
+---
+
+## D25 — Relevance is judged relatively, because this model's range is compressed
+
+Measured on `BAAI/bge-small-en-v1.5`, cosine similarity against "Days sales
+outstanding is rising and cash is getting tight":
+
+    near-identical restatement                  0.758
+    same topic, different words                 0.575
+    same domain, different subject              0.556
+    unrelated finance (payroll ran fine)        0.550
+    unrelated business (marketing campaign)     0.537
+    nonsense                                    0.387
+
+The gap between *same topic* and *entirely unrelated marketing copy* is 0.038.
+That is noise. The model's recommended query prefix was tried and does not
+help — it moved the spread from 0.221 to 0.215.
+
+So no absolute similarity threshold can separate relevant from irrelevant
+here: any cutoff admitting "same topic" also admits marketing copy. The
+store's `max_distance` is for callers who know their own data and **must not
+be used as a relevance filter**. `embedding.standout()` instead asks whether a
+result is meaningfully closer than the rest of the candidates, which survives
+a compressed range where a magic number does not.
+
+The honest summary: this retrieves *"have we seen almost exactly this
+before?"* reliably and *"is this vaguely related?"* not at all. For an agent
+asking whether a situation has happened to this business before, the first
+question is the useful one — but nothing downstream should claim more.

@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # the deterministic generator instead of silently overspending.
     llm_monthly_budget_usd_per_tenant: float = 5.0
 
+    # Knowledge base embeddings. Local by design rather than by thrift: this
+    # product's promise is that one business's data is unreachable from
+    # another's, and routing every decision and outcome through an external
+    # embedding service would put all of it through a third party. See
+    # knowledge/embedding.py.
+    embedding_enabled: bool = True
+    embedding_model: str = "BAAI/bge-small-en-v1.5"  # 384 dimensions, matches the column
+
     # Outbound email (notification service). Unconfigured (empty host) means
     # notifications are recorded with status=skipped_unconfigured, never lost
     # silently. Any SMTP provider works: SES, Resend, Mailgun, or dev Mailpit.

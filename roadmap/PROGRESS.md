@@ -7,6 +7,38 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 2.2: local embeddings
+
+`knowledge/embedding.py`. fastembed over ONNX with `BAAI/bge-small-en-v1.5`,
+384 dimensions to match the column. ~50MB of runtime rather than torch's 2GB,
+12s cold load, 0.22s for three texts.
+
+Local by decision, not thrift — see D24. Routing a customer's decisions and
+outcomes through an external embedding service is hard to defend in a product
+whose pitch is that their data is unreachable from anyone else's.
+
+**No fallback embedder anywhere.** If the model cannot load, embedding raises
+and the knowledge base goes unwritten. A hashed fallback would answer every
+query confidently with nonsense and nothing downstream could tell.
+
+**Measured the model's limits before designing around them**, and they are
+worse than expected. Unrelated marketing copy scores 0.537 against a
+receivables query, while genuinely same-topic text scores 0.575 — a gap of
+0.038. The recommended query prefix was tried and did not help. So absolute
+similarity thresholds are close to useless here, and relevance is judged
+relatively via `standout()`. See D25 for the full table.
+
+That limitation is documented in the module rather than left to be
+rediscovered by someone wondering why retrieval surfaces irrelevant memories.
+
+Tests split: 10 logic tests that need no download, 3 marked `slow` that
+exercise the real model and skip if it is absent. A fresh clone runs the suite
+in seconds and still gets the real thing where the model exists.
+
+306 tests, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 2.1: the agent knowledge base exists
 
 Migration 0009, `core/models.py`, `knowledge/store.py`. pgvector enabled for

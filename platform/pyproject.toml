@@ -17,6 +17,9 @@ dependencies = [
     "bcrypt>=4.1",
     "httpx>=0.27",
     "pyyaml>=6.0",
+    # Local embeddings for the agent knowledge base. ONNX rather than torch:
+    # ~50MB of runtime instead of ~2GB, and no GPU assumptions.
+    "fastembed>=0.4",
 ]
 
 [project.optional-dependencies]
@@ -51,4 +54,5 @@ check_untyped_defs = true
 testpaths = ["tests"]
 markers = [
     "postgres: tests that require a running Postgres (docker compose up -d db)",
+    "slow: tests that exercise the real embedding model (skipped unless downloaded)",
 ]
