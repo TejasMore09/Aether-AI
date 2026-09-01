@@ -261,12 +261,11 @@ def test_a_notice_is_folded_into_only_one_finding():
 
 
 def test_explains_requires_an_overlap_not_just_a_shared_domain():
-    findings = for_business(slowing_business())
-    dso_finding = next(f for f in findings if f.relation_id == "collections_slowing_drains_cash")
+    finding = for_business(slowing_business())[0]
 
-    assert explains(dso_finding, notice("receivables", contributing=("dso_days",))) is True
-    assert explains(dso_finding, notice("receivables", contributing=("disputed_ratio",))) is False
-    assert explains(dso_finding, notice("sales_pipeline", contributing=("dso_days",))) is False
+    assert explains(finding, notice("receivables", contributing=("dso_days",))) is True
+    assert explains(finding, notice("receivables", contributing=("disputed_ratio",))) is False
+    assert explains(finding, notice("sales_pipeline", contributing=("dso_days",))) is False
 
 
 def test_contributing_metrics_match_what_a_relation_leg_counts_as_a_hit():
@@ -300,13 +299,16 @@ def test_presentation_serialises_with_the_folding_visible():
 def test_findings_over_the_same_domains_are_not_told_twice():
     """Two relations can fire over the same pair — an overdue book against
     obligation coverage, and a stretching DSO against runway. Because a
-    finding's exposure is the largest single domain's, both arrive quoting the
-    *same money*, and sending both is telling the customer about one problem
+    finding's exposure is the largest single domain's, both quote the *same
+    money*, and telling both is telling the customer about one problem twice.
+
+    Collapsed in for_business rather than here, so no caller can route around
+    it — the prompt layer did exactly that and rendered the exposure paragraph
     twice."""
     findings = tuple(for_business(slowing_business()))
-    assert len(findings) == 2, "both relations should match this business"
-    assert findings[0].domains == findings[1].domains
-    assert findings[0].daily_usd == findings[1].daily_usd, "the same money"
+
+    assert len(findings) == 1
+    assert findings[0].also_seen, "the other mechanism is named, not discarded"
 
     shown = apply(findings, ())
     assert len(shown.findings) == 1

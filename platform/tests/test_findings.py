@@ -182,14 +182,15 @@ def test_a_finding_carries_the_mechanism_a_person_can_read():
     assert top.guidance
 
 
-def test_a_finding_quotes_the_readings_that_triggered_it():
-    top = next(
-        f
-        for f in for_business(slowing_business())
-        if f.relation_id == "collections_slowing_drains_cash"
-    )
+def test_a_finding_quotes_every_reading_that_triggered_it():
+    """Including those from a sibling folded into it. Dropping them would mean
+    the explanation quotes fewer numbers than the engine actually used."""
+    top = for_business(slowing_business())[0]
+
+    assert top.also_seen, "this business matches two relations over the same pair"
     assert top.readings["receivables.dso_days"] == 68.0
     assert top.readings["cash_runway.runway_months"] == 4.1
+    assert top.readings["receivables.overdue_ratio"] == 0.34
 
 
 def test_severity_is_the_worst_domain_not_the_average():

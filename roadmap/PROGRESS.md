@@ -7,6 +7,40 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.6: the prompt sees the whole business
+
+`business/briefing.py`, wired into `services/diagnosis.py`. An explanation of
+slowing collections can now say what it is doing to cash, instead of
+describing one domain and leaving the customer to notice.
+
+The block states the arithmetic rather than implying it. It carries two
+exposure figures, and a model handed two numbers will add them — which would
+contradict the engine's own figure inside the explanation of the engine's own
+decision. Same failure as D14, so it says outright: largest single exposure,
+not a total, never add them.
+
+Economy matters because tokens are metered per tenant. Connected domains and
+impaired domains go in; healthy unconnected ones do not, because they cost
+budget to teach the model nothing. Silent domains are named with an explicit
+instruction not to read anything into their absence.
+
+Gathering is wrapped in a try: a diagnosis that explains one domain well beats
+no diagnosis because the cross-domain layer had a bad day.
+
+**Found by running it:** the block rendered the same $54.40 paragraph twice
+with two mechanisms. Deduplication lived in `presentation.apply`, and the
+prompt layer had gone around it by calling `for_business` directly. Moved
+dedupe into `for_business`, so no caller can route around it.
+
+Fixing that exposed two more losses the tests caught: a folded sibling's
+readings and its corroborating history were being discarded. The survivor now
+absorbs both — otherwise the surviving explanation quotes fewer numbers than
+the engine actually used.
+
+15 tests. 264 overall, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 1.5: suppression
 
 `business/presentation.py`. A cross-domain finding can now take over the

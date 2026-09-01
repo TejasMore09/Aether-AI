@@ -160,8 +160,25 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
                 f"Never do: {'; '.join(pack.narrative.avoid)}\n\n"
             )
 
+        # The whole business, not just this domain. Wrapped because a
+        # diagnosis that explains one domain well beats no diagnosis at
+        # all because the cross-domain layer had a bad day.
+        business_context = ""
+        business_instructions = ""
+        try:
+            from aether.business import briefing
+            from aether.business import findings as business_findings
+            from aether.business import state as business_state
+
+            whole = business_state.load(tenant_id)
+            found = tuple(business_findings.for_business(whole))
+            business_context = briefing.context_block(whole, approval.domain, found)
+            business_instructions = briefing.extra_instructions(found, approval.domain)
+        except Exception:  # noqa: BLE001 - context must never kill the explanation
+            logger.warning("cross-domain context unavailable", exc_info=True)
+
         user_prompt = (
-            context + f"Domain: {approval.domain}\n"
+            context + business_instructions + business_context + f"Domain: {approval.domain}\n"
             f"Pending decision: {approval.action} | risk {approval.risk_level} | "
             f"estimated exposure ${approval.expected_loss_usd:,.2f}/day\n"
             f"Engine reasoning: {approval.reason}\n\n"

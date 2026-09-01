@@ -33,14 +33,12 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 
-from aether.business.findings import CrossDomainFinding
-from aether.business.relations import Confidence, all_relations
+from aether.business.findings import CrossDomainFinding, dedupe
+from aether.business.relations import all_relations
 from aether.business.state import DomainSnapshot
 
 # Risk levels, most serious first, for comparing what a finding inherits.
 _RISK_ORDER = {"HIGH": 3, "MEDIUM": 2, "LOW": 1, "": 0}
-
-_CONFIDENCE_ORDER = {Confidence.mechanical: 0, Confidence.strong: 1, Confidence.plausible: 2}
 
 
 @dataclass(frozen=True)
@@ -145,47 +143,6 @@ class Presentation:
         }
 
 
-def _dedupe(
-    findings: tuple[CrossDomainFinding, ...],
-) -> list[CrossDomainFinding]:
-    """Collapse findings that cover the same set of domains.
-
-    Two relations can both fire over the same pair — an overdue book against
-    obligation coverage, and a stretching DSO against runway. Those are two
-    lenses on one situation, and because a finding's exposure is the largest
-    single domain's, both arrive quoting the *same money*. Sending both means
-    telling the customer about one problem twice, which is the exact
-    redundancy this module exists to remove.
-
-    The strongest claim survives and names the others rather than repeating
-    them. Confidence decides, because when both describe the same money the
-    useful question is which explanation is most likely to be true.
-    """
-    by_domains: dict[frozenset[str], list[CrossDomainFinding]] = {}
-    for finding in findings:
-        by_domains.setdefault(frozenset(finding.domains), []).append(finding)
-
-    kept: list[CrossDomainFinding] = []
-    for group in by_domains.values():
-        if len(group) == 1:
-            kept.append(group[0])
-            continue
-        group.sort(key=lambda f: (_CONFIDENCE_ORDER[f.confidence], -f.daily_usd, f.relation_id))
-        primary, *rest = group
-        kept.append(
-            dataclasses.replace(
-                primary,
-                also_seen=tuple(f.label for f in rest),
-                also_covers=tuple(f.relation_id for f in rest),
-            )
-        )
-
-    # Preserve the caller's ordering, which is by money at risk.
-    order = {f.relation_id: i for i, f in enumerate(findings)}
-    kept.sort(key=lambda f: order[f.relation_id])
-    return kept
-
-
 def apply(
     findings: tuple[CrossDomainFinding, ...],
     notices: tuple[DomainNotice, ...],
@@ -196,7 +153,7 @@ def apply(
     already sorts them by money at risk — so the largest claim gets first call
     on anything it explains, and a notice is never folded twice.
     """
-    findings = tuple(_dedupe(findings))
+    findings = tuple(dedupe(findings))
 
     claimed: dict[str, list[DomainNotice]] = {}
     remaining: list[DomainNotice] = []
