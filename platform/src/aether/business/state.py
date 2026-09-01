@@ -60,9 +60,16 @@ class DomainSnapshot:
     per_metric: dict[str, dict] = field(default_factory=dict)
     stale: bool = False
     max_age_hours: float = 24.0
-    # Health floor from the tenant's policy, needed to say whether this
-    # domain is impaired without re-running the engine.
-    perf_threshold: float = 0.75
+    # The tenant's resolved policy for this domain. Carried whole rather than
+    # just its health floor, so anything reasoning across domains can compute
+    # exposure with the same parameters the single-domain decision used —
+    # rather than approximating and then disagreeing with it in the same
+    # sentence.
+    params: PolicyParams = field(default_factory=PolicyParams)
+
+    @property
+    def perf_threshold(self) -> float:
+        return self.params.perf_threshold
 
     @property
     def age_hours(self) -> float:
@@ -203,7 +210,7 @@ def _snapshot_from(
         per_metric=signals.get("per_metric") or {},
         stale=age_hours > max_age,
         max_age_hours=max_age,
-        perf_threshold=params.perf_threshold,
+        params=params,
     )
 
 

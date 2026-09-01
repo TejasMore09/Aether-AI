@@ -9,8 +9,8 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 1
 
-Phase 0 complete. Phase 1 started 2026-08-28. **1.1–1.3 done; next is 1.4.**
-212 tests.
+Phase 0 complete. Phase 1 started 2026-08-28. **1.1–1.4 done; next is 1.5.**
+232 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -55,7 +55,7 @@ exists to hang knowledge, sector context and forecasts on.
 - [x] **1.1** `BusinessState` — one object holding every domain's latest reading, signals and decision for a tenant
 - [x] **1.2** A relations file: which metrics across domains move together, and in which direction, with reasons
 - [x] **1.3** Correlation pass — detect co-movement across domains in a tenant's own history, not just the declared relations
-- [ ] **1.4** `CrossDomainFinding` — a finding that names several domains at once, with a combined exposure figure
+- [x] **1.4** `CrossDomainFinding` — a finding that names several domains at once, with a combined exposure figure
 - [ ] **1.5** Suppression: when a cross-domain finding subsumes single-domain ones, raise the former and mute the latter rather than sending both
 - [ ] **1.6** Diagnosis prompt receives the whole business, not one domain
 - [ ] **1.7** Dashboard surface for cross-domain findings, visibly distinct from per-domain ones

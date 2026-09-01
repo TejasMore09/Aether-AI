@@ -7,6 +7,34 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.4: cross-domain findings
+
+`business/findings.py`. A matched relation plus the business state becomes one
+finding naming several domains, with a combined exposure figure.
+
+Detecting the pair was the easy half. The hard part was the money, and the
+obvious answer is wrong: summing the per-domain exposures counts the same
+pounds twice, because the claim being made is that they are one problem
+measured from two sides. Worse, it would overstate most exactly where the
+relationship is strongest. See D20.
+
+The headline is the largest single exposure, and the basis says so, naming the
+smaller figure and why it is not added — understating quietly would be its own
+dishonesty.
+
+Exposure is computed with the same function the single-domain decision uses,
+now public rather than private. If the two disagreed for the same reading, a
+customer would be right to trust neither. DomainSnapshot carries the tenant's
+resolved PolicyParams for the same reason.
+
+Corroborating co-movements from 1.3 attach to a finding when they support that
+specific relation. Absence is not weakness: most tenants will never have enough
+history for the correlation pass to say anything either way.
+
+20 tests, no database. 232 overall, none skipped — Docker came back.
+
+---
+
 ## 2026-08-28 — Phase 1.3: correlation against a tenant's own history
 
 `business/correlation.py`. Asks whether *this* company's history actually

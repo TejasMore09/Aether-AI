@@ -107,7 +107,7 @@ class Decision:
         }
 
 
-def _expected_daily_loss(
+def expected_daily_loss(
     pack: DomainPack | None,
     params: PolicyParams,
     perf_degradation: float,
@@ -212,7 +212,7 @@ def evaluate(
     else:
         risk_level = RiskLevel.low
 
-    expected_loss, basis = _expected_daily_loss(pack, params, perf_degradation, values)
+    expected_loss, basis = expected_daily_loss(pack, params, perf_degradation, values)
     cost = params.intervention_cost_usd
 
     horizon_loss = expected_loss * params.payback_days

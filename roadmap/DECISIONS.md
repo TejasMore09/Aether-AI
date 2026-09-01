@@ -290,3 +290,35 @@ Four defences underneath that, each load-bearing:
 
 `spearman()` returns None rather than 0.0 on constant input: no correlation
 *exists* there, which is different from "these do not move together".
+
+---
+
+## D20 — A cross-domain finding takes the largest exposure, never the sum
+
+Each domain computes its own money at risk. Receivables might say $147 a day
+and cash $26. The obvious combined figure is $173, and $173 is false.
+
+The entire claim a cross-domain finding makes is that these are **one problem
+measured twice** — the overdue book *is* the cash shortfall. Adding them counts
+the same money in both places, which would inflate every such finding by
+exactly the amount that made it worth raising, and would overstate most where
+the domains are most strongly related. The better the product got at
+connecting things, the more it would exaggerate.
+
+So the headline is the largest single exposure, and the basis says so out
+loud, naming the smaller figure and why it is not added. Understating quietly
+would be its own dishonesty.
+
+A relation may one day declare `exposure: sum` where its legs genuinely
+describe separate money. Nothing does today, and the default is the
+conservative one: being quietly understated is survivable in a system whose
+job is to be believed; being enthusiastically overstated is not.
+
+Severity is likewise the worst domain involved, not the average — a finding is
+as serious as the most serious thing in it, and averaging would let one
+healthy leg dilute a real crisis in the other.
+
+Findings are ordered by money rather than by confidence. A merely strong claim
+about a large sum deserves attention before a mechanical certainty about a
+trivial one; the customer is deciding where to spend a morning, not grading
+the epistemology.

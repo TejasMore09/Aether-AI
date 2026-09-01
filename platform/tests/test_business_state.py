@@ -14,6 +14,7 @@ import datetime
 import uuid
 
 from aether.business.state import BusinessState, DomainSnapshot, utcnow
+from aether.policy.decision_engine import PolicyParams
 
 
 def snapshot(
@@ -35,7 +36,7 @@ def snapshot(
         metrics=metrics or {},
         stale=age_hours > max_age_hours,
         max_age_hours=max_age_hours,
-        perf_threshold=perf_threshold,
+        params=PolicyParams(perf_threshold=perf_threshold),
     )
 
 

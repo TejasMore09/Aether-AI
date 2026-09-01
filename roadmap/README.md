@@ -23,8 +23,8 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 1 — Cross-domain reasoning.** Started 2026-08-28.
 >
-> Phase 0 is complete. `1.1`–`1.3` are done — 212 tests. Next: `1.4`
-> (CrossDomainFinding) in [PLAN.md](PLAN.md).
+> Phase 0 is complete. `1.1`–`1.4` are done — 232 tests, none skipped.
+> Next: `1.5` (suppression) in [PLAN.md](PLAN.md).
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work. No test can tell you whether one is true.
