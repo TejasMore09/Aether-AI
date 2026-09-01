@@ -7,10 +7,10 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ---
 
-## ▶ CURRENT POSITION: Phase 2
+## ▶ CURRENT POSITION: Phase 3
 
-Phases 0 and 1 complete. Phase 2 in progress: **2.1–2.5 done, next is 2.6**
-— the main brain seeing how much an agent remembers, never what. 352 tests,
+Phases 0, 1 and 2 complete. Phase 3 not started: sector awareness, where
+the mechanism is days of code and the numbers are the slow part. 354 tests,
 none skipped.
 
 Keep this line in step with `roadmap/README.md`.
@@ -67,7 +67,7 @@ finding that connects them, with combined money at risk, instead of two.
 
 ---
 
-## Phase 2 — Agent knowledge base `[~]` IN PROGRESS
+## Phase 2 — Agent knowledge base `[x]` COMPLETE
 
 The thing asked for in the very first vision message and still entirely
 unbuilt. `pgvector` is in the Docker image; the extension has never been
@@ -82,14 +82,14 @@ dedicated isolation test because this is where a leak would be worst.
 - [x] **2.3** Retrieval scoped to one tenant, with an isolation test that fails loudly on any cross-tenant hit
 - [x] **2.4** Ingest a tenant's own history — past decisions, approvals, outcomes — so the agent remembers what it already told them
 - [x] **2.5** Retrieval feeds the diagnosis prompt: prior similar situations and how they resolved
-- [ ] **2.6** Main brain can see chunk counts and freshness, never chunk contents, without break-glass
+- [x] **2.6** Main brain can see chunk counts and freshness, never chunk contents, without break-glass
 
 **Done when:** an agent's explanation can reference what happened to that same
 business six months ago, and no query path can reach another tenant's chunks.
 
 ---
 
-## Phase 3 — Sector awareness `[ ]`
+## Phase 3 — Sector awareness `[ ]` NEXT
 
 Currently a stock brokerage and a bakery receive byte-identical packs. This is
 the specific gap Tejas called out, and there is no hook to hang it on yet.

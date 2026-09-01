@@ -7,6 +7,44 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-01 — Phase 2.6: the fleet sees how much, never what
+
+Migration `0010`. The fleet view gains three columns: how many memories an
+agent holds, when it last gained one, and how many resolved decisions were
+never indexed.
+
+The third is the reason this exists. A knowledge base fails silently: approvals
+resolve, the indexing task raises, the store stops growing, and the only
+symptom is that explanations quietly stop mentioning the past. Nobody gets an
+error, and the customer cannot tell, never having seen the version that works.
+A count of decisions with no memory of them is how that becomes noticeable
+from outside.
+
+The line from `0008` holds unchanged, and this is where it matters most.
+Everything else the view counts is telemetry a business pushed at us; a
+knowledge base is the agent's record of what its owners *decided*, written in
+prose a person can read at a glance. It is the one place where "just show the
+body, for debugging" would be most tempting and worst. So the guarantee is
+structural rather than good manners: the view cannot return a body because it
+does not select one, and it is owned by the migration role.
+
+Console shows both counts on the tenant page with that stated plainly, and
+raises a fleet signal once unindexed decisions reach three — one or two is a
+model that was missing when a decision happened, which a backfill repairs; a
+steady climb is a pipeline that stopped.
+
+**Phase 2 is complete.** Its own test: an agent's explanation can reference
+what happened to that same business months ago, and no query path reaches
+another tenant's chunks. Both hold.
+
+What Phase 2 is *not*: the retrieval only answers "have we seen almost exactly
+this before?" A tenant with one prior decision gets nothing quoted. And no
+real business has used any of it — the memories in every test are invented.
+
+354 tests, none skipped.
+
+---
+
 ## 2026-09-01 — Phase 2.5: the agent remembers out loud
 
 `knowledge/briefing.py`. What this business decided last time now reaches the

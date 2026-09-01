@@ -18,6 +18,10 @@ const BUDGET_USD = Number(process.env.AETHER_TENANT_BUDGET_USD ?? '5')
 
 const SILENT_HOURS = 48
 
+// One or two is a model that was not downloaded when a decision happened, and
+// a backfill fixes it. A steady climb is a pipeline that stopped.
+const UNINDEXED_LIMIT = 3
+
 export type Signal = { label: string; tone: Tone }
 
 export function signalsFor(row: FleetRow): Signal[] {
@@ -47,6 +51,12 @@ export function signalsFor(row: FleetRow): Signal[] {
   }
   if (BUDGET_USD > 0 && row.month_spend_usd >= BUDGET_USD * 0.9) {
     signals.push({ label: 'budget', tone: 'attention' })
+  }
+  // An agent that stopped remembering shows no error anywhere else. Its
+  // explanations simply stop mentioning what this business decided before,
+  // and the customer cannot tell, never having seen the version that works.
+  if (row.unindexed_decisions >= UNINDEXED_LIMIT) {
+    signals.push({ label: `${row.unindexed_decisions} unremembered`, tone: 'attention' })
   }
 
   if (signals.length === 0 && !everReported) {

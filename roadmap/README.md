@@ -21,12 +21,16 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 ## Current position
 
-> **Phase 2 — Agent knowledge base.** Phases 0 and 1 are complete.
+> **Phase 3 — Sector awareness.** Phases 0, 1 and 2 are complete.
 >
-> 352 tests, none skipped. `2.1`–`2.5` done — pgvector with RLS, local
-> embeddings, tenant-scoped retrieval, a tenant's own decisions indexed, and
-> those decisions recalled into the diagnosis prompt. Next: `2.6`, the main
-> brain seeing chunk counts and freshness but never contents.
+> 354 tests, none skipped. An agent now remembers its own business: pgvector
+> under RLS, local embeddings, tenant-scoped retrieval, and past decisions
+> recalled into the explanation an approver reads. Staff can see how much an
+> agent remembers and never what.
+>
+> Next: Phase 3, where a stock brokerage and a bakery stop receiving
+> byte-identical packs. The code is days; the defensible numbers are not,
+> and need Tejas's domain access.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work, and

@@ -275,6 +275,14 @@ forbids any claim about how a past decision turned out — nothing tracks that
 yet. Retrieval failing costs an explanation a sentence, never the explanation:
 memory is an enhancement, never a precondition.
 
+**Staff see how much, never what.** The fleet view carries each agent's chunk
+count, when it last learned something, and how many resolved decisions were
+never indexed — that last one because a knowledge base fails silently
+otherwise: indexing raises, the store stops growing, and the only symptom is
+explanations quietly ceasing to mention the past. Reading a memory is a
+break-glass matter like any other tenant data, and the guarantee is the view's
+rather than the code's good manners.
+
 The limitation to hold onto: this model reliably answers *"have we seen almost
 exactly this before?"* and is close to useless on *"is this vaguely related?"*
 Everything above is built around the first question, and nothing downstream

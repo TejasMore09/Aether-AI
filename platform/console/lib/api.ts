@@ -99,6 +99,9 @@ export type FleetRow = {
   active_keys: number
   month_spend_usd: number
   failed_notifications: number
+  knowledge_chunks: number
+  last_knowledge_at: string | null
+  unindexed_decisions: number
 }
 
 export type Grant = {

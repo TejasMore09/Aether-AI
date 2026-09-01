@@ -131,6 +131,94 @@ def test_fleet_health_is_counts_not_contents(apps):
         assert value not in blob, f"fleet health leaked {value}"
 
 
+def test_fleet_sees_how_much_an_agent_remembers_and_never_what(apps):
+    """The line from 0008, applied where it matters most.
+
+    A knowledge base is the one thing on this platform written in prose — the
+    agent's record of what a business decided, in sentences a person can read
+    at a glance. It is where "just show the body, for debugging" is most
+    tempting and worst, so the guarantee is the view's rather than this code's
+    good manners: it cannot return a body because it does not select one.
+    """
+    from aether.knowledge import store
+
+    cp, _, brain = apps
+    tenant_id, _ = _new_org(cp)
+    secret = "Owner escalated collections against the largest overdue account."
+    store.remember(
+        tenant_id,
+        kind="decision",
+        body=secret,
+        embedding=[0.05] * store.EMBEDDING_DIMENSIONS,
+    )
+    _, staff_headers = _staff(StaffRole.observer)
+
+    rows = brain.get("/v1/fleet", headers=staff_headers).json()
+    mine = next(r for r in rows if r["tenant_id"] == str(tenant_id))
+
+    assert mine["knowledge_chunks"] == 1
+    assert mine["last_knowledge_at"] is not None
+
+    blob = repr(mine)
+    for fragment in (secret, "collections", "overdue", "embedding"):
+        assert fragment not in blob, f"fleet health leaked {fragment!r}"
+
+
+def test_a_decision_nobody_remembered_is_visible_from_the_fleet(apps):
+    """The failure this column exists for.
+
+    If indexing breaks, approvals resolve, the store stops growing, and the
+    only symptom is that explanations quietly stop mentioning the past. Nobody
+    gets an error and the customer cannot tell, because they have never seen
+    the version that works. A count of decisions with no memory of them is how
+    that becomes noticeable from outside.
+    """
+    from aether.core.models import ApprovalStatus, PendingApproval
+    from aether.knowledge import store
+
+    cp, _, brain = apps
+    tenant_id, _ = _new_org(cp)
+    _, staff_headers = _staff(StaffRole.observer)
+
+    def fleet_row() -> dict:
+        rows = brain.get("/v1/fleet", headers=staff_headers).json()
+        return next(r for r in rows if r["tenant_id"] == str(tenant_id))
+
+    with tenant_session(tenant_id) as db:
+        resolved = PendingApproval(
+            tenant_id=tenant_id,
+            domain="receivables",
+            action="ESCALATE_COLLECTIONS",
+            reason="overdue share climbing",
+            risk_level="HIGH",
+            expected_loss_usd=147.0,
+            status=ApprovalStatus.approved,
+            resolved_by="owner@example.io",
+        )
+        still_open = PendingApproval(
+            tenant_id=tenant_id,
+            domain="receivables",
+            action="ESCALATE_COLLECTIONS",
+            reason="waiting on a person",
+            risk_level="HIGH",
+            expected_loss_usd=99.0,
+        )
+        db.add_all([resolved, still_open])
+        db.flush()
+        resolved_id = resolved.id
+
+    assert fleet_row()["unindexed_decisions"] == 1, "a pending decision is not yet history"
+
+    store.remember(
+        tenant_id,
+        kind="decision",
+        body="March 2026, Cash & Receivables: ...",
+        embedding=[0.05] * store.EMBEDDING_DIMENSIONS,
+        source_id=resolved_id,
+    )
+    assert fleet_row()["unindexed_decisions"] == 0
+
+
 def test_fleet_health_sees_every_tenant(apps):
     cp, _, _ = apps
     a, _ = _new_org(cp)

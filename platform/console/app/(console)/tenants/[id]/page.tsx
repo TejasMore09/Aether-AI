@@ -97,6 +97,33 @@ export default async function TenantPage({ params }: { params: Promise<{ id: str
         <Stat label="Spend" value={usd(row.month_spend_usd, 2)} />
       </Panel>
 
+      {/* ── What their agent remembers, and never what it is ──────────── */}
+      <Panel className="mb-5">
+        <PanelHead
+          title="Agent memory"
+          aside={
+            <span className="text-[11.5px]" style={{ color: 'var(--ink-faint)' }}>
+              last learned <Ago iso={row.last_knowledge_at} />
+            </span>
+          }
+        />
+        <div className="grid grid-cols-2 divide-x">
+          <Stat label="Remembered" value={row.knowledge_chunks} />
+          <Stat
+            label="Unremembered decisions"
+            value={row.unindexed_decisions}
+            tone={row.unindexed_decisions >= 3 ? 'attention' : 'plain'}
+          />
+        </div>
+        <p className="px-4 pb-4 text-[12px]" style={{ color: 'var(--ink-faint)' }}>
+          Counts only. What this agent remembers is its owners&rsquo; own decisions, in
+          plain sentences — reading one is tenant data and needs a grant, like their
+          readings. A climbing unremembered count means indexing has stopped, which
+          shows up nowhere else: their explanations just quietly stop referring to
+          what they decided before.
+        </p>
+      </Panel>
+
       {/* ── Access ─────────────────────────────────────────────────────── */}
       <Panel className="mb-5">
         <PanelHead

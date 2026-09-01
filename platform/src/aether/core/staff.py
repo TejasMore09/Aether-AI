@@ -197,7 +197,8 @@ def read_staff_trail(limit: int = 100, tenant_id: uuid.UUID | None = None) -> li
 _FLEET_COLUMNS = (
     "tenant_id, name, slug, is_active, created_at, active_agents, observation_count, "
     "quarantined_count, last_observation_at, pending_approvals, configured_domains, "
-    "active_keys, month_spend_usd, failed_notifications"
+    "active_keys, month_spend_usd, failed_notifications, "
+    "knowledge_chunks, last_knowledge_at, unindexed_decisions"
 )
 
 
@@ -208,6 +209,13 @@ def fleet_health() -> list[dict]:
     tenant content whatsoever. The restriction is the view's, not this
     function's: there is no argument to this call that would return a metric
     value, because the view does not select one.
+
+    That holds for what an agent remembers too. Staff see how many memories a
+    knowledge base holds, when it last gained one, and how many resolved
+    decisions were never indexed — enough to spot a broken pipeline that would
+    otherwise show up only as explanations quietly ceasing to mention the
+    past. Reading a memory is a break-glass matter, like every other piece of
+    a customer's data.
     """
     with plain_session() as db:
         rows = db.execute(
@@ -231,6 +239,11 @@ def fleet_health() -> list[dict]:
                 "active_keys": int(r["active_keys"]),
                 "month_spend_usd": float(r["month_spend_usd"]),
                 "failed_notifications": int(r["failed_notifications"]),
+                "knowledge_chunks": int(r["knowledge_chunks"]),
+                "last_knowledge_at": (
+                    r["last_knowledge_at"].isoformat() if r["last_knowledge_at"] else None
+                ),
+                "unindexed_decisions": int(r["unindexed_decisions"]),
             }
             for r in rows
         ]
