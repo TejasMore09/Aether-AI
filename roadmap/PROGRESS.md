@@ -7,6 +7,42 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.7: findings on the dashboard
+
+`GET /v1/business` on the agent runtime, and a `ConnectedProblems` section
+that leads the Overview page.
+
+Given its own treatment rather than another per-domain card: the whole value
+is the claim that two symptoms are one problem, and rendering it in the same
+shape as the cards underneath would bury the only thing worth reading. The
+mechanism is shown in full rather than truncated behind a link — it is the
+reasoning, not decoration, and a customer who cannot see why we connected two
+numbers has been asked to take it on trust.
+
+The exposure basis is shown too, because a reader who assumed we had added the
+two domains together would think we were overstating, and be right to.
+
+**Found by looking at it:** the page said "Everything is tracking normally"
+directly above a connected problem quoting $54.56 a day at risk, and the
+"Exposure if unaddressed" figure read $0. Both headline numbers were computed
+from gated approvals alone and ignored findings entirely. That kind of
+contradiction teaches a customer to stop reading the headline.
+
+Fixed both. The exposure figure is now the *larger* of gated exposure and the
+biggest finding, never their sum — a gated receivables decision and a finding
+naming receivables measure the same money, so the D20 reasoning applies here
+too.
+
+Verified end to end against a seeded tenant: twelve fortnights of slowing
+collections and tightening cash, through the API, rendered in the browser,
+zero console errors.
+
+Incidentally confirmed the 1.3 trend guard on my own seed data: perfectly
+linear trends have constant first differences, so Spearman is undefined and the
+finding correctly reported "not corroborated" rather than inventing support.
+
+---
+
 ## 2026-08-28 — Phase 1.6: the prompt sees the whole business
 
 `business/briefing.py`, wired into `services/diagnosis.py`. An explanation of

@@ -157,6 +157,40 @@ def push_reading(
 # ── Domain inventory ──────────────────────────────────────────────────────────
 
 
+@app.get("/v1/business")
+def business_view(principal: Principal = Depends(authenticated)) -> dict:
+    """The whole business at once: connected problems, and where they sit.
+
+    Separate from /v1/domains, which is an inventory. This answers a different
+    question — not "what do you report" but "what is wrong, and is any of it
+    the same thing twice".
+
+    Correlation is computed against the tenant's own history so a finding can
+    say whether this business has actually shown the pattern before. It is
+    corroboration only; it never creates a finding on its own (D19).
+    """
+    from aether.business import correlation
+    from aether.business import findings as business_findings
+    from aether.business import state as business_state
+
+    whole = business_state.load(principal.tenant_id)
+
+    try:
+        series = correlation.load_series(principal.tenant_id)
+        support = tuple(correlation.evidence(series))
+    except Exception:  # noqa: BLE001 — corroboration is a bonus, never a blocker
+        support = ()
+
+    found = business_findings.for_business(whole, support)
+    return {
+        "captured_at": whole.captured_at.isoformat(),
+        "findings": [f.as_dict() for f in found],
+        "impaired": [s.domain for s in whole.impaired],
+        "silent": list(whole.silent),
+        "domains": {k: v.as_dict() for k, v in whole.domains.items()},
+    }
+
+
 @app.get("/v1/domains")
 def list_domains(principal: Principal = Depends(authenticated)) -> list[dict]:
     """Every domain this tenant has data for, with its latest reading.

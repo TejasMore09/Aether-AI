@@ -188,6 +188,36 @@ export type ApiKeyRow = {
   revoked: boolean
 }
 
+export type CrossDomainFinding = {
+  relation_id: string
+  label: string
+  confidence: 'mechanical' | 'strong'
+  domains: string[]
+  mechanism: string
+  guidance: string
+  lag_note: string
+  readings: Record<string, number>
+  daily_usd: number
+  exposure_basis: string
+  per_domain: { domain: string; daily_usd: number; basis: string }[]
+  severity: number
+  corroborated: boolean
+  corroborated_by: string[]
+  subsumes: string[]
+  inherited_risk_level: string
+  requires_approval: boolean
+  also_seen: string[]
+  also_covers: string[]
+}
+
+export type BusinessView = {
+  captured_at: string
+  findings: CrossDomainFinding[]
+  impaired: string[]
+  silent: string[]
+  domains: Record<string, unknown>
+}
+
 export type NotificationRow = {
   id: string
   created_at: string

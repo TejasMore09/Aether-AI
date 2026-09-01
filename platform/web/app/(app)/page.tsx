@@ -12,17 +12,35 @@ import {
   usd,
   whenUTC,
 } from '@/components/forge'
-import { api, type Approval, type AuditEntry, type UsageReport } from '@/lib/api'
+import { api, type Approval, type AuditEntry, type BusinessView, type UsageReport } from '@/lib/api'
+
+import { ConnectedProblems } from './ConnectedProblems'
 
 export default async function OverviewPage() {
-  const [approvals, activity, usage] = await Promise.all([
+  const [approvals, activity, usage, business] = await Promise.all([
     api.runtime<Approval[]>('/v1/approvals'),
     api.runtime<AuditEntry[]>('/v1/audit-logs?limit=8'),
     api.runtime<UsageReport>('/v1/usage/llm'),
+    api.runtime<BusinessView>('/v1/business'),
   ])
 
   const pending = approvals.ok ? approvals.data : []
-  const exposure = pending.reduce((sum, a) => sum + a.expected_loss_usd, 0)
+  const findings = business.ok ? business.data.findings : []
+
+  const gated = pending.reduce((sum, a) => sum + a.expected_loss_usd, 0)
+
+  // The headline figure is the larger of the two, never their sum. A gated
+  // receivables decision and a connected problem naming receivables are
+  // measuring the same money, so adding them would overstate — the same
+  // reasoning that makes a finding's own exposure a maximum rather than a
+  // total.
+  const largestFinding = findings.reduce((most, f) => Math.max(most, f.daily_usd), 0)
+  const exposure = Math.max(gated, largestFinding)
+
+  // Something is wrong if a decision is waiting *or* the business has a
+  // connected problem. Saying "everything is tracking normally" above a
+  // finding that quotes money at risk is the kind of contradiction that
+  // teaches a customer to stop reading the headline.
   const firstError = [approvals, activity, usage].find((r) => !r.ok) as
     | { ok: false; message: string }
     | undefined
@@ -37,12 +55,16 @@ export default async function OverviewPage() {
         title={
           pending.length > 0
             ? 'Your agent needs a decision from you.'
-            : 'Everything is tracking normally.'
+            : findings.length > 0
+              ? 'Something is connected across your business.'
+              : 'Everything is tracking normally.'
         }
         lede={
           pending.length > 0
             ? 'It has already done the analysis. What remains is the judgement call it will not make on its own.'
-            : 'Your agent is watching, and will stop you only when something is worth your attention.'
+            : findings.length > 0
+              ? 'Nothing needs your approval yet, but two parts of the business are moving together and it is worth understanding why.'
+              : 'Your agent is watching, and will stop you only when something is worth your attention.'
         }
       />
 
@@ -51,6 +73,8 @@ export default async function OverviewPage() {
           <ErrorNote message={firstError.message} />
         </div>
       ) : null}
+
+      <ConnectedProblems findings={business.ok ? business.data.findings : []} />
 
       <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Figure
@@ -62,7 +86,11 @@ export default async function OverviewPage() {
         <Figure
           label="Exposure if unaddressed"
           value={usd(exposure, 0)}
-          note="summed across gated decisions, per day"
+          note={
+            largestFinding > gated
+              ? 'from the connected problem below, per day'
+              : 'across gated decisions, per day'
+          }
           tone={exposure > 0 ? 'risk' : 'plain'}
         />
         <Figure

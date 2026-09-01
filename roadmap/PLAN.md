@@ -9,7 +9,7 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 1
 
-Phase 0 complete. Phase 1 started 2026-08-28. **1.1–1.6 done; next is 1.7.**
+Phase 0 complete. Phase 1 started 2026-08-28. **1.1–1.7 done; next is 1.8**, the last task in this phase.
 264 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
@@ -58,7 +58,7 @@ exists to hang knowledge, sector context and forecasts on.
 - [x] **1.4** `CrossDomainFinding` — a finding that names several domains at once, with a combined exposure figure
 - [x] **1.5** Suppression: when a cross-domain finding subsumes single-domain ones, raise the former and mute the latter rather than sending both
 - [x] **1.6** Diagnosis prompt receives the whole business, not one domain
-- [ ] **1.7** Dashboard surface for cross-domain findings, visibly distinct from per-domain ones
+- [x] **1.7** Dashboard surface for cross-domain findings, visibly distinct from per-domain ones
 - [ ] **1.8** Tests: co-movement detected, spurious correlation rejected, suppression correct, no leakage across tenants
 
 **Done when:** a tenant with stretching DSO and shortening runway receives one
