@@ -21,10 +21,10 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 ## Current position
 
-> **Phase 1 — Cross-domain reasoning.** Started 2026-08-28.
+> **Phase 2 — Agent knowledge base.** Phases 0 and 1 are complete.
 >
-> Phase 0 is complete. `1.1`–`1.7` are done — 264 tests, none skipped.
-> Next: `1.8` (end-to-end tests), which closes Phase 1.
+> 277 tests, none skipped. Next: `2.1` in [PLAN.md](PLAN.md) — enable pgvector
+> and create the tenant-scoped `knowledge_chunks` table.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work. No test can tell you whether one is true.

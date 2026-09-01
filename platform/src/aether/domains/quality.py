@@ -195,6 +195,33 @@ def _cross_checks(pack: DomainPack, values: dict[str, float]) -> list[Issue]:
                     )
                 )
 
+        # A ratio of a book that does not exist. Individually every figure
+        # here is in range, which is exactly why this needs stating: nothing
+        # is owed, so no share of it can be overdue or disputed, and the
+        # ratio is undefined rather than low.
+        #
+        # Worth an error rather than a warning since cross-domain reasoning
+        # began: overdue_ratio is a leg of a relation now, so a nonsense value
+        # can satisfy half a finding about the whole business while carrying
+        # no money at all.
+        if ar_total is not None and ar_total <= 0:
+            for key in ("overdue_ratio", "disputed_ratio"):
+                share = values.get(key)
+                if share is not None and share > 0:
+                    issues.append(
+                        Issue(
+                            metric=key,
+                            code="contradiction",
+                            severity=Severity.error,
+                            message=(
+                                f"{share:.0%} of the book is reported under this "
+                                "measure, but nothing is outstanding. A share of "
+                                "an empty book is undefined, not zero — the two "
+                                "figures come from different periods or sources."
+                            ),
+                        )
+                    )
+
         dso = values.get("dso_days")
         if dso is not None and overdue is not None and dso < 15 and overdue > 0.5:
             issues.append(

@@ -7,6 +7,54 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.8, and Phase 1 complete
+
+`tests/test_cross_domain_e2e.py`. Readings pushed through the real API, real
+database, real RLS. 277 tests overall, none skipped.
+
+Isolation is the test that matters: two tenants reporting the *same* domain,
+one in trouble and one healthy. Different domains could pass by accident; the
+same one cannot. It also asserts neither tenant's balance figure appears in
+the other's view, which a domain-name check would miss.
+
+**The first seed produced no findings at all**, and the reason is worth
+keeping. It had the business declining across the entire window, so
+calibration adapted and the decline became its normal — D7 working exactly as
+designed. Real deterioration happens against a period of normality, so the
+seed is now eight steady periods then five bad ones. Test data invented for
+convenience had been quietly unrealistic.
+
+**Found a real gap in the quality gate.** A reading of `ar_total: 0` with
+`overdue_ratio: 0.45` passed every check. A share of a book that does not
+exist is undefined, not low — and since Phase 1, `overdue_ratio` is a leg of a
+cross-domain relation, so a nonsense value could satisfy half a finding about
+the whole business while carrying no money at all. Now an error.
+
+Also corrected: the `dso < 15 with overdue > 0.5` rule is a warning, not an
+error, so a reading built on it is accepted. The test had assumed otherwise
+and was skipping rather than asserting.
+
+The plausible-relation guard could not be provoked here — that relation spans
+sales and receivables, and the sales pack is on the unmerged PR #4. Rewritten
+to assert the invariant over whatever findings the API produces, so it stays
+meaningful as packs land.
+
+---
+
+### Phase 1 closed
+
+A business with slowing collections and tightening cash now receives **one
+message instead of four**, naming both domains, quoting the largest single
+exposure rather than a misleading sum, carrying the mechanism in plain
+language, and corroborated by that tenant's own history where it exists.
+
+Six defects were found by running it rather than by reading it: two exposure
+contradictions, a duplicated prompt paragraph, lost coverage on dedupe,
+discarded readings and evidence, and a dashboard headline that said
+"everything is tracking normally" above a live finding.
+
+---
+
 ## 2026-08-28 — Phase 1.7: findings on the dashboard
 
 `GET /v1/business` on the agent runtime, and a `ConnectedProblems` section
