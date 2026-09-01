@@ -322,3 +322,40 @@ Findings are ordered by money rather than by confidence. A merely strong claim
 about a large sum deserves attention before a mechanical certainty about a
 trivial one; the customer is deciding where to spend a morning, not grading
 the epistemology.
+
+---
+
+## D21 — Suppression changes what is said, never what is recorded
+
+Cross-domain findings create a problem the moment they work: a business whose
+collections slow and cash tightens generates a receivables decision, a cash
+decision, and a finding saying they are the same thing. Three messages about
+one problem is worse than before any of it existed.
+
+So a finding can subsume the notices it explains. Three rules keep that safe:
+
+**Nothing is deleted.** Every domain decision still happens, still lands in
+the audit trail, still gates a human where it should. Only the telling
+changes. A system that hid a decision would trade the customer's
+understanding for its own tidiness.
+
+**A finding inherits the urgency of what it folded.** If receivables alone
+would have demanded action, the finding replacing it demands action too.
+Folding an urgent notice into a calm summary is the failure that would make
+this feature actively dangerous.
+
+**An existential breach is never folded.** Whatever else is true of a business
+that cannot make payroll, the message about it must not arrive as a
+subordinate clause in a summary about collections.
+
+A notice is only folded when the finding genuinely explains it — the metrics
+must overlap, not merely the domain. A book can be slow *and* disputed, and
+suppressing the whole domain would hide the disputes.
+
+Findings covering the same domains are also collapsed, which the tests found
+rather than the design: two relations fired over the same pair quoting the
+*same money*, because exposure is the largest single domain's either way. The
+strongest confidence survives and names the other rather than repeating it —
+and it absorbs the other's coverage, or the notices that sibling explained
+fall through and get told separately, reintroducing exactly the duplication
+the fold removed.

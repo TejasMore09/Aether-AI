@@ -7,6 +7,35 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-08-28 — Phase 1.5: suppression
+
+`business/presentation.py`. A cross-domain finding can now take over the
+telling of the single-domain notices it explains.
+
+Measured end to end: a business with slowing collections and tightening cash
+went from **4 messages to 1**, and the surviving message kept the HIGH risk
+level and approval gate it inherited.
+
+This is the one feature here that makes the product say less, so its failure
+mode is different from everything else: a missed fold costs a redundant
+message, a wrong fold costs the customer the message they most needed. Hence
+the rules in D21 — nothing deleted, urgency inherited, existential breaches
+never folded, and overlap required rather than a shared domain name.
+
+**Found by the tests, not the design:** two relations fired over the same pair
+of domains quoting the *same money*, because a finding's exposure is the
+largest single domain's either way. So findings covering identical domains are
+collapsed too, strongest confidence surviving and naming the other.
+
+The first attempt at that broke coverage — the survivor did not inherit the
+dropped finding's legs, so notices the sibling would have explained fell
+through to standalone and got told separately. Six tests caught it. Survivors
+now absorb `also_covers`.
+
+17 tests, no database. 249 overall, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 1.4: cross-domain findings
 
 `business/findings.py`. A matched relation plus the business state becomes one

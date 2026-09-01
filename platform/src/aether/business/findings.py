@@ -72,6 +72,25 @@ class CrossDomainFinding:
     severity: float
     corroborated_by: tuple[str, ...] = ()
 
+    # Filled in by presentation.apply() when this finding takes over the
+    # telling of a single-domain notice. Kept here rather than alongside,
+    # because whatever renders the finding needs to know it is now speaking
+    # for more than itself.
+    subsumes: tuple[str, ...] = ()
+    # The most urgent thing folded away. A finding that replaced a decision
+    # demanding action must demand action too — see D21.
+    inherited_risk_level: str = ""
+    requires_approval: bool = False
+    # Labels of other findings covering the same domains, folded in by
+    # presentation.apply(). Their exposure is the same money seen through a
+    # different mechanism, so they are named rather than repeated in full.
+    also_seen: tuple[str, ...] = ()
+    # Relation ids this finding now speaks for, beyond its own. A survivor
+    # that absorbed a sibling must also absorb its coverage, or notices the
+    # sibling would have explained fall through and get told separately —
+    # reintroducing the duplication the fold was meant to remove.
+    also_covers: tuple[str, ...] = ()
+
     @property
     def corroborated(self) -> bool:
         """Whether this tenant's own history shows the pattern too.
@@ -100,6 +119,11 @@ class CrossDomainFinding:
             "severity": round(self.severity, 4),
             "corroborated": self.corroborated,
             "corroborated_by": list(self.corroborated_by),
+            "subsumes": list(self.subsumes),
+            "inherited_risk_level": self.inherited_risk_level,
+            "requires_approval": self.requires_approval,
+            "also_seen": list(self.also_seen),
+            "also_covers": list(self.also_covers),
         }
 
 
