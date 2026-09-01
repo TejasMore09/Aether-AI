@@ -9,10 +9,11 @@ Run: uvicorn aether.agent_runtime.app:app --port 8200
 """
 
 import datetime
+import logging
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Path
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -30,6 +31,8 @@ from aether.core.security import Principal
 from aether.core.tenancy import authenticated, ingest_principal, require_role
 from aether.policy.decision_engine import PolicyParams
 from aether.services.evaluation import evaluate_domain, record_observation
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Aether Agent Runtime", version=__version__)
 
@@ -499,6 +502,7 @@ class ResolveBody(BaseModel):
 def resolve_approval(
     approval_id: uuid.UUID,
     body: ResolveBody,
+    background: BackgroundTasks,
     principal: Principal = Depends(require_role(Role.owner)),
 ) -> dict:
     if body.decision == ApprovalStatus.pending:
@@ -521,7 +525,27 @@ def resolve_approval(
                 status=body.decision.value,
             )
         )
+    # The decision is now this business's history, and its agent should be
+    # able to find it again the next time the same situation arises. After the
+    # response, and never in front of it: embedding may have to load a model
+    # from disk, and an owner clicking Approve should not wait on the memory
+    # of what they just approved.
+    background.add_task(_remember_decision, principal.tenant_id, approval_id)
     return {"id": str(approval_id), "status": body.decision.value}
+
+
+def _remember_decision(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> None:
+    """Index one resolved decision, swallowing everything.
+
+    Recording history must never be able to disturb a decision that has
+    already been made and answered.
+    """
+    try:
+        from aether.knowledge import history
+
+        history.index_one(tenant_id, approval_id)
+    except Exception:  # noqa: BLE001 - see the docstring
+        logger.warning("decision %s not remembered", approval_id, exc_info=True)
 
 
 @app.get("/v1/audit-logs")

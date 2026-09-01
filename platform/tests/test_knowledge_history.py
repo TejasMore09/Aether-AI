@@ -329,3 +329,58 @@ def test_an_agent_can_find_the_last_time_this_happened():
     assert found, "the agent should recall something"
     assert "Receivables" in found[0].body, "and the nearest should be the same situation"
     assert "escalate collections" in found[0].body
+
+
+# ── Deciding something makes it memorable ─────────────────────────────────────
+
+
+def test_approving_a_decision_makes_it_findable_afterwards():
+    """The loop that keeps the knowledge base filling itself.
+
+    Without this the store only grows when someone runs a backfill by hand,
+    and an agent's memory of its own business would be as stale as the last
+    time an engineer remembered to think about it.
+    """
+    if not model_available():
+        pytest.skip("embedding model not downloaded on this machine")
+
+    from fastapi.testclient import TestClient
+
+    from aether.agent_runtime.app import app as runtime_app
+    from aether.control_plane.app import app as cp_app
+
+    cp, rt = TestClient(cp_app), TestClient(runtime_app)
+    slug = f"hist-{uuid.uuid4().hex[:10]}"
+    signup = cp.post(
+        "/v1/auth/signup",
+        json={
+            "org_name": "History Org",
+            "org_slug": slug,
+            "email": f"owner-{slug}@aethertest.io",
+            "password": "long-enough-password",
+        },
+    )
+    assert signup.status_code == 201, signup.text
+    t = uuid.UUID(signup.json()["tenant_id"])
+    auth = {"Authorization": f"Bearer {signup.json()['access_token']}"}
+
+    a = add_approval(t, status=ApprovalStatus.pending)
+    assert store.stats(t)["chunks"] == 0
+
+    resolved = rt.post(f"/v1/approvals/{a}/resolve", json={"decision": "approved"}, headers=auth)
+    assert resolved.status_code == 200, resolved.text
+
+    found = retrieval.search(t, "escalate collections on overdue receivables")
+    assert [m.body for m in found] == [history.describe(approval(t, a))]
+    assert "approved" in found[0].body, "the resolution, not the pending state, is what is stored"
+
+
+def test_recording_history_cannot_disturb_a_decision_already_made(monkeypatch):
+    """The decision is answered before this runs. Nothing it does may surface."""
+    from aether.agent_runtime.app import _remember_decision
+
+    def boom(*_a, **_k):
+        raise RuntimeError("knowledge base on fire")
+
+    monkeypatch.setattr(history, "index_one", boom)
+    _remember_decision(uuid.uuid4(), uuid.uuid4())  # must not raise

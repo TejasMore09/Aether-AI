@@ -16,6 +16,7 @@ concurrency.
 """
 
 import concurrent.futures
+import datetime
 import uuid
 
 import pytest
@@ -270,3 +271,46 @@ def test_recollections_serialise_with_their_standing():
     assert "standout" in payload
     assert "similarity" in payload
     assert payload["kind"] == "note"
+
+
+# ── Narrowing what may be recalled ────────────────────────────────────────────
+
+
+def test_a_memory_from_after_the_moment_asked_about_is_not_recalled():
+    """Asking what was decided last time must not be answered with the present. A
+    replay or a backfill asks about a decision with later ones already stored,
+    and quoting those as precedent inverts the history."""
+    t = tenant()
+    cutoff = datetime.datetime(2026, 6, 1, tzinfo=datetime.UTC)
+
+    store.remember(
+        t,
+        kind="decision",
+        body="before",
+        embedding=vec(5),
+        occurred_at=cutoff - datetime.timedelta(days=1),
+    )
+    store.remember(
+        t,
+        kind="decision",
+        body="after",
+        embedding=vec(5),
+        occurred_at=cutoff + datetime.timedelta(days=1),
+    )
+
+    assert {m.body for m in store.recall(t, vec(5), limit=10)} == {"before", "after"}
+    assert [m.body for m in store.recall(t, vec(5), limit=10, before=cutoff)] == ["before"]
+
+
+def test_a_memory_can_be_excluded_by_what_it_was_made_from():
+    """The decision being explained is a perfect match for itself. Excluding it
+    in SQL rather than afterwards matters: left in the result set it would also
+    skew the comparison that decides what stands out."""
+    t = tenant()
+    mine = uuid.uuid4()
+    store.remember(t, kind="decision", body="itself", embedding=vec(6), source_id=mine)
+    store.remember(t, kind="decision", body="another", embedding=vec(6), source_id=uuid.uuid4())
+    store.remember(t, kind="note", body="unsourced", embedding=vec(6))
+
+    kept = {m.body for m in store.recall(t, vec(6), limit=10, exclude_source_id=mine)}
+    assert kept == {"another", "unsourced"}, "a memory with no source must survive"

@@ -9,9 +9,9 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 2
 
-Phases 0 and 1 complete. Phase 2 in progress: **2.1–2.4 done, next is 2.5**
-— feeding recalled memory into the diagnosis prompt. 335 tests, none
-skipped.
+Phases 0 and 1 complete. Phase 2 in progress: **2.1–2.5 done, next is 2.6**
+— the main brain seeing how much an agent remembers, never what. 352 tests,
+none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -81,7 +81,7 @@ dedicated isolation test because this is where a leak would be worst.
 - [x] **2.2** Embedding pipeline with a free/local model — no paid API dependency
 - [x] **2.3** Retrieval scoped to one tenant, with an isolation test that fails loudly on any cross-tenant hit
 - [x] **2.4** Ingest a tenant's own history — past decisions, approvals, outcomes — so the agent remembers what it already told them
-- [ ] **2.5** Retrieval feeds the diagnosis prompt: prior similar situations and how they resolved
+- [x] **2.5** Retrieval feeds the diagnosis prompt: prior similar situations and how they resolved
 - [ ] **2.6** Main brain can see chunk counts and freshness, never chunk contents, without break-glass
 
 **Done when:** an agent's explanation can reference what happened to that same

@@ -137,3 +137,61 @@ def test_budget_is_per_tenant(tenant, monkeypatch):
     with tenant_session(other) as db:
         db.add(LLMUsage(tenant_id=other, purpose="diagnosis", model="t", cost_usd=99.0))
     assert gateway.month_spend_usd(tenant) == 0.0
+
+
+def test_the_prompt_carries_what_this_business_decided_last_time(
+    tenant, gated_approval, monkeypatch
+):
+    """The point of Phase 2: an approver should be reminded that this has come
+    up before, rather than left to remember it themselves.
+
+    The knowledge base is stubbed here — whether retrieval finds the right
+    memory is settled in the knowledge tests, and what matters at this seam is
+    that a found memory reaches the model, labelled as this business's own
+    past and fenced against claims about how it turned out.
+    """
+    import litellm
+
+    from aether.knowledge import briefing as knowledge_briefing
+
+    remembered = "September 2025, Cash & Receivables: the agent recommended escalate collections."
+    monkeypatch.setattr(
+        knowledge_briefing,
+        "prior_decisions",
+        lambda *a, **k: [
+            SimpleNamespace(body=remembered, standout=True),
+        ],
+    )
+
+    captured: dict = {}
+
+    def fake_completion(**kwargs):
+        captured["messages"] = kwargs["messages"]
+        return _fake_litellm_response("Explanation.")
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    monkeypatch.setattr(litellm, "completion_cost", lambda completion_response: 0.0)
+
+    assert diagnose_approval(tenant, gated_approval) == "llm"
+
+    user_msg = captured["messages"][1]["content"]
+    assert remembered in user_msg
+    assert "its own past decisions" in user_msg
+    assert "Do NOT" in user_msg
+
+
+def test_a_failing_knowledge_base_does_not_cost_the_approver_an_explanation(
+    tenant, gated_approval, monkeypatch
+):
+    import litellm
+
+    from aether.knowledge import briefing as knowledge_briefing
+
+    def boom(*_a, **_k):
+        raise RuntimeError("vector search down")
+
+    monkeypatch.setattr(knowledge_briefing, "prior_decisions", boom)
+    monkeypatch.setattr(litellm, "completion", lambda **kw: _fake_litellm_response("Explanation."))
+    monkeypatch.setattr(litellm, "completion_cost", lambda completion_response: 0.0)
+
+    assert diagnose_approval(tenant, gated_approval) == "llm"

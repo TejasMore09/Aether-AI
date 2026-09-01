@@ -7,6 +7,42 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-01 — Phase 2.5: the agent remembers out loud
+
+`knowledge/briefing.py`. What this business decided last time now reaches the
+explanation an approver reads, so they are reminded rather than left to
+remember for themselves.
+
+**The question is written in the store's own template.** The query is
+`history.describe()` of the decision being explained — the identical template
+that produced every memory. That is not a shortcut; D25 measured that this
+model matches near-duplicates and nothing else, so asking in any other words
+is the version that quietly returns nothing (D26).
+
+**Only standouts are quoted**, never raw `search`. The honest consequence,
+written down rather than discovered later: a tenant with a single prior
+decision gets nothing quoted, because `standout` has nothing to compare
+against. The feature stays quiet for a business's first months (D27).
+
+**Nothing may be called a success.** The instructions forbid the model from
+saying a past decision worked, helped or caused what followed — outcomes are
+not tracked until Phase 9, and it is the most persuasive unevidenced sentence
+available (D28).
+
+Two exclusions live in SQL rather than in the caller, and the placement is the
+point: a backfill indexes pending approvals too, so without them the nearest
+memory to a decision is reliably that same decision, offered back as precedent
+for itself — and filtering it afterwards would still leave it skewing the
+comparison that decides what stands out.
+
+Resolving an approval now indexes it, as a background task after the response.
+Previously the store only grew when someone ran a backfill by hand. The
+end-to-end test approves a decision over HTTP and then finds it.
+
+352 tests, none skipped.
+
+---
+
 ## 2026-08-28 — Phase 2.4: a tenant's own history, indexed
 
 `knowledge/history.py`. Gated decisions and how they were resolved become

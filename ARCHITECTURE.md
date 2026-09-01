@@ -243,7 +243,46 @@ organization's sessions, not the ability to mint fleet-wide identity.
 
 ---
 
-## 8. Where the numbers come from
+## 8. What an agent remembers
+
+Each agent has its own knowledge base: a `knowledge_chunks` table carrying a
+384-dimension embedding per row, scoped by the same row-level policy as every
+other tenant table. One business's memory is unreachable from another's, which
+is why the isolation tests there go further than elsewhere — many tenants at
+once, threads sharing a connection pool, and a query whose globally nearest
+neighbour belongs to somebody else.
+
+**Embeddings are computed locally**, by a small ONNX model on the machine
+running the platform. No text leaves the deployment to be vectorised, and
+there is no paid API in the path.
+
+**Similarity search is an exact scan, deliberately.** Under row-level security
+an approximate HNSW index searches the whole table and then discards what the
+policy forbids, so a tenant whose rows are a small fraction of the table gets
+back nothing at all — measured, and recorded in migration `0009`. The index
+exists; the query does not use it. That is a correctness decision, and it will
+need revisiting on volume rather than on principle.
+
+**What is stored is decisions, not readings.** Numbers are already in the
+database and directly queryable. The memory worth keeping is *"we have been
+here before, and last time you decided this"*, which lives in the approvals.
+Resolving an approval indexes it, as a background task after the response.
+
+**What comes back is fenced before it reaches a customer.** Only memories
+measurably closer than the tenant's others are quoted, the recalled text is
+labelled as that business's own past rather than as fact, and the prompt
+forbids any claim about how a past decision turned out — nothing tracks that
+yet. Retrieval failing costs an explanation a sentence, never the explanation:
+memory is an enhancement, never a precondition.
+
+The limitation to hold onto: this model reliably answers *"have we seen almost
+exactly this before?"* and is close to useless on *"is this vaguely related?"*
+Everything above is built around the first question, and nothing downstream
+should claim the second.
+
+---
+
+## 9. Where the numbers come from
 
 The honest state of the data question.
 
@@ -269,7 +308,7 @@ next improvement.
 
 ---
 
-## 9. Deliberately not built
+## 10. Deliberately not built
 
 - **Aether Mega.** The schema carries the tier as an upgrade seam; the API
   refuses to provision it. Nano monitors, diagnoses and reports. Nothing acts
@@ -281,7 +320,7 @@ next improvement.
 
 ---
 
-## 10. Verification
+## 11. Verification
 
 141 tests. RLS isolation is proven by test rather than asserted by design, and
 the break-glass gate is mutation-checked — stubbing the grant check to always

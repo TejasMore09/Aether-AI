@@ -25,6 +25,7 @@ the policy removed — see D23.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import uuid
 from dataclasses import dataclass
@@ -61,6 +62,8 @@ def search(
     limit: int = 5,
     kind: str | None = None,
     domain: str | None = None,
+    before: datetime.datetime | None = None,
+    exclude_source_id: uuid.UUID | None = None,
 ) -> list[Recollection]:
     """What this business remembers that resembles the question.
 
@@ -81,7 +84,15 @@ def search(
         logger.info("knowledge search skipped: %s", exc)
         return []
 
-    memories = store.recall(tenant_id, vector, limit=limit, kind=kind, domain=domain)
+    memories = store.recall(
+        tenant_id,
+        vector,
+        limit=limit,
+        kind=kind,
+        domain=domain,
+        before=before,
+        exclude_source_id=exclude_source_id,
+    )
     if not memories:
         return []
 
@@ -96,6 +107,8 @@ def worth_quoting(
     limit: int = 5,
     kind: str | None = None,
     domain: str | None = None,
+    before: datetime.datetime | None = None,
+    exclude_source_id: uuid.UUID | None = None,
 ) -> list[Recollection]:
     """Only the results that stand out from the rest.
 
@@ -104,9 +117,16 @@ def worth_quoting(
     an agent that quotes its nearest memory regardless will eventually cite an
     irrelevant one with complete confidence, and be believed.
     """
-    return [
-        r for r in search(tenant_id, question, limit=limit, kind=kind, domain=domain) if r.standout
-    ]
+    found = search(
+        tenant_id,
+        question,
+        limit=limit,
+        kind=kind,
+        domain=domain,
+        before=before,
+        exclude_source_id=exclude_source_id,
+    )
+    return [r for r in found if r.standout]
 
 
 def remember_text(

@@ -177,8 +177,21 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
         except Exception:  # noqa: BLE001 - context must never kill the explanation
             logger.warning("cross-domain context unavailable", exc_info=True)
 
+        # What this business decided the last time it was here. Quiet by
+        # design: nothing is added unless a past decision stands out from the
+        # tenant's other memories, and `for_approval` swallows its own
+        # failures for the same reason the block above is wrapped.
+        from aether.knowledge import briefing as knowledge_briefing
+
+        memory_instructions, memory_context = knowledge_briefing.for_approval(tenant_id, approval)
+
         user_prompt = (
-            context + business_instructions + business_context + f"Domain: {approval.domain}\n"
+            context
+            + business_instructions
+            + memory_instructions
+            + business_context
+            + memory_context
+            + f"Domain: {approval.domain}\n"
             f"Pending decision: {approval.action} | risk {approval.risk_level} | "
             f"estimated exposure ${approval.expected_loss_usd:,.2f}/day\n"
             f"Engine reasoning: {approval.reason}\n\n"

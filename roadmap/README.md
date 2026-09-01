@@ -23,9 +23,10 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 2 — Agent knowledge base.** Phases 0 and 1 are complete.
 >
-> 335 tests, none skipped. `2.1`–`2.4` done — pgvector with RLS, local
-> embeddings, tenant-scoped retrieval, and a tenant's own decisions indexed.
-> Next: `2.5`, feeding recalled memory into the diagnosis prompt.
+> 352 tests, none skipped. `2.1`–`2.5` done — pgvector with RLS, local
+> embeddings, tenant-scoped retrieval, a tenant's own decisions indexed, and
+> those decisions recalled into the diagnosis prompt. Next: `2.6`, the main
+> brain seeing chunk counts and freshness but never contents.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work, and

@@ -444,3 +444,50 @@ The honest summary: this retrieves *"have we seen almost exactly this
 before?"* reliably and *"is this vaguely related?"* not at all. For an agent
 asking whether a situation has happened to this business before, the first
 question is the useful one — but nothing downstream should claim more.
+
+---
+
+## D26 — The agent asks its memory a question written in its own template
+
+Retrieval for the diagnosis prompt does not embed a free-form question. It
+embeds `history.describe()` of the decision being explained — the identical
+template that produced every memory in the store.
+
+This looks like a shortcut and is the opposite. D25 measured that this model
+finds near-duplicates and nothing else, so the *only* reliable way to match a
+stored memory is to ask in the words it was written in. A hand-written query
+("collections are slowing, has this happened before?") is the version that
+quietly returns nothing.
+
+The dependency runs both ways and is worth stating: changing the wording in
+`history.describe()` changes what old memories can still be found. A backfill
+after any such change is not housekeeping, it is a repair.
+
+---
+
+## D27 — Only standouts reach a prompt, and a young tenant therefore gets nothing
+
+`knowledge/briefing.py` calls `worth_quoting`, never `search`. Since
+`standout` needs candidates to compare against, a business with one prior
+decision has none quoted, however apt it is.
+
+That is a real cost and the right side to err on. A recalled precedent arrives
+in an explanation the customer already trusts; an irrelevant one, quoted with
+the same confidence, will be believed and acted on. Silence costs a sentence.
+
+The obvious "fix" — quote the nearest memory when there is only one — is the
+thing to not do. With one candidate there is no evidence of relevance at all,
+only a nearest row, and this model's nearest row to anything is something.
+
+---
+
+## D28 — A recalled decision may never be described as having worked
+
+Whether acting helped is not tracked anywhere (Phase 9.4). The prompt
+instructions explicitly forbid the model from saying a past decision worked,
+helped, fixed anything, or caused what followed.
+
+Without that fence the model will supply it, because it reads naturally: "you
+escalated collections in September and DSO recovered" is the most persuasive
+sentence available and entirely unevidenced. It would also be the single
+hardest claim for a customer to check.

@@ -156,6 +156,8 @@ def recall(
     kind: str | None = None,
     domain: str | None = None,
     max_distance: float | None = None,
+    before: datetime.datetime | None = None,
+    exclude_source_id: uuid.UUID | None = None,
 ) -> list[Memory]:
     """The closest things this business remembers, nearest first.
 
@@ -167,6 +169,13 @@ def recall(
     agent that quotes the nearest memory regardless of how near it is will
     eventually cite something irrelevant with complete confidence, which is
     worse than saying nothing.
+
+    `before` and `exclude_source_id` narrow the candidate set in SQL rather
+    than in the caller, and that placement is the point. Anything asking "what
+    did we do last time" must not be shown the present: a memory of the very
+    decision being explained is a perfect match, so filtering it afterwards
+    would leave it in the set that decides which results stand out, and drag
+    the comparison with it.
     """
     vector = _vector_literal(embedding)
 
@@ -181,6 +190,12 @@ def recall(
     if max_distance is not None:
         clauses.append(f"embedding <=> '{vector}' <= :max_distance")
         params["max_distance"] = max_distance
+    if before is not None:
+        clauses.append("occurred_at < :before")
+        params["before"] = before
+    if exclude_source_id is not None:
+        clauses.append("(source_id IS NULL OR source_id <> :exclude_source_id)")
+        params["exclude_source_id"] = exclude_source_id
 
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
