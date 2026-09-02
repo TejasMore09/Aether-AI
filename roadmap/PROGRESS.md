@@ -7,6 +7,59 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-02 — Phase 6.4: credential guessing gets expensive
+
+Pulled forward out of Phase 6 because it was not a missing feature. Every
+password endpoint on the platform accepted unlimited attempts at whatever rate
+a caller could manage — the cheapest serious attack available against a
+system holding other companies' operating data, requiring no skill at all.
+
+Migration `0011`, `core/throttle.py`. Failures are counted per account and per
+address, and a lock doubles from one minute once the free attempts are spent.
+
+**Postgres, not Redis, although Redis is already in the compose file.** This
+state sits in the authentication path, so its failure mode is the whole
+question. Redis down and failing open makes the mechanism decorative exactly
+when someone is hammering the service; failing closed makes a cache the single
+point of failure for every login. Postgres introduces neither, because login
+already cannot proceed without it. One upsert against a bcrypt verify is free.
+
+**The customer login was an enumeration oracle** and is not any more. An
+unknown email returned before any hashing while a real one paid ~100ms, so the
+endpoint told an attacker which of our customers' addresses were real, by
+clock, for nothing. It now verifies against a fixed dummy hash. Staff login
+already did this; the two had drifted.
+
+**The finding worth recording: per-address throttling would have been an
+outage.** Both front ends are back-ends-for-front-ends, so the browser never
+reaches the API and `request.client.host` is one Next.js server for every
+customer on the platform. Throttling on it puts the entire customer base in a
+single bucket, where twenty bad guesses by one attacker locks out everybody.
+A test caught it. Believing `X-Forwarded-For` instead is the opposite trap:
+without a proxy that overwrites it, every attacker gets a fresh identity per
+request.
+
+Neither can be inferred at runtime, so `AETHER_CLIENT_IP_SOURCE` states which
+is true and the default states nothing. **Per-address throttling is therefore
+inert in this deployment**, which means password spraying — one guess each
+against a thousand accounts — is not currently defended. That is honest and
+it is the right trade: the alternative shipped an outage. It activates when
+6.1 puts a proxy in front.
+
+The account cap is 15 minutes rather than longer for a reason that expires:
+password reset does not exist (6.5), so a longer lock strands a real customer
+with no way out. And what this does not do, stated so nobody assumes
+otherwise: it bounds the *rate* of guessing. A patient attacker with a good
+wordlist is 6.6's problem, not a bigger number here.
+
+Not done, and not claimed: general per-endpoint rate limiting. That belongs at
+the reverse proxy in 6.1, where doing it well is easy and doing it in the
+application is worse than not doing it.
+
+374 tests, none skipped.
+
+---
+
 ## 2026-09-01 — Phase 2.6: the fleet sees how much, never what
 
 Migration `0010`. The fleet view gains three columns: how many memories an

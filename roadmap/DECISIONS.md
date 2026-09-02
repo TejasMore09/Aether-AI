@@ -491,3 +491,44 @@ Without that fence the model will supply it, because it reads naturally: "you
 escalated collections in September and DSO recovered" is the most persuasive
 sentence available and entirely unevidenced. It would also be the single
 hardest claim for a customer to check.
+
+---
+
+## D29 — Throttling state lives in Postgres, not Redis
+
+Redis is already in the compose file, so this looks like the wrong choice. It
+is not, and the reason is the failure mode rather than the throughput.
+
+Throttling sits inside the authentication path. Redis down and failing open
+makes the mechanism decorative exactly when someone is hammering the service.
+Redis down and failing closed makes a cache the single point of failure for
+every login on the platform. Postgres introduces neither, because login
+already cannot proceed without Postgres — there is no new way to fail. The
+cost is one indexed upsert next to a bcrypt verification that already takes
+about 100ms.
+
+Revisit this only if login volume makes the write measurable, which at 30
+tenants it will not.
+
+---
+
+## D30 — Per-address throttling stays off until a deployment can name the client
+
+Both front ends are back-ends-for-front-ends: the browser never reaches the
+API, so `request.client.host` is one Next.js server for every customer on the
+platform. Throttling on it puts the entire customer base in a single bucket,
+where twenty bad guesses by one attacker locks out everybody. That is an
+outage wearing the costume of a security control.
+
+Believing `X-Forwarded-For` instead is the opposite failure: without something
+in front that overwrites it, every attacker gets a fresh identity per request
+and the scope becomes theatre.
+
+Neither is inferable at runtime, so `AETHER_CLIENT_IP_SOURCE` states which is
+true (`none` | `socket` | `forwarded`) and defaults to claiming nothing.
+
+**The cost of this is real and must not be forgotten:** password spraying —
+one guess each against a thousand accounts — is not currently defended,
+because the per-account counter never fires. Setting the variable once 6.1
+puts a proxy in front is what closes it. Do not "fix" this by defaulting to
+the socket address; that is the outage.

@@ -34,6 +34,22 @@ class Settings(BaseSettings):
 
     env: str = "dev"
 
+    # How the platform learns a caller's address, for per-address throttling.
+    #
+    #   none       cannot be established; per-address throttling is off
+    #   socket     the TCP peer, correct when clients reach the API directly
+    #   forwarded  X-Forwarded-For, correct behind a proxy that overwrites it
+    #
+    # "none" is the default because it is the truth for this deployment: both
+    # front ends are back-ends-for-front-ends, so every customer's login
+    # arrives from one Next.js server. Believing that address would collapse
+    # the whole customer base into a single bucket, where twenty bad guesses
+    # by anyone locks out everyone -- an outage wearing the costume of a
+    # security control. And "forwarded" must not be set without a proxy that
+    # overwrites the header, or every attacker gets a fresh identity per
+    # request. Both wrong settings fail worse than off.
+    client_ip_source: str = "none"
+
     # Temporal (durable workflow engine) — the autonomous monitor loop.
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"

@@ -44,6 +44,7 @@ from aether.core.staff import (
     record,
     verify_staff_token,
 )
+from aether.core.throttle import client_ip, guard, refused, succeeded
 
 app = FastAPI(title="Aether Main Brain", version=__version__)
 
@@ -92,10 +93,19 @@ class StaffLogin(BaseModel):
 
 
 @app.post("/v1/staff/login")
-def staff_login(body: StaffLogin) -> dict:
-    admin = authenticate_staff(body.email, body.password)
+def staff_login(body: StaffLogin, request: Request) -> dict:
+    # Staff credentials are the more valuable of the two: one of these reaches
+    # every tenant in the fleet, where a customer's reaches one organization.
+    # Same mechanism, and no reason to make it weaker here.
+    email = body.email.lower()
+    who = {"email": f"staff:{email}", "ip": client_ip(request)}
+    guard(who)
+
+    admin = authenticate_staff(email, body.password)
     if admin is None:
+        refused(who)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    succeeded(f"staff:{email}")
     record(admin.email, "staff.login")
     return {
         "access_token": issue_staff_token(admin),

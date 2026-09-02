@@ -8,7 +8,7 @@ Run: uvicorn aether.control_plane.app:app --port 8100
 
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
@@ -29,8 +29,14 @@ from aether.core.security import (
     verify_password,
 )
 from aether.core.tenancy import authenticated, require_role
+from aether.core.throttle import client_ip, guard, refused, succeeded
 
 app = FastAPI(title="Aether Control Plane", version=__version__)
+
+# A real bcrypt hash of a value nothing can supply, so an unknown email costs
+# the same verification as a known one. Computed once: generating it per
+# request would be its own timing signal.
+_DUMMY_HASH = hash_password(uuid.uuid4().hex)
 
 
 @app.get("/")
@@ -90,10 +96,22 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/v1/auth/login", response_model=TokenResponse)
-def login(body: LoginRequest) -> TokenResponse:
+def login(body: LoginRequest, request: Request) -> TokenResponse:
+    email = body.email.lower()
+    who = {"email": email, "ip": client_ip(request)}
+    guard(who)
+
     with session() as db:
-        user = db.scalar(select(User).where(User.email == body.email.lower(), User.is_active))
-        if not user or not verify_password(body.password, user.password_hash):
+        user = db.scalar(select(User).where(User.email == email, User.is_active))
+        if user is None:
+            # Hash anyway, so a missing account and a wrong password cost the
+            # same time. Without this the endpoint tells an attacker which of
+            # our customers' email addresses are real, for free, by clock.
+            verify_password(body.password, _DUMMY_HASH)
+            refused(who)
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not verify_password(body.password, user.password_hash):
+            refused(who)
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         q = select(Membership, Tenant).join(Tenant, Membership.tenant_id == Tenant.id)
@@ -112,6 +130,7 @@ def login(body: LoginRequest) -> TokenResponse:
             )
 
         membership, tenant = rows[0]
+        succeeded(email)
         token = issue_token(user.id, user.email, tenant.id, membership.role)
         return TokenResponse(access_token=token, tenant_id=tenant.id, role=membership.role)
 

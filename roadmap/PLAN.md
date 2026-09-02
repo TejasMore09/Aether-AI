@@ -7,11 +7,13 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ---
 
-## ▶ CURRENT POSITION: Phase 3
+## ▶ CURRENT POSITION: Phase 3, with 6.4 pulled forward
 
-Phases 0, 1 and 2 complete. Phase 3 not started: sector awareness, where
-the mechanism is days of code and the numbers are the slow part. 354 tests,
-none skipped.
+Phases 0, 1 and 2 complete. **6.4 done out of order** because it closed a live
+hole rather than adding a feature: every password endpoint accepted unlimited
+guesses. Phase 3 not started — sector awareness, where the mechanism is days
+of code and the numbers are the slow part (see DATA.md). 374 tests, none
+skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -177,7 +179,9 @@ cheap now and painful later.
 - [ ] **6.1** Deployment: containerised, infrastructure as code, free tier
 - [ ] **6.2** Automated backups with a *tested* restore, not merely configured
 - [ ] **6.3** Error tracking and metrics; alerts that reach a person
-- [ ] **6.4** Rate limiting and login lockout — currently absent, credential stuffing is wide open
+- [x] **6.4** Login throttling per account, with backoff. Per-address is built but
+  inert until a deployment can name the client (see PROGRESS 2026-09-02).
+  General per-endpoint rate limiting belongs at the proxy in 6.1 and is not done
 - [ ] **6.5** Password reset — a locked-out user currently cannot be helped at all
 - [ ] **6.6** MFA, at least for owners
 - [ ] **6.7** Refresh tokens; 60-minute hard expiry is a support burden at scale
