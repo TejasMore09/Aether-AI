@@ -64,6 +64,17 @@ class Settings(BaseSettings):
     # LLM gateway (diagnosis layer). Model in LiteLLM notation; the matching
     # provider key comes from the provider's own env var (e.g. GEMINI_API_KEY).
     llm_model: str = "gemini/gemini-3.6-flash"  # pinned; override via AETHER_LLM_MODEL
+
+    # The provider key, passed straight to the call rather than exported into
+    # the process environment: one key per configuration, no global mutation,
+    # and no surprise if two providers are ever configured at once.
+    #
+    # Empty falls back to LiteLLM's own lookup (GEMINI_API_KEY and friends), so
+    # an existing machine-level variable keeps working. Setting it here is the
+    # documented way, because the alternative was a shell variable that had to
+    # be remembered separately from every other secret and whose absence failed
+    # silently.
+    llm_api_key: str = ""
     llm_timeout_seconds: float = 30.0
     # Must cover the model's internal reasoning as well as the words a person
     # reads, and on a reasoning model the first dwarfs the second. Measured on

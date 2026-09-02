@@ -78,6 +78,9 @@ def complete(
             timeout=settings.llm_timeout_seconds,
             max_tokens=settings.llm_max_output_tokens,
             temperature=settings.llm_temperature,
+            # None rather than "" so LiteLLM falls back to its own environment
+            # lookup when nothing is configured here.
+            api_key=settings.llm_api_key or None,
         )
         choice = response.choices[0]
         text = (choice.message.content or "").strip()

@@ -139,6 +139,53 @@ def test_budget_is_per_tenant(tenant, monkeypatch):
     assert gateway.month_spend_usd(tenant) == 0.0
 
 
+def test_the_configured_key_is_what_reaches_the_provider(tenant, gated_approval, monkeypatch):
+    """The key belongs in .env with every other secret.
+
+    It used to live only in the machine environment, which meant it was
+    remembered separately from everything else and its absence failed silently
+    -- diagnoses fell back and nothing said why. Passing it per call also means
+    a stale machine-level variable cannot quietly win over the configured one.
+    """
+    import litellm
+
+    from aether.core.config import get_settings
+
+    seen: dict = {}
+
+    def capture(**kwargs):
+        seen["api_key"] = kwargs.get("api_key")
+        return _fake_litellm_response("Explanation.")
+
+    monkeypatch.setattr(litellm, "completion", capture)
+    monkeypatch.setattr(litellm, "completion_cost", lambda completion_response: 0.0)
+    monkeypatch.setattr(get_settings(), "llm_api_key", "configured-key", raising=False)
+
+    diagnose_approval(tenant, gated_approval)
+    assert seen["api_key"] == "configured-key"
+
+
+def test_no_configured_key_defers_to_the_provider_library(tenant, gated_approval, monkeypatch):
+    """None, not "". An empty string would be sent as a key and rejected,
+    breaking every machine that still sets GEMINI_API_KEY the old way."""
+    import litellm
+
+    from aether.core.config import get_settings
+
+    seen: dict = {}
+
+    def capture(**kwargs):
+        seen["api_key"] = kwargs.get("api_key")
+        return _fake_litellm_response("Explanation.")
+
+    monkeypatch.setattr(litellm, "completion", capture)
+    monkeypatch.setattr(litellm, "completion_cost", lambda completion_response: 0.0)
+    monkeypatch.setattr(get_settings(), "llm_api_key", "", raising=False)
+
+    diagnose_approval(tenant, gated_approval)
+    assert seen["api_key"] is None
+
+
 def test_a_truncated_answer_falls_back_rather_than_being_shown(tenant, gated_approval, monkeypatch):
     """The failure a stub cannot produce, found the first time a real model ran.
 
