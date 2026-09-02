@@ -86,6 +86,27 @@ dedicated isolation test because this is where a leak would be worst.
 
 **Done when:** an agent's explanation can reference what happened to that same
 business six months ago, and no query path can reach another tenant's chunks.
+Both hold as of 2026-09-01.
+
+### Completion debt `[ ]`
+
+Phase 2 is complete as scoped above, and the scope was narrower than the
+words "agent knowledge base" imply. What is missing is written here rather
+than left for someone to discover:
+
+- The store holds only what the system generated about itself — its own
+  decisions. A business cannot give its agent their contracts, policies or
+  reports. That arrives with document ingest in **7.1/7.2**.
+- It knows nothing about the sector the business is in. That is **3.4**.
+- [ ] **2.7** Hybrid retrieval: keyword search alongside vectors, and a
+  reranker. The embedding model reliably answers only "have we seen almost
+  exactly this?" (D25), and this is the standard fix for exactly that.
+- [ ] **2.8** A retrieval evaluation harness — measured recall on realistic
+  queries, published. There is currently no number for how good retrieval is,
+  only tests proving it does what it was designed to do.
+
+So: **structurally complete now, genuinely complete after Phase 7**, with
+2.7 and 2.8 doable at any point in between.
 
 ---
 
