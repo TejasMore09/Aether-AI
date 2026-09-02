@@ -59,7 +59,28 @@ class Settings(BaseSettings):
     # provider key comes from the provider's own env var (e.g. GEMINI_API_KEY).
     llm_model: str = "gemini/gemini-3.6-flash"  # pinned; override via AETHER_LLM_MODEL
     llm_timeout_seconds: float = 30.0
-    llm_max_output_tokens: int = 700
+    # Must cover the model's internal reasoning as well as the words a person
+    # reads, and on a reasoning model the first dwarfs the second. Measured on
+    # gemini-3.6-flash against the real diagnosis prompt:
+    #
+    #   temp  cap   finish   thinking  visible chars
+    #   0.2   2000  length       1920            233   <- the old settings
+    #   0.2   4000  stop         2774           1519
+    #   1.0   2000  length       1664           1129
+    #   1.0   4000  stop         1982           1373   <- these settings
+    #
+    # The old cap of 700 was set for a non-reasoning model and silently
+    # destroyed every explanation: nothing raised, the text was not empty, and
+    # a customer read two sentences that stopped mid-number.
+    llm_max_output_tokens: int = 4000
+
+    # 1.0, which looks wrong for a factual explanation and is not. Gemini 3
+    # degrades below it: the provider warns of loops and weaker reasoning, and
+    # the table above measures the cost — 0.2 spends 40% more tokens thinking
+    # to reach the same answer, and at a tight cap never finishes. Determinism
+    # would be worth having, but it is not on offer here, and the numbers in
+    # an explanation come from the prompt rather than from sampling.
+    llm_temperature: float = 1.0
     # Hard monthly ceiling per tenant. When reached, diagnosis falls back to
     # the deterministic generator instead of silently overspending.
     llm_monthly_budget_usd_per_tenant: float = 5.0

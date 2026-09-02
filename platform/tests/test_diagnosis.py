@@ -139,6 +139,41 @@ def test_budget_is_per_tenant(tenant, monkeypatch):
     assert gateway.month_spend_usd(tenant) == 0.0
 
 
+def test_a_truncated_answer_falls_back_rather_than_being_shown(tenant, gated_approval, monkeypatch):
+    """The failure a stub cannot produce, found the first time a real model ran.
+
+    Reasoning models spend the output budget thinking before they write
+    anything visible. At the old cap of 700, gemini-3.6-flash used 668 tokens
+    on reasoning and emitted 116 characters before being cut off mid-number —
+    and nothing raised, `text` was not empty, so it was stored and shown. A
+    plain explanation that finishes beats an eloquent one that stops.
+    """
+    import litellm
+
+    def truncated(**kwargs):
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="**Connected Problem** With $62,000"),
+                    finish_reason="length",
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=900, completion_tokens=700),
+        )
+
+    monkeypatch.setattr(litellm, "completion", truncated)
+    monkeypatch.setattr(litellm, "completion_cost", lambda completion_response: 0.0004)
+
+    assert diagnose_approval(tenant, gated_approval) == "fallback"
+
+    with tenant_session(tenant) as db:
+        approval = db.get(PendingApproval, gated_approval)
+        assert "Automated summary" in approval.diagnosis
+        assert "With $62,000" not in approval.diagnosis
+        # Metered regardless: the tokens were spent whether or not we used them.
+        assert db.scalars(select(LLMUsage)).all()
+
+
 def test_the_prompt_carries_what_this_business_decided_last_time(
     tenant, gated_approval, monkeypatch
 ):

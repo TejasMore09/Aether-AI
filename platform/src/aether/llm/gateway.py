@@ -77,9 +77,11 @@ def complete(
             messages=messages,
             timeout=settings.llm_timeout_seconds,
             max_tokens=settings.llm_max_output_tokens,
-            temperature=0.2,
+            temperature=settings.llm_temperature,
         )
-        text = (response.choices[0].message.content or "").strip()
+        choice = response.choices[0]
+        text = (choice.message.content or "").strip()
+        finish = getattr(choice, "finish_reason", None)
         usage = getattr(response, "usage", None)
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
@@ -90,6 +92,21 @@ def complete(
     except Exception as exc:  # provider/network failure — contained here
         logger.error("LLM call failed (purpose=%s): %s", purpose, exc)
         return LLMResult(ok=False, error=f"provider_error: {type(exc).__name__}")
+
+    # A truncated answer is worse than no answer, and it does not look like a
+    # failure: `text` is non-empty and nothing raised, so without this check
+    # the caller stores it and a customer reads two sentences that stop
+    # mid-number. The deterministic fallback is less impressive and complete,
+    # which is the right trade. Metered anyway — the tokens were spent.
+    truncated = finish == "length"
+    if truncated:
+        logger.error(
+            "LLM answer truncated (purpose=%s, completion_tokens=%s, cap=%s) — "
+            "reasoning models spend this budget before writing anything visible",
+            purpose,
+            completion_tokens,
+            settings.llm_max_output_tokens,
+        )
 
     with tenant_session(tenant_id) as db:
         db.add(
@@ -102,6 +119,9 @@ def complete(
                 cost_usd=cost,
             )
         )
+
+    if truncated:
+        return LLMResult(ok=False, error="truncated", model=settings.llm_model)
 
     return LLMResult(
         ok=True,
