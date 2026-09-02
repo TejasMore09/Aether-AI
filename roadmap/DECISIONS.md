@@ -532,3 +532,77 @@ one guess each against a thousand accounts — is not currently defended,
 because the per-account counter never fires. Setting the variable once 6.1
 puts a proxy in front is what closes it. Do not "fix" this by defaulting to
 the socket address; that is the outage.
+
+---
+
+## D31 — Aether targets India, the US and Europe from the start
+
+Not one market first. That is a larger commitment than it sounds and the
+consequences are worth stating before Phase 3 starts, because two of them are
+structural.
+
+**The sector taxonomy cannot be borrowed.** India uses NIC, the US uses
+NAICS (and SIC in SEC filings), Europe uses NACE. Adopting any one of them
+makes the other two second-class. So Phase 3.1 defines a *coarse Aether
+taxonomy* — tens of sectors, not hundreds — with a crosswalk to all three.
+The crosswalk is also what lets a US-derived band (Damodaran, SIC-shaped)
+apply to an Indian tenant, which we would need anyway.
+
+**Money is not a float any more.** Every monetary column and figure in the
+system is USD by name: `expected_loss_usd`, `cost_usd`, `$71.89 a day`. An
+Indian SME thinks in rupees and a German one in euros, and an explanation
+quoting dollars at either is not slightly wrong, it is unusable. Multi-currency
+is now a Phase 3 prerequisite rather than a nicety — see PLAN 3.0.
+
+**GDPR is an obligation, not a feature.** Serving Europe makes 6.8 mandatory
+and constrains where the database may physically live. Data residency is now a
+hosting decision with legal weight rather than a latency preference.
+
+Also differing and cheaper to handle: fiscal year ends (India runs April to
+March), date formats, and statutory filing calendars — which matters if a
+compliance domain is ever built.
+
+---
+
+## D32 — Domains are chosen by how replaceable the job is, hardest one included
+
+Tejas's framing, and it is a better selection rule than "what is easy to
+build". In IT, the roles automated first were the ones with clear inputs and
+an agreed definition of done — frontend, UI work — while senior engineering
+held out. The same gradient exists inside a small business, and Aether should
+target the replaceable end first *and stay several steps ahead of it*, which
+means the pack must do what the clerk's manager does, not what the clerk does.
+
+Six domains, deliberately not all easy:
+
+| Tier | Domain | The job it stands in for | Status |
+|---|---|---|---|
+| Easy | Receivables | Credit controller / AR clerk | built |
+| Easy | Cash & runway | Bookkeeper's cash reporting | built |
+| Easy | **Payables & supplier terms** | AP clerk | **next** |
+| Medium | Sales pipeline | Sales ops analyst | built |
+| Medium | **Inventory & stock cover** | Stock controller | **next** |
+| Hard | **Customer concentration & credit risk** | A good CFO's judgement | **next** |
+
+Three reasons this particular set, beyond the tiering:
+
+**Two of the three new bands are already in hand.** The Damodaran file at
+`reference/` carries `Acc Pay/Sales` and `Inventory/Sales` alongside the
+receivables figure already being used. Payables and inventory need no data
+that does not already exist in the repository.
+
+**Together they complete the cash conversion cycle.** DSO + DIO − DPO is the
+standard working-capital measure an SME's own accountant uses. Receivables
+alone is a third of it. With all three, Aether can say something an owner has
+heard before and can check — which is worth more than a novel metric.
+
+**The hard one needs no new ingestion.** `top5_concentration` is already a
+metric on the receivables pack, and Phase 1's cross-domain machinery already
+exists. "Your largest customer is 40% of the book and paying later than they
+used to" is precisely the judgement a clerk does not make and a good finance
+lead does — the five-steps-ahead case, reachable with data already flowing.
+
+Workforce/HR is the obvious other "hard" candidate and is deliberately *not*
+first: it needs data most SMEs do not hold, and "healthy attrition" is
+genuinely contested, so it would mean inventing bands. It comes after real
+data exists.

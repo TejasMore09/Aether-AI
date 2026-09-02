@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # request. Both wrong settings fail worse than off.
     client_ip_source: str = "none"
 
+    # Transactional email, for password reset (6.5) and alert delivery.
+    # Empty means unconfigured, and callers must degrade rather than raise —
+    # an unsendable email is not a reason to fail the request that triggered it.
+    resend_api_key: str = ""
+    email_from: str = ""
+
     # Temporal (durable workflow engine) — the autonomous monitor loop.
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"

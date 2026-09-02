@@ -122,19 +122,27 @@ of 30 Nano + 10 Mega tenants.
 
 | # | Service | For | Cost | Status |
 |---|---|---|---|---|
-| 1 | **Gemini API key** (already have) | Diagnosis prose | Free tier, metered per tenant | 🔴 **BLOCKING a real check** — see below |
-| 2 | **Transactional email** — Resend, SendGrid, Mailgun or AWS SES | Password reset (6.5), alert delivery | Free tier | 🔴 **BLOCKING 6.5** |
-| 3 | **A domain name** | Email deliverability (SPF/DKIM), and the product needs a URL | ~$10/year | 🟠 Needed with #2 |
+| 1 | **Gemini API key** | Diagnosis prose | Metered per tenant | ✅ **Done.** Supplied, tested, and it found two real bugs — see below |
+| 2 | **Resend API key** | Password reset (6.5), alert delivery | Free tier | ✅ Supplied and working — but see #3, it can only reach *your own* address |
+| 3 | **A domain name**, verified at resend.com/domains | Reaching anyone but you | ~$10/year | 🔴 **BLOCKING 6.5.** Resend's shared sender `onboarding@resend.dev` delivers only to the account owner's address. A password reset to a real customer is silently undeliverable until a domain is verified |
 | 4 | **Sentry** (or equivalent) | Error tracking, 6.3 | Free tier | 🟠 Phase 6 |
 
-**On #1 — the single cheapest thing you can do this week.** The LLM is stubbed
-in every one of the 374 tests. I have written a great deal of careful prompt
-engineering and **never once seen a real model respond to any of it.** Put the
-key in, run one diagnosis against the seeded scenario, and read the output. It
-costs cents. If it reads like a competent advisor wrote it, a large amount of
-work is validated at once. If it reads like filler, I have been polishing the
-input to a black box — and you want to know that before Phase 3 stacks more
-context on top.
+**On #1 — this was run, and it was worth running.** The model had been stubbed
+in all 374 tests, so a great deal of prompt engineering had never met a live
+model. It found two settings that were each correct a generation ago and
+together destroyed every explanation: a 700-token output cap that a reasoning
+model spends entirely on thinking before writing a visible word, and
+`temperature=0.2`, which the provider warns degrades Gemini 3 and which
+measurably made it think 40% harder for the same answer. Customers would have
+read two sentences that stopped mid-number, and nothing would have logged an
+error. Fixed, and truncation is now treated as a failure so the next model's
+drift falls back rather than ships. The live output then did everything the
+prompt asks: led with the cross-domain connection, quoted the tenant's own
+calibrated band, derived the overdue balance and cash gap correctly, and did
+not add the two exposure figures together.
+
+**Rotate both keys once you are done testing** — they were pasted into a chat
+transcript, so treat them as disclosed.
 
 ### Needed for deployment — Phase 6 🟠
 
@@ -246,9 +254,9 @@ Not tasks — judgement calls I should not make alone.
 
 | # | Decision | Why it is yours | When |
 |---|---|---|---|
-| 17 | Is Aether India-first or global? | Sets sector taxonomy (NIC vs NACE), currency, jurisdiction | 🟠 Before Phase 3 |
-| 18 | Which sectors matter most to you? | Phase 3 seeds bands for the ones you name first | 🟠 Before Phase 3 |
-| 19 | Which domains after the current three? | Phase 5 order. Each pack costs truth, not code | 🟢 Phase 5 |
+| 17 | ~~India-first or global?~~ | ✅ **Answered: India + US + Europe.** Consequences recorded as D31 — multi-currency becomes a Phase 3 prerequisite, the sector taxonomy must be our own with crosswalks to NIC/NAICS/NACE, and GDPR becomes an obligation | done |
+| 18 | ~~Which domains next?~~ | ✅ **Answered: by how replaceable the job is.** Recorded as D32 — payables (easy), inventory (medium), customer concentration & credit risk (hard). Two of the three bands are already in `reference/` | done |
+| 19 | Which *sectors* to seed bands for first | Phase 3 seeds the ones you name. The file covers 94, but they are not equally worth the effort | 🟠 Before Phase 3 |
 | 20 | How much may Mega ever spend or move unsupervised? | The blast-radius limits in 8.6. A product decision wearing an engineering costume | 🟢 Phase 8 |
 | 21 | Monthly budget ceiling, if any | Everything above is free-tier today; I will keep it that way unless told otherwise | Anytime |
 
@@ -256,17 +264,18 @@ Not tasks — judgement calls I should not make alone.
 
 ## The short list — if you only do a few things
 
-1. 🔴 **Run one real LLM diagnosis and read it.** Ten minutes, costs cents,
-   and it validates or invalidates a large amount of existing work. This is
-   the single highest-value item on this page.
-2. 🔴 **Sign up for transactional email** (#2) and **buy a domain** (#3).
-   Password reset is blocked without them, and password reset is what lets the
-   login lockout cap rise above fifteen minutes.
-3. 🟠 **One conversation with an accountant or SME owner** (§1C). Costs
+1. ✅ ~~Run one real LLM diagnosis.~~ Done. Found two bugs, both fixed.
+2. 🔴 **Buy a domain and verify it at resend.com/domains** (#3). The Resend key
+   works but can only email you until this is done, so password reset cannot
+   reach a customer — and password reset is what lets the login lockout cap
+   rise above fifteen minutes.
+3. 🔴 **Rotate the Gemini and Resend keys** once testing is finished. Both were
+   pasted into a chat transcript.
+4. 🟠 **One conversation with an accountant or SME owner** (§1C). Costs
    nothing, and answers questions no dataset can.
-4. 🟠 **Write a page on your SME product's data shape** (§1B) so the contract
+5. 🟠 **Write a page on your SME product's data shape** (§1B) so the contract
    between the two products is designed rather than retrofitted.
-5. 🟠 **Decide India-first or global** (#17). It constrains hosting, taxonomy
-   and legal obligations, and it is expensive to change later.
+6. 🟠 **Name the sectors that matter most** (#19), so Phase 3 seeds those
+   bands first rather than all 94.
 
 Everything else on this page has a date attached and can wait for it.

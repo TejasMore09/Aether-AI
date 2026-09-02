@@ -121,7 +121,11 @@ Note the honest constraint: sector bands need *real-world truth*. Code here is
 days; defensible numbers are the slow part and need Tejas's domain access.
 Build the mechanism first so numbers can be filled in as they are learned.
 
-- [ ] **3.1** Sector taxonomy on the tenant — coarse enough to be useful, fine enough to matter
+- [ ] **3.0** Multi-currency: money stops being USD-by-name. Prerequisite, not
+  polish — an explanation quoting dollars to an Indian SME is unusable (D31)
+- [ ] **3.1** A coarse Aether sector taxonomy (tens, not hundreds) with a crosswalk
+  to NIC (India), NAICS/SIC (US) and NACE (EU). Serving three regions means none
+  of the three can be adopted wholesale (D31)
 - [ ] **3.2** Packs carry per-sector band overrides layered over their defaults
 - [ ] **3.3** Sector selected during onboarding, changeable, with the effect on bands shown honestly
 - [ ] **3.4** Sector corpus in the knowledge base — what normal looks like in that industry
@@ -162,12 +166,24 @@ agreed.
 Each domain is cheap in code and expensive in truth. Do not add a pack whose
 bands are pure invention; that scales confident guessing.
 
-- [ ] **5.1** Workforce / HR — headcount, attrition, time-to-fill, absence
-- [ ] **5.2** Inventory / supply — cover, stockouts, dead stock, lead time
-- [ ] **5.3** Marketing — spend efficiency, pipeline contribution, channel mix
-- [ ] **5.4** Operations — delivery, utilisation, rework
-- [ ] **5.5** Customer health — churn, concentration, satisfaction
-- [ ] **5.6** Compliance — filing deadlines, licences, obligations
+**Chosen by how replaceable the job is, hardest one included (D32).** Three of
+these are built; the three marked next complete the set.
+
+- [ ] **5.1** *(easy)* **Payables & supplier terms** — the AP clerk's job. Band
+  comes from `Acc Pay/Sales` in `reference/`, already in hand
+- [ ] **5.2** *(medium)* **Inventory & stock cover** — the stock controller's job.
+  Band comes from `Inventory/Sales` in the same file
+- [ ] **5.3** *(hard)* **Customer concentration & credit risk** — the judgement a
+  clerk does not make. Needs no new ingestion: `top5_concentration` is already a
+  receivables metric and Phase 1's cross-domain machinery already exists
+- [ ] **5.4** Workforce / HR — deliberately after real data. "Healthy attrition"
+  is genuinely contested and most SMEs hold no HRIS data to check it against
+- [ ] **5.5** Marketing — spend efficiency, channel mix
+- [ ] **5.6** Compliance — filing deadlines, licences. Jurisdiction-specific, so it
+  waits on 3.1
+
+**5.1 + 5.2 + receivables complete the cash conversion cycle** (DSO + DIO — DPO),
+which is the working-capital measure an SME's own accountant already uses.
 
 ---
 
