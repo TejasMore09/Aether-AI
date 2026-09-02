@@ -16,27 +16,30 @@ answers. Conflating them is how "we need real data" stays vague for months.
 **Needed for:** Phase 3. Right now a stock brokerage and a bakery get
 byte-identical packs.
 
-**Available now, free, and good enough to start:**
+**In hand, verified, ready to use.** Damodaran's working-capital dataset is
+committed at `reference/damodaran-working-capital-2026-01.xls` — see
+`reference/README.md` for the provenance check and the numbers. 94 industries,
+dated 2026-01-05, US companies, and `DSO = 365 x (Acc Rec / Sales)` was
+checked against sectors an SME actually occupies rather than assumed: grocery
+retail 6.4 days, restaurants 19.4, trucking 45.3, building materials 50.3,
+software 61.5. Median across all 94 is 46.8 days. Those are defensible
+starting bands. The same file carries `Inventory/Sales` and `Acc Pay/Sales`
+for Phase 5.
 
-[Damodaran's working-capital dataset](https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/wcdata.html)
-(NYU Stern, data as of January 2026, 142 industries, US firms) publishes
-`Acc Rec/Sales` per industry. That converts directly:
+**Two limits, and the second is a hard requirement on Phase 3.**
 
-    DSO = 365 x (Acc Rec / Sales)
+These are US *public* companies. An SME's DSO is not a listed company's DSO —
+small firms have worse terms and less leverage over customers. What transfers
+is the *ordering* across sectors, not the levels. Phase 3.6 exists precisely
+so a band can say "seeded from US public-company data, not SME data" on the
+screen where a customer reads it.
 
-So the receivables pack's healthy band can be seeded per sector from a real,
-citable, annually-updated source instead of from judgement. The same file
-carries `Inventory/Sales` and `Acc Pay/Sales`, which are the inventory and
-payables packs in Phase 5. The Excel is at
-`pages.stern.nyu.edu/~adamodar/pc/datasets/wcdata.xls`.
-
-**The limitation, which must be labelled and not buried:** these are US
-*public* companies. An SME's DSO is not a listed company's DSO — small firms
-usually have worse collection terms and less leverage over customers. What
-transfers is the *ordering* across sectors (software near zero, building
-supplies high), not the levels. Phase 3.6 exists precisely so a band can say
-"seeded from US public-company data, not SME data" on the screen where a
-customer reads it.
+And the conversion is **invalid for financial sectors**, where reported
+revenue is not comparable to the receivable: banks come out at 0 days, REITs
+at 485, brokerage at 512, non-bank financial services at 4863. Phase 3 must
+refuse these industries and fall back to the pack default rather than seed
+them. Note where that bites — a stock brokerage is the vision's own example of
+a sector-aware agent, and it is exactly the sector this dataset cannot supply.
 
 **Better but not free:**
 - **RMA Annual Statement Studies** — the actual SME benchmark, built from bank
@@ -47,10 +50,25 @@ customer reads it.
 
 **Free, coarser, real SME data:**
 - [Eurostat Structural Business Statistics](https://ec.europa.eu/eurostat/web/structural-business-statistics/database)
-  — several hundred NACE activities, broken down by enterprise size class, so
-  genuinely about SMEs rather than large firms. Turnover and employment
-  rather than working-capital ratios.
-- MCA21 (India) — company filings are public per document.
+  — `sbs_ovw_act` (enterprises by detailed NACE Rev. 2 activity),
+  `sbs_sc_ovw` (by size class) and `sbs_ovw_iep` (investment, expenditure,
+  purchases). Genuinely SME-scale, because the size-class breakdown is the
+  point of it. **But it carries no working-capital ratios**, so it does not
+  compete with Damodaran for bands.
+
+  Its real value here is **NACE Rev. 2 as the sector taxonomy for 3.1** — a
+  standard, hierarchical, internationally recognised classification, which
+  beats inventing one. India's NIC and the US SIC/NAICS are the same tree with
+  different labels, and SEC filings are keyed on SIC, so a mapping between
+  them is work Phase 3 has to do anyway. Damodaran's 94 industry names are
+  ad hoc and will need mapping to whichever taxonomy is chosen.
+
+**Not useful, checked so nobody checks again:** the MCA "Annual Reports on
+Working & Administration of the Companies Act" are statistics about company
+*registrations and compliance* — how many companies incorporated, struck off,
+prosecuted. They contain no financial ratios. What is useful at MCA is a
+different thing: individual company balance sheets via MCA21, which are
+per-document and paid, and require knowing which companies to ask for.
 
 ---
 
