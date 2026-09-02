@@ -14,6 +14,7 @@ before writing any code.**
 | [DECISIONS.md](DECISIONS.md) | Choices already made, with reasons. Do not re-litigate these. |
 | [PROGRESS.md](PROGRESS.md) | Dated log of what actually shipped. |
 | [DATA.md](DATA.md) | Where the real numbers come from. The largest open risk. |
+| [../System_Requirements_fromTejas.md](../System_Requirements_fromTejas.md) | Everything needed from Tejas: data, keys, services, decisions. |
 
 Then read `/ARCHITECTURE.md` for how the system is built, and
 `/platform/README.md` for how to run it.
