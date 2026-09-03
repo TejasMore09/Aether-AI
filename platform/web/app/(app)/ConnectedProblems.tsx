@@ -1,4 +1,4 @@
-import { Inset, usd } from '@/components/forge'
+import { Inset, money, usd } from '@/components/forge'
 import type { CrossDomainFinding } from '@/lib/api'
 
 /**
@@ -91,7 +91,7 @@ function Finding({ finding }: { finding: CrossDomainFinding }) {
       <Inset className="mt-5 px-5 py-[18px]">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="tnum text-[22px] font-semibold" style={{ color: 'var(--color-risk)' }}>
-            {usd(finding.daily_usd)}
+            {money(finding.daily_amount, finding.currency)}
           </span>
           <span className="text-[13px]" style={{ color: 'var(--color-ink-faint)' }}>
             a day at risk

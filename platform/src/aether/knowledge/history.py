@@ -34,6 +34,7 @@ import uuid
 
 from sqlalchemy import select
 
+from aether.core import money
 from aether.core.db import tenant_session
 from aether.core.models import ApprovalStatus, PendingApproval
 from aether.domains.pack import get_pack
@@ -57,7 +58,7 @@ def describe(approval: PendingApproval) -> str:
     when = approval.created_at.strftime("%B %Y")
 
     action = approval.action.replace("_", " ").lower()
-    money = f"${approval.expected_loss_usd:,.2f} a day at risk"
+    amount = f"{money.per_day(approval.expected_loss, approval.currency)} at risk"
 
     resolution = {
         ApprovalStatus.approved: "and it was approved",
@@ -71,7 +72,7 @@ def describe(approval: PendingApproval) -> str:
     parts = [
         f"{when}, {label}:",
         f"the agent recommended {action} at {approval.risk_level} risk,",
-        f"with {money},",
+        f"with {amount},",
         f"{resolution}.",
     ]
     if reason:
@@ -84,7 +85,7 @@ def _meta(approval: PendingApproval) -> dict:
         "action": approval.action,
         "risk_level": approval.risk_level,
         "status": approval.status.value,
-        "expected_loss_usd": round(approval.expected_loss_usd, 2),
+        "expected_loss": round(approval.expected_loss, 2),
         "resolved_by": approval.resolved_by,
         # Kept for display, deliberately absent from the embedded body.
         "diagnosis": approval.diagnosis,

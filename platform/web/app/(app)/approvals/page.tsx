@@ -1,4 +1,4 @@
-import { EmptyState, ErrorNote, Eyebrow, Figure, PageTitle, usd } from '@/components/forge'
+import { EmptyState, ErrorNote, Eyebrow, Figure, PageTitle, money, usd } from '@/components/forge'
 import { api, type Approval } from '@/lib/api'
 import { readSession } from '@/lib/session'
 
@@ -20,7 +20,10 @@ export default async function ApprovalsPage() {
   }
 
   const pending = approvals.data
-  const exposure = pending.reduce((sum, a) => sum + a.expected_loss_usd, 0)
+  const exposure = pending.reduce((sum, a) => sum + a.expected_loss, 0)
+  // Every approval carries the tenant's currency; they cannot differ
+  // within one business, so the first is the whole page's.
+  const currency = pending[0]?.currency ?? 'USD'
   const canResolve = session?.role === 'owner'
 
   return (
@@ -44,7 +47,7 @@ export default async function ApprovalsPage() {
         <div className="mb-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Figure
             label="Total exposure"
-            value={usd(exposure, 0)}
+            value={money(exposure, currency, 0)}
             note="per day, while these remain unresolved"
             tone="risk"
           />

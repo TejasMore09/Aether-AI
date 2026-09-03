@@ -194,7 +194,7 @@ def test_exposure_economics_uses_real_money(receivables):
     decision = evaluate(0.5, performance, params, pack=receivables, values=bad)
 
     expected = bad["ar_total"] * bad["overdue_ratio"] * params.daily_rate
-    assert decision.expected_daily_loss_usd == pytest.approx(expected)
+    assert decision.expected_daily_loss == pytest.approx(expected)
     assert "outstanding" in decision.inputs["loss_basis"]
 
 
@@ -236,4 +236,4 @@ def test_healthy_book_takes_no_action(receivables):
 def test_tenant_override_beats_pack_default(receivables):
     strict = PolicyParams.for_pack(receivables, {"perf_threshold": 0.99})
     assert strict.perf_threshold == 0.99
-    assert strict.intervention_cost_usd == receivables.economics.intervention_cost_usd
+    assert strict.intervention_cost == receivables.economics.intervention_cost

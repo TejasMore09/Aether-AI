@@ -33,6 +33,9 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > **6.4 was pulled forward** out of Phase 6: password endpoints accepted
 > unlimited guesses, which was a live hole rather than a missing feature.
 >
+> **Phase 3 has started.** 3.0 is done: money is the tenant's own currency
+> throughout, INR/USD/EUR/GBP, with no FX conversion anywhere. Next is 3.1.
+>
 > Next: Phase 3, where a stock brokerage and a bakery stop receiving
 > byte-identical packs. The code is days; the defensible numbers are not,
 > and need Tejas's domain access.

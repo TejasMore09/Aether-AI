@@ -51,6 +51,10 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # ISO 4217. One currency per business, and the platform never converts —
+    # see core/money.py for why an FX rate is a liability rather than a
+    # feature here.
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
 
 
 class User(Base):
@@ -150,7 +154,11 @@ class PendingApproval(Base, TenantScoped):
     action: Mapped[str] = mapped_column(String(60))
     reason: Mapped[str] = mapped_column(Text, default="")
     risk_level: Mapped[str] = mapped_column(String(10))
-    expected_loss_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    expected_loss: Mapped[float] = mapped_column(Float, default=0.0)
+    # Copied from the tenant rather than joined, so a decision recorded last
+    # March keeps meaning what it meant last March even if the business later
+    # changes currency. Same reasoning as storing the band on the observation.
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
     status: Mapped[ApprovalStatus] = mapped_column(
         Enum(ApprovalStatus, name="approval_status"), default=ApprovalStatus.pending
     )

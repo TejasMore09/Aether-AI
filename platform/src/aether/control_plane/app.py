@@ -9,10 +9,11 @@ Run: uvicorn aether.control_plane.app:app --port 8100
 import uuid
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from aether import __version__
+from aether.core import money
 from aether.core.db import session, tenant_session
 from aether.core.models import (
     AgentInstance,
@@ -58,6 +59,18 @@ class SignupRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=10, max_length=200)
     display_name: str = ""
+    # The business's own currency. Validated against what the platform can
+    # actually render rather than accepted as any three letters, because an
+    # unrenderable code would surface much later as a failed explanation.
+    currency: str = money.DEFAULT
+
+    @field_validator("currency")
+    @classmethod
+    def _known_currency(cls, value: str) -> str:
+        try:
+            return money.currency(value).code
+        except money.UnsupportedCurrency as exc:
+            raise ValueError(str(exc)) from None
 
 
 class TokenResponse(BaseModel):
@@ -76,7 +89,7 @@ def signup(body: SignupRequest) -> TokenResponse:
         if db.scalar(select(User).where(User.email == body.email.lower())):
             raise HTTPException(status_code=409, detail="Email already registered")
 
-        tenant = Tenant(name=body.org_name, slug=body.org_slug)
+        tenant = Tenant(name=body.org_name, slug=body.org_slug, currency=body.currency)
         user = User(
             email=body.email.lower(),
             password_hash=hash_password(body.password),
@@ -142,6 +155,7 @@ class TenantInfo(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
+    currency: str
 
 
 @app.get("/v1/tenant", response_model=TenantInfo)
@@ -150,7 +164,9 @@ def my_tenant(principal: Principal = Depends(authenticated)) -> TenantInfo:
         tenant = db.get(Tenant, principal.tenant_id)
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
-        return TenantInfo(id=tenant.id, name=tenant.name, slug=tenant.slug)
+        return TenantInfo(
+            id=tenant.id, name=tenant.name, slug=tenant.slug, currency=tenant.currency
+        )
 
 
 class AgentCreate(BaseModel):

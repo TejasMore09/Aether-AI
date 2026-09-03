@@ -128,7 +128,7 @@ def test_decision_uses_business_economics(tenant):
     assert outcome.approval_id is not None
 
     expected = 800_000.0 * 0.46 * 0.0004
-    assert decision["expected_daily_loss_usd"] == pytest.approx(expected, rel=0.01)
+    assert decision["expected_daily_loss"] == pytest.approx(expected, rel=0.01)
     assert "outstanding" in decision["inputs"]["loss_basis"]
 
 

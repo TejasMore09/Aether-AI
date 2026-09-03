@@ -129,7 +129,7 @@ economics:
   exposure_metric: ar_total
   at_risk_metric: overdue_ratio
   daily_rate: 0.0004        # ≈15% annualised: financing cost plus write-off risk
-  intervention_cost_usd: 400.0   # a focused collections push: staff time and effort
+  intervention_cost: 400.0   # a focused collections push: staff time and effort
 
 actions:
   none:

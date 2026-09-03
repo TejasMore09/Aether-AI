@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from aether.business.findings import CrossDomainFinding
 from aether.business.state import BusinessState
+from aether.core import money
 
 # Fewer than this many words in a mechanism and it is not worth the tokens.
 _MIN_MECHANISM_WORDS = 5
@@ -113,7 +114,7 @@ def context_block(
         # giving no explanation at all.
         lines.append(
             f"Combined exposure across {' and '.join(finding.domains)} is "
-            f"${finding.daily_usd:,.2f} a day. This is the LARGEST single "
+            f"{money.per_day(finding.daily_amount, finding.currency)}. This is the LARGEST single "
             f"exposure, not a total — these figures measure the same money "
             f"from two sides. Never add them together or state a larger sum."
         )

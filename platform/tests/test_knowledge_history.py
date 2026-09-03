@@ -70,7 +70,7 @@ def add_approval(
             action=action,
             reason=reason,
             risk_level=risk,
-            expected_loss_usd=loss,
+            expected_loss=loss,
             status=status,
             resolved_by="owner@example.io" if status is not ApprovalStatus.pending else None,
             diagnosis=diagnosis,
@@ -190,7 +190,7 @@ def test_the_metadata_carries_what_the_sentence_leaves_out():
     meta = store.recall(t, embedding.embed_one("collections"), limit=1)[0].meta
     assert meta["action"] == "ESCALATE_COLLECTIONS"
     assert meta["status"] == "approved"
-    assert meta["expected_loss_usd"] == 147.0
+    assert meta["expected_loss"] == 147.0
     assert meta["resolved_by"] == "owner@example.io"
 
 

@@ -136,7 +136,7 @@ class ActionSpec:
 @dataclass(frozen=True)
 class Economics:
     model: EconomicsModel = EconomicsModel.degradation_scaled
-    intervention_cost_usd: float = 250.0
+    intervention_cost: float = 250.0
     # exposure_scaled / shortfall_scaled
     exposure_metric: str | None = None
     at_risk_metric: str | None = None
@@ -151,7 +151,7 @@ class Economics:
     exposure_noun: str = "outstanding"
     # degradation_scaled
     daily_decision_volume: int = 1000
-    impact_per_error_usd: float = 1000.0
+    impact_per_error: float = 1000.0
     error_rate_translation: float = 0.1
 
 
@@ -255,7 +255,7 @@ def _pack_from_dict(raw: dict) -> DomainPack:
     econ_raw = raw.get("economics") or {}
     economics = Economics(
         model=EconomicsModel(econ_raw.get("model", "degradation_scaled")),
-        intervention_cost_usd=float(econ_raw.get("intervention_cost_usd", 250.0)),
+        intervention_cost=float(econ_raw.get("intervention_cost", 250.0)),
         exposure_metric=econ_raw.get("exposure_metric"),
         at_risk_metric=econ_raw.get("at_risk_metric"),
         cover_metric=econ_raw.get("cover_metric"),
@@ -263,7 +263,7 @@ def _pack_from_dict(raw: dict) -> DomainPack:
         payback_days=int(econ_raw.get("payback_days", 7)),
         exposure_noun=str(econ_raw.get("exposure_noun", "outstanding")),
         daily_decision_volume=int(econ_raw.get("daily_decision_volume", 1000)),
-        impact_per_error_usd=float(econ_raw.get("impact_per_error_usd", 1000.0)),
+        impact_per_error=float(econ_raw.get("impact_per_error", 1000.0)),
         error_rate_translation=float(econ_raw.get("error_rate_translation", 0.1)),
     )
 

@@ -9,6 +9,7 @@ import {
   Panel,
   RiskPill,
   SectionTitle,
+  money,
   usd,
   whenUTC,
 } from '@/components/forge'
@@ -27,14 +28,15 @@ export default async function OverviewPage() {
   const pending = approvals.ok ? approvals.data : []
   const findings = business.ok ? business.data.findings : []
 
-  const gated = pending.reduce((sum, a) => sum + a.expected_loss_usd, 0)
+  const gated = pending.reduce((sum, a) => sum + a.expected_loss, 0)
 
   // The headline figure is the larger of the two, never their sum. A gated
   // receivables decision and a connected problem naming receivables are
   // measuring the same money, so adding them would overstate — the same
   // reasoning that makes a finding's own exposure a maximum rather than a
   // total.
-  const largestFinding = findings.reduce((most, f) => Math.max(most, f.daily_usd), 0)
+  const largestFinding = findings.reduce((most, f) => Math.max(most, f.daily_amount), 0)
+  const currency = pending[0]?.currency ?? findings[0]?.currency ?? 'USD'
   const exposure = Math.max(gated, largestFinding)
 
   // Something is wrong if a decision is waiting *or* the business has a
@@ -85,7 +87,7 @@ export default async function OverviewPage() {
         />
         <Figure
           label="Exposure if unaddressed"
-          value={usd(exposure, 0)}
+          value={money(exposure, currency, 0)}
           note={
             largestFinding > gated
               ? 'from the connected problem below, per day'

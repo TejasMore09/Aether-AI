@@ -49,7 +49,7 @@ class DomainNotice:
     action: str
     risk_level: str
     requires_approval: bool
-    daily_usd: float
+    daily_amount: float
     reason: str
     # Which metrics actually drove it. Needed to tell whether a finding
     # explains this notice or merely happens to mention the same domain.
@@ -133,7 +133,7 @@ class Presentation:
                     "action": n.action,
                     "risk_level": n.risk_level,
                     "requires_approval": n.requires_approval,
-                    "daily_usd": round(n.daily_usd, 2),
+                    "daily_amount": round(n.daily_amount, 2),
                     "reason": n.reason,
                 }
                 for n in self.standalone

@@ -187,6 +187,7 @@ def business_view(principal: Principal = Depends(authenticated)) -> dict:
     found = business_findings.for_business(whole, support)
     return {
         "captured_at": whole.captured_at.isoformat(),
+        "currency": whole.currency,
         "findings": [f.as_dict() for f in found],
         "impaired": [s.domain for s in whole.impaired],
         "silent": list(whole.silent),
@@ -486,7 +487,8 @@ def list_approvals(principal: Principal = Depends(authenticated)) -> list[dict]:
                 "action": i.action,
                 "reason": i.reason,
                 "risk_level": i.risk_level,
-                "expected_loss_usd": i.expected_loss_usd,
+                "expected_loss": i.expected_loss,
+                "currency": i.currency,
                 "diagnosis": i.diagnosis,
                 "diagnosis_source": i.diagnosis_source,
             }

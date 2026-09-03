@@ -107,7 +107,7 @@ def test_a_finding_never_sums_exposures_across_related_domains():
     daily, basis = _combine((a, b))
 
     assert daily == 147.0
-    assert daily != a.daily_usd + b.daily_usd
+    assert daily != a.daily_amount + b.daily_amount
     assert "not the sum" in basis
     assert "count it twice" in basis
 
@@ -159,7 +159,7 @@ def test_exposure_matches_what_the_single_domain_decision_would_say():
     direct, _ = expected_daily_loss(
         get_pack("receivables"), snap.params, snap.severity, snap.metrics
     )
-    assert exposure_of(snap).daily_usd == direct
+    assert exposure_of(snap).daily_amount == direct
 
 
 # ── Building a finding ────────────────────────────────────────────────────────
@@ -172,7 +172,7 @@ def test_the_headline_case_becomes_one_finding_naming_both_domains():
     top = findings[0]
     assert isinstance(top, CrossDomainFinding)
     assert set(top.domains) == {"receivables", "cash_runway"}
-    assert top.daily_usd > 0
+    assert top.daily_amount > 0
 
 
 def test_a_finding_carries_the_mechanism_a_person_can_read():
@@ -207,7 +207,7 @@ def test_per_domain_exposures_are_kept_alongside_the_combined_one():
     top = for_business(slowing_business())[0]
     assert len(top.per_domain) == 2
     assert {e.domain for e in top.per_domain} == {"receivables", "cash_runway"}
-    assert top.daily_usd == max(e.daily_usd for e in top.per_domain)
+    assert top.daily_amount == max(e.daily_amount for e in top.per_domain)
 
 
 def test_a_lagged_relation_carries_its_lag_note_into_the_finding():
@@ -271,7 +271,7 @@ def test_no_history_leaves_a_finding_uncorroborated_not_weakened():
     say anything either way. Absence is not evidence against."""
     top = for_business(slowing_business())[0]
     assert top.corroborated is False
-    assert top.daily_usd > 0, "and it still stands on the declared mechanism"
+    assert top.daily_amount > 0, "and it still stands on the declared mechanism"
 
 
 # ── Ordering and refusals ─────────────────────────────────────────────────────
@@ -282,7 +282,7 @@ def test_findings_are_ordered_by_money_not_by_confidence():
     epistemology."""
     findings = for_business(slowing_business())
     if len(findings) > 1:
-        assert findings[0].daily_usd >= findings[1].daily_usd
+        assert findings[0].daily_amount >= findings[1].daily_amount
 
 
 def test_a_healthy_business_produces_no_findings():
@@ -337,7 +337,7 @@ def test_serialisation_carries_the_working_not_just_the_answer():
     payload = for_business(slowing_business())[0].as_dict()
 
     assert payload["confidence"] in {"mechanical", "strong"}
-    assert payload["daily_usd"] > 0
+    assert payload["daily_amount"] > 0
     assert payload["exposure_basis"]
     assert len(payload["per_domain"]) == 2
     assert payload["corroborated"] is False

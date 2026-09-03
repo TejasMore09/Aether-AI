@@ -7,6 +7,49 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.0: money stops being dollars by assumption
+
+Migration `0012`, `core/money.py`. A prerequisite for the rest of Phase 3
+rather than polish: Aether targets India, the US and Europe (D31), and every
+monetary value was USD by name. Telling a Pune manufacturer they are losing
+$147 a day is not slightly wrong — it is a number they cannot check against
+anything they know.
+
+**The platform never converts.** No FX rate is stored, fetched or applied. A
+rate is a fact about a moment, and a stale one silently corrupts figures that
+have already been shown to a customer and acted on. Businesses report in their
+own currency and it stays there. Most of the product turned out to be
+currency-neutral already: DSO is days, overdue share is a fraction.
+
+**Two kinds of money were spelled the same and are now separated.**
+`expected_loss_usd` became `expected_loss` plus a currency, because it may be
+rupees. `LLMUsage.cost_usd` kept its name, because what a diagnosis costs *us*
+at the model provider is billed in dollars whoever the tenant is. The same
+distinction runs through both front ends.
+
+**Currency is copied onto each approval rather than joined from the tenant**,
+so a decision recorded last March keeps meaning what it meant last March even
+if the business later switches. Same reasoning that put the band on the
+observation instead of looking it up at read time.
+
+**Indian grouping is implemented rather than approximated.** Rupees group in
+lakhs and crores: ₹1,50,000, not ₹150,000. Nine parametrised cases pin it,
+including one crore. Getting this wrong is a small constant signal that the
+product was built for somebody else, and it is fifteen lines.
+
+Found along the way: `money.for_tenant` opened a second database session
+inside callers that already held one, which surfaced as an intermittent
+failure under a full test run. It now takes the session its caller is holding.
+
+Not done, and named so it is not mistaken for done: per-locale symbol
+placement. A German reader writes `1.234,56 €` and gets `€1,234.56`. Smaller
+than the currency itself being wrong, and it should be fixed before anyone is
+charged money for this.
+
+399 tests, none skipped.
+
+---
+
 ## 2026-09-02 — Phase 6.4: credential guessing gets expensive
 
 Pulled forward out of Phase 6 because it was not a missing feature. Every

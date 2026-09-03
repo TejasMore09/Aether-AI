@@ -32,8 +32,9 @@ def approval(**overrides) -> PendingApproval:
         "action": "ESCALATE_COLLECTIONS",
         "reason": "34% of 400,000 outstanding, carried at 15% a year.",
         "risk_level": "HIGH",
-        "expected_loss_usd": 147.0,
+        "expected_loss": 147.0,
         "status": ApprovalStatus.pending,
+        "currency": "USD",
     }
     fields.update(overrides)
     return PendingApproval(**fields)

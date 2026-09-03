@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 
+from aether.core import money
 from aether.core.db import tenant_session
 from aether.core.models import Observation, PolicyConfig
 from aether.domains.pack import DomainPack, get_pack
@@ -137,6 +138,10 @@ class BusinessState:
 
     tenant_id: uuid.UUID
     captured_at: datetime.datetime
+    # The business's own currency, carried here so every layer that renders a
+    # figure gets it from the object it already holds rather than reaching
+    # back to the database mid-render.
+    currency: str = money.DEFAULT
     domains: dict[str, DomainSnapshot] = field(default_factory=dict)
     # Domains with a policy configured that have never reported, or whose
     # readings were all quarantined. Kept separate from the healthy ones
@@ -246,10 +251,12 @@ def load(tenant_id: uuid.UUID) -> BusinessState:
         # deliberately turned on and that has produced nothing is a setup
         # failure, and it looks identical to silence if nobody names it.
         silent = tuple(sorted(d for d in configured if d not in snapshots))
+        currency = money.for_tenant(tenant_id, db)
 
     return BusinessState(
         tenant_id=tenant_id,
         captured_at=utcnow(),
+        currency=currency,
         domains=snapshots,
         silent=silent,
     )

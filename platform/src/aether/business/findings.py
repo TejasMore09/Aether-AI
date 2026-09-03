@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from aether.business.correlation import CoMovement
 from aether.business.relations import ActiveRelation, Confidence, active
 from aether.business.state import BusinessState, DomainSnapshot
+from aether.core import money
 from aether.domains.pack import get_pack
 from aether.policy.decision_engine import expected_daily_loss
 
@@ -46,7 +47,7 @@ class DomainExposure:
     """One domain's money at risk, and how that number was arrived at."""
 
     domain: str
-    daily_usd: float
+    daily_amount: float
     basis: str
 
 
@@ -60,7 +61,7 @@ def exposure_of(snapshot: DomainSnapshot) -> DomainExposure:
     """
     pack = get_pack(snapshot.domain)
     loss, basis = expected_daily_loss(pack, snapshot.params, snapshot.severity, snapshot.metrics)
-    return DomainExposure(domain=snapshot.domain, daily_usd=loss, basis=basis)
+    return DomainExposure(domain=snapshot.domain, daily_amount=loss, basis=basis)
 
 
 @dataclass(frozen=True)
@@ -76,9 +77,13 @@ class CrossDomainFinding:
     lag_note: str
     readings: dict[str, float]
     per_domain: tuple[DomainExposure, ...]
-    daily_usd: float
+    daily_amount: float
     exposure_basis: str
     severity: float
+    # Carried on the finding rather than looked up by whoever renders it: this
+    # object crosses into prompts, the dashboard and notifications, and each of
+    # those reaching back for the currency is three chances to disagree.
+    currency: str = money.DEFAULT
     corroborated_by: tuple[str, ...] = ()
 
     # Filled in by presentation.apply() when this finding takes over the
@@ -119,10 +124,11 @@ class CrossDomainFinding:
             "guidance": self.guidance,
             "lag_note": self.lag_note,
             "readings": self.readings,
-            "daily_usd": round(self.daily_usd, 2),
+            "daily_amount": round(self.daily_amount, 2),
+            "currency": self.currency,
             "exposure_basis": self.exposure_basis,
             "per_domain": [
-                {"domain": e.domain, "daily_usd": round(e.daily_usd, 2), "basis": e.basis}
+                {"domain": e.domain, "daily_amount": round(e.daily_amount, 2), "basis": e.basis}
                 for e in self.per_domain
             ],
             "severity": round(self.severity, 4),
@@ -136,7 +142,9 @@ class CrossDomainFinding:
         }
 
 
-def _combine(exposures: tuple[DomainExposure, ...]) -> tuple[float, str]:
+def _combine(
+    exposures: tuple[DomainExposure, ...], currency: str = money.DEFAULT
+) -> tuple[float, str]:
     """The finding's headline figure, and the sentence explaining it.
 
     See the module docstring for why this is a maximum rather than a sum.
@@ -144,17 +152,17 @@ def _combine(exposures: tuple[DomainExposure, ...]) -> tuple[float, str]:
     if not exposures:
         return 0.0, "no exposure could be computed for these domains"
 
-    largest = max(exposures, key=lambda e: e.daily_usd)
-    if len(exposures) == 1 or largest.daily_usd == 0:
-        return largest.daily_usd, largest.basis
+    largest = max(exposures, key=lambda e: e.daily_amount)
+    if len(exposures) == 1 or largest.daily_amount == 0:
+        return largest.daily_amount, largest.basis
 
-    others = [e for e in exposures if e is not largest and e.daily_usd > 0]
+    others = [e for e in exposures if e is not largest and e.daily_amount > 0]
     if not others:
-        return largest.daily_usd, largest.basis
+        return largest.daily_amount, largest.basis
 
-    named = ", ".join(f"{e.domain} at ${e.daily_usd:,.2f}" for e in others)
+    named = ", ".join(f"{e.domain} at {money.fmt(e.daily_amount, currency)}" for e in others)
     return (
-        largest.daily_usd,
+        largest.daily_amount,
         f"{largest.basis} — the largest single exposure, not the sum. "
         f"{named} measures the same money from the other side, "
         f"and adding them would count it twice",
@@ -171,7 +179,7 @@ def from_relation(
         for domain in matched.domains
         if (snapshot := state.get(domain)) is not None
     )
-    daily, basis = _combine(exposures)
+    daily, basis = _combine(exposures, state.currency)
 
     # The worst domain involved, not the average of them. A finding is as
     # serious as the most serious thing in it; averaging would let one healthy
@@ -190,6 +198,7 @@ def from_relation(
 
     relation = matched.relation
     return CrossDomainFinding(
+        currency=state.currency,
         relation_id=relation.id,
         label=relation.label,
         confidence=relation.confidence,
@@ -199,7 +208,7 @@ def from_relation(
         lag_note=" ".join(relation.lag_note.split()),
         readings=matched.values,
         per_domain=exposures,
-        daily_usd=daily,
+        daily_amount=daily,
         exposure_basis=basis,
         severity=severity,
         corroborated_by=supporting,
@@ -231,7 +240,7 @@ def dedupe(
         if len(group) == 1:
             kept.append(group[0])
             continue
-        group.sort(key=lambda f: (_CONFIDENCE_ORDER[f.confidence], -f.daily_usd, f.relation_id))
+        group.sort(key=lambda f: (_CONFIDENCE_ORDER[f.confidence], -f.daily_amount, f.relation_id))
         primary, *rest = group
 
         # Absorb what the siblings knew, not just their names. The readings
@@ -273,7 +282,7 @@ def for_business(
     grading the epistemology.
     """
     findings = [from_relation(m, state, co_movements) for m in active(state)]
-    findings.sort(key=lambda f: (f.daily_usd, f.severity), reverse=True)
+    findings.sort(key=lambda f: (f.daily_amount, f.severity), reverse=True)
     # Deduplicated here rather than at presentation, so no caller can ever
     # receive two findings quoting the same money. The prompt layer hit
     # exactly that: it rendered both mechanisms and repeated the exposure

@@ -105,7 +105,7 @@ def test_provider_failure_falls_back_deterministically(tenant, gated_approval, m
         approval = db.get(PendingApproval, gated_approval)
         assert approval.diagnosis_source == "fallback"
         assert "Automated summary" in approval.diagnosis
-        assert f"${approval.expected_loss_usd:,.2f}" in approval.diagnosis
+        assert f"${approval.expected_loss:,.2f}" in approval.diagnosis
         assert db.scalars(select(LLMUsage)).all() == []  # failure costs nothing
 
 

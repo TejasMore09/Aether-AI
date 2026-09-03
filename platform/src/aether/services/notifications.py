@@ -17,6 +17,7 @@ from email.mime.text import MIMEText
 
 from sqlalchemy import select
 
+from aether.core import money
 from aether.core.config import get_settings
 from aether.core.db import session, tenant_session
 from aether.core.models import Membership, Notification, PendingApproval, Role, User
@@ -78,7 +79,8 @@ def notify_approval_created(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> dic
             f"Aether Nano gated a {approval.risk_level}-risk action and needs a decision.\n\n"
             f"Domain:          {approval.domain}\n"
             f"Proposed action: {approval.action}\n"
-            f"Estimated loss:  ${approval.expected_loss_usd:,.2f}/day if unaddressed\n"
+            f"Estimated loss:  "
+            f"{money.per_day(approval.expected_loss, approval.currency)} if unaddressed\n"
             f"Engine reason:   {approval.reason}\n\n"
             f"--- Diagnosis ({approval.diagnosis_source or 'pending'}) ---\n"
             f"{diagnosis}\n\n"

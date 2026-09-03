@@ -191,7 +191,7 @@ def test_a_decision_nobody_remembered_is_visible_from_the_fleet(apps):
             action="ESCALATE_COLLECTIONS",
             reason="overdue share climbing",
             risk_level="HIGH",
-            expected_loss_usd=147.0,
+            expected_loss=147.0,
             status=ApprovalStatus.approved,
             resolved_by="owner@example.io",
         )
@@ -201,7 +201,7 @@ def test_a_decision_nobody_remembered_is_visible_from_the_fleet(apps):
             action="ESCALATE_COLLECTIONS",
             reason="waiting on a person",
             risk_level="HIGH",
-            expected_loss_usd=99.0,
+            expected_loss=99.0,
         )
         db.add_all([resolved, still_open])
         db.flush()

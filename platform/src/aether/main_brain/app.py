@@ -323,7 +323,8 @@ def tenant_approvals(
                 "action": r.action,
                 "status": r.status.value,
                 "risk_level": r.risk_level,
-                "expected_loss_usd": r.expected_loss_usd,
+                "expected_loss": r.expected_loss,
+                "currency": r.currency,
                 "diagnosis": r.diagnosis,
             }
             for r in rows

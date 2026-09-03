@@ -606,3 +606,44 @@ Workforce/HR is the obvious other "hard" candidate and is deliberately *not*
 first: it needs data most SMEs do not hold, and "healthy attrition" is
 genuinely contested, so it would mean inventing bands. It comes after real
 data exists.
+
+---
+
+## D33 — The platform never converts currency
+
+No FX rate is stored, fetched or applied anywhere in Aether, and adding one
+should be treated as a significant decision rather than a convenience.
+
+A rate is a fact about a moment. A stale one does not fail — it silently
+produces figures that look right, and those figures go into explanations a
+customer reads and decisions they act on. There is no way to notice
+afterwards, and no way to explain to a business why the number they were shown
+in March is not the number in the audit log.
+
+Each business reports in one currency and it stays there. Most of the product
+is already currency-neutral, which is what makes this cheap: DSO is days,
+overdue share is a fraction, coverage is a ratio. Only money is affected.
+
+The consequence to accept rather than work around: the fleet view cannot show
+a single total across tenants in mixed currencies, and should not pretend to.
+`month_spend_usd` is exempt because it is genuinely our cost in dollars.
+
+If a business ever genuinely needs multi-currency *within itself* — a UK
+company invoicing in euros — that is a different and much larger problem than
+this, and it still does not require Aether to hold a rate.
+
+---
+
+## D34 — Two kinds of money, spelled differently on purpose
+
+`expected_loss` carries a currency and may be rupees. `LLMUsage.cost_usd`
+keeps its name because what a diagnosis costs *us* at the model provider is
+billed in dollars whoever the tenant is.
+
+They were previously spelled the same, which is how every figure on the
+dashboard came to be a dollar amount regardless of who was reading it. Keeping
+the `_usd` suffix on genuinely-dollar values is not an oversight to tidy up
+later: it is the thing that stops the two being merged again.
+
+The same split runs through both front ends — `money(value, currency)` for the
+customer's money, `usd(value)` for platform spend.

@@ -103,7 +103,7 @@ def notice(
         action=action,
         risk_level=risk,
         requires_approval=approval,
-        daily_usd=daily,
+        daily_amount=daily,
         reason=f"{domain} on its own",
         contributing=contributing,
         existential=existential,

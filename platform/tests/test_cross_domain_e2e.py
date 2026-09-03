@@ -220,7 +220,7 @@ def test_slowing_collections_and_tightening_cash_arrive_as_one_finding(clients):
     finding = view["findings"][0]
     assert set(finding["domains"]) == {"receivables", "cash_runway"}
     assert finding["confidence"] in {"mechanical", "strong"}
-    assert finding["daily_usd"] > 0
+    assert finding["daily_amount"] > 0
     assert len(finding["mechanism"].split()) > 15
 
 
@@ -231,11 +231,11 @@ def test_the_combined_exposure_is_never_the_sum_of_its_parts(clients):
     seed_slowdown(runtime, headers)
 
     finding = business(runtime, headers)["findings"][0]
-    parts = [p["daily_usd"] for p in finding["per_domain"]]
+    parts = [p["daily_amount"] for p in finding["per_domain"]]
 
-    assert finding["daily_usd"] == pytest.approx(max(parts))
+    assert finding["daily_amount"] == pytest.approx(max(parts))
     if len([p for p in parts if p > 0]) > 1:
-        assert finding["daily_usd"] < sum(parts)
+        assert finding["daily_amount"] < sum(parts)
         assert "not the sum" in finding["exposure_basis"]
 
 

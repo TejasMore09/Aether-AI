@@ -13,6 +13,7 @@ ML tool, and so a new domain is a pack rather than a change here.
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from aether.core import money
 from aether.domains.pack import (
     _GENERIC_ACTIONS,
     ActionSlot,
@@ -31,7 +32,7 @@ class PolicyParams:
     values, and a tenant may override any of them.
     """
 
-    intervention_cost_usd: float = 250.0
+    intervention_cost: float = 250.0
     drift_threshold: float = 0.15
     perf_threshold: float = 0.85
     drift_weight: float = 0.4
@@ -39,7 +40,7 @@ class PolicyParams:
     high_risk_score: float = 0.4
     medium_risk_score: float = 0.15
     # degradation_scaled economics
-    impact_per_error_usd: float = 1000.0
+    impact_per_error: float = 1000.0
     daily_decision_volume: int = 1000
     error_rate_translation: float = 0.1
     # exposure_scaled economics
@@ -62,10 +63,10 @@ class PolicyParams:
         merged: dict = {}
         if pack is not None:
             merged.update(pack.policy_defaults)
-            merged["intervention_cost_usd"] = pack.economics.intervention_cost_usd
+            merged["intervention_cost"] = pack.economics.intervention_cost
             merged["daily_rate"] = pack.economics.daily_rate
             merged["payback_days"] = pack.economics.payback_days
-            merged["impact_per_error_usd"] = pack.economics.impact_per_error_usd
+            merged["impact_per_error"] = pack.economics.impact_per_error
             merged["daily_decision_volume"] = pack.economics.daily_decision_volume
             merged["error_rate_translation"] = pack.economics.error_rate_translation
         if overrides:
@@ -86,8 +87,8 @@ class Decision:
     action_description: str
     risk_level: RiskLevel
     risk_score: float
-    expected_daily_loss_usd: float
-    action_cost_usd: float
+    expected_daily_loss: float
+    action_cost: float
     reason: str
     requires_approval: bool = False
     inputs: dict = field(default_factory=dict)
@@ -99,8 +100,8 @@ class Decision:
             "action_description": self.action_description,
             "risk_level": self.risk_level.value,
             "risk_score": round(self.risk_score, 4),
-            "expected_daily_loss_usd": round(self.expected_daily_loss_usd, 2),
-            "action_cost_usd": self.action_cost_usd,
+            "expected_daily_loss": round(self.expected_daily_loss, 2),
+            "action_cost": self.action_cost,
             "reason": self.reason,
             "requires_approval": self.requires_approval,
             "inputs": self.inputs,
@@ -151,10 +152,10 @@ def expected_daily_loss(
         return loss, basis
 
     error_rate_increase = perf_degradation * params.error_rate_translation
-    loss = params.daily_decision_volume * error_rate_increase * params.impact_per_error_usd
+    loss = params.daily_decision_volume * error_rate_increase * params.impact_per_error
     basis = (
         f"{error_rate_increase:.1%} of {params.daily_decision_volume:,} daily decisions "
-        f"at {params.impact_per_error_usd:,.0f} each"
+        f"at {params.impact_per_error:,.0f} each"
     )
     return loss, basis
 
@@ -189,6 +190,7 @@ def evaluate(
     params: PolicyParams,
     pack: DomainPack | None = None,
     values: dict[str, float] | None = None,
+    currency: str = money.DEFAULT,
 ) -> Decision:
     """Evaluate one domain's state against a tenant's policy.
 
@@ -213,7 +215,7 @@ def evaluate(
         risk_level = RiskLevel.low
 
     expected_loss, basis = expected_daily_loss(pack, params, perf_degradation, values)
-    cost = params.intervention_cost_usd
+    cost = params.intervention_cost
 
     horizon_loss = expected_loss * params.payback_days
 
@@ -239,8 +241,8 @@ def evaluate(
             slot = ActionSlot.intervene
             payback = cost / expected_loss if expected_loss > 0 else float("inf")
             reason = (
-                f"${expected_loss:,.2f} a day at risk — {basis} — against a "
-                f"${cost:,.2f} one-off cost to act, which pays for itself in "
+                f"{money.per_day(expected_loss, currency)} at risk — {basis} — against a "
+                f"{money.fmt(cost, currency)} one-off cost to act, which pays for itself in "
                 f"{payback:.1f} days."
             )
         else:
@@ -250,9 +252,10 @@ def evaluate(
             # "$26.00 a day" is exactly the figure a customer will want to
             # see the working for before they accept the conclusion.
             reason = (
-                f"Conditions have deteriorated, but ${expected_loss:,.2f} a day at risk "
+                f"Conditions have deteriorated, but "
+                f"{money.per_day(expected_loss, currency)} at risk "
                 f"— {basis} — would take longer than {params.payback_days} days to repay "
-                f"the ${cost:,.2f} cost of acting."
+                f"the {money.fmt(cost, currency)} cost of acting."
             )
     elif risk_level is RiskLevel.medium:
         slot = ActionSlot.monitor
@@ -269,8 +272,8 @@ def evaluate(
         action_description=spec.description,
         risk_level=risk_level,
         risk_score=risk_score,
-        expected_daily_loss_usd=expected_loss,
-        action_cost_usd=cost,
+        expected_daily_loss=expected_loss,
+        action_cost=cost,
         reason=reason,
         requires_approval=spec.requires_approval,
         inputs={

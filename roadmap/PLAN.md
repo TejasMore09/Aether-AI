@@ -7,13 +7,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ---
 
-## ▶ CURRENT POSITION: Phase 3, with 6.4 pulled forward
+## ▶ CURRENT POSITION: Phase 3
 
-Phases 0, 1 and 2 complete. **6.4 done out of order** because it closed a live
-hole rather than adding a feature: every password endpoint accepted unlimited
-guesses. Phase 3 not started — sector awareness, where the mechanism is days
-of code and the numbers are the slow part (see DATA.md). 374 tests, none
-skipped.
+Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0 done** — money is
+now the tenant's own currency everywhere. Next is 3.1, the sector taxonomy
+with crosswalks to NIC, NAICS/SIC and NACE. 399 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -121,8 +119,7 @@ Note the honest constraint: sector bands need *real-world truth*. Code here is
 days; defensible numbers are the slow part and need Tejas's domain access.
 Build the mechanism first so numbers can be filled in as they are learned.
 
-- [ ] **3.0** Multi-currency: money stops being USD-by-name. Prerequisite, not
-  polish — an explanation quoting dollars to an Indian SME is unusable (D31)
+- [x] **3.0** Multi-currency: money stops being USD-by-name (D31, D33)
 - [ ] **3.1** A coarse Aether sector taxonomy (tens, not hundreds) with a crosswalk
   to NIC (India), NAICS/SIC (US) and NACE (EU). Serving three regions means none
   of the three can be adopted wholesale (D31)

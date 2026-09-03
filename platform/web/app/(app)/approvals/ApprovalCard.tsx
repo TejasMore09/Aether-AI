@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { Inset, RiskPill, usd, whenUTC } from '@/components/forge'
+import { Inset, RiskPill, money, usd, whenUTC } from '@/components/forge'
 import { resolveApproval } from '@/lib/actions'
 import type { Approval } from '@/lib/api'
 
@@ -99,7 +99,7 @@ export function ApprovalCard({
           className="text-[34px] font-bold leading-none tracking-[-0.035em]"
           style={{ color: 'var(--color-risk)' }}
         >
-          {usd(approval.expected_loss_usd)}
+          {money(approval.expected_loss, approval.currency)}
         </span>
         <span className="text-[13px]" style={{ color: 'var(--color-ink-faint)' }}>
           at risk each day · {approval.domain} · gated {whenUTC(approval.created_at)}

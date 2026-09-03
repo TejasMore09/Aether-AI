@@ -106,7 +106,7 @@ def test_the_combined_figure_is_the_findings_own_number():
     finding = next(f for f in for_business(state) if "receivables" in f.domains)
     block = context_block(state, "receivables", tuple(for_business(state)))
 
-    assert f"${finding.daily_usd:,.2f}" in block
+    assert f"${finding.daily_amount:,.2f}" in block
 
 
 # ── The connection is actually surfaced ───────────────────────────────────────

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from aether.core import money
 from aether.core.db import tenant_session
 from aether.core.models import AuditLog, Observation, PendingApproval, PolicyConfig
 from aether.domains.pack import get_pack
@@ -124,7 +125,10 @@ def evaluate_domain(
         params = PolicyParams.for_pack(pack, cfg.params if cfg else None)
 
         assert drift_fraction is not None and performance is not None
-        decision = evaluate(drift_fraction, performance, params, pack=pack, values=metric_values)
+        currency = money.for_tenant(tenant_id, db)
+        decision = evaluate(
+            drift_fraction, performance, params, pack=pack, values=metric_values, currency=currency
+        )
         result = decision.as_dict()
 
         approval_id = None
@@ -135,7 +139,8 @@ def evaluate_domain(
                 action=decision.action,
                 reason=decision.reason,
                 risk_level=decision.risk_level.value,
-                expected_loss_usd=decision.expected_daily_loss_usd,
+                expected_loss=decision.expected_daily_loss,
+                currency=currency,
             )
             db.add(approval)
             db.flush()

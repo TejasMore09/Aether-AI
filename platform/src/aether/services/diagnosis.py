@@ -14,6 +14,7 @@ import uuid
 
 from sqlalchemy import select
 
+from aether.core import money
 from aether.core.db import tenant_session
 from aether.core.models import Observation, PendingApproval, PolicyConfig
 from aether.domains.pack import get_pack
@@ -50,7 +51,8 @@ def _fallback_text(approval: PendingApproval, observations: list[Observation]) -
         f"{trend}"
         f"The decision engine flagged **{approval.action}** for domain "
         f"`{approval.domain}` at **{approval.risk_level}** risk. "
-        f"Estimated exposure if unaddressed: **${approval.expected_loss_usd:,.2f}/day**.\n\n"
+        f"Estimated exposure if unaddressed: "
+        f"**{money.per_day(approval.expected_loss, approval.currency)}**.\n\n"
         f"Engine reasoning: {approval.reason}\n\n"
         f"Before deciding, verify that recent telemetry is trustworthy and that the "
         f"degradation is not caused by a data pipeline fault."
@@ -193,11 +195,11 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
             + memory_context
             + f"Domain: {approval.domain}\n"
             f"Pending decision: {approval.action} | risk {approval.risk_level} | "
-            f"estimated exposure ${approval.expected_loss_usd:,.2f}/day\n"
+            f"estimated exposure {money.per_day(approval.expected_loss, approval.currency)}\n"
             f"Engine reasoning: {approval.reason}\n\n"
             f"Policy thresholds: health floor {params.perf_threshold}, "
             f"drift threshold {params.drift_threshold}, "
-            f"cost to act ${params.intervention_cost_usd:,.0f}\n\n"
+            f"cost to act {money.fmt(params.intervention_cost, approval.currency, decimals=0)}\n\n"
             f"Recent readings (newest first):\n" + "\n".join(obs_lines)
         )
 

@@ -195,9 +195,44 @@ export function ago(iso: string | null): string {
   return `${Math.round(hours / 24)}d ago`
 }
 
+/**
+ * Money, in the currency the business actually uses.
+ *
+ * `Intl.NumberFormat` already knows every rule this needs, including that an
+ * Indian reader writes ₹1,50,000 rather than ₹150,000 — so the locale follows
+ * the currency instead of being pinned to en-US, which is what made every
+ * figure here a dollar amount regardless of who was reading it.
+ *
+ * Nothing converts. The amount arrives in the tenant's own currency and is
+ * only being written down; see platform/src/aether/core/money.py for why an
+ * FX rate is a liability rather than a feature.
+ */
+const LOCALE: Record<string, string> = {
+  INR: 'en-IN', // lakh and crore grouping
+  USD: 'en-US',
+  EUR: 'en-IE',
+  GBP: 'en-GB',
+}
+
+export function money(value: number, currency = 'USD', decimals = 2): string {
+  const code = (currency || 'USD').toUpperCase()
+  try {
+    return new Intl.NumberFormat(LOCALE[code] ?? 'en-US', {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value)
+  } catch {
+    // An unknown code should cost a symbol, never a rendered page.
+    return `${value.toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })} ${code}`
+  }
+}
+
+/** Platform spend, which genuinely is billed to us in dollars. */
 export function usd(value: number, decimals = 2): string {
-  return `$${value.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })}`
+  return money(value, 'USD', decimals)
 }

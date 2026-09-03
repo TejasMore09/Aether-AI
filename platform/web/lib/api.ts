@@ -117,7 +117,8 @@ export type Approval = {
   action: string
   reason: string
   risk_level: 'LOW' | 'MEDIUM' | 'HIGH'
-  expected_loss_usd: number
+  expected_loss: number
+  currency: string
   diagnosis: string | null
   diagnosis_source: 'llm' | 'fallback' | null
 }
@@ -197,9 +198,10 @@ export type CrossDomainFinding = {
   guidance: string
   lag_note: string
   readings: Record<string, number>
-  daily_usd: number
+  daily_amount: number
+  currency: string
   exposure_basis: string
-  per_domain: { domain: string; daily_usd: number; basis: string }[]
+  per_domain: { domain: string; daily_amount: number; basis: string }[]
   severity: number
   corroborated: boolean
   corroborated_by: string[]

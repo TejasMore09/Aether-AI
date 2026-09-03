@@ -14,7 +14,7 @@ def test_healthy_system_no_action():
     assert d.slot is ActionSlot.none
     assert d.action == "NO_ACTION"
     assert d.risk_level is RiskLevel.low
-    assert d.expected_daily_loss_usd == 0
+    assert d.expected_daily_loss == 0
     assert not d.requires_approval
 
 
@@ -29,11 +29,11 @@ def test_high_risk_expensive_degradation_intervenes_with_approval():
     assert d.slot is ActionSlot.intervene
     assert d.risk_level is RiskLevel.high
     assert d.requires_approval
-    assert d.expected_daily_loss_usd > d.action_cost_usd
+    assert d.expected_daily_loss > d.action_cost
 
 
 def test_high_risk_cheap_impact_investigates_instead_of_acting():
-    params = PolicyParams(impact_per_error_usd=0.01, daily_decision_volume=10)
+    params = PolicyParams(impact_per_error=0.01, daily_decision_volume=10)
     d = evaluate(drift_fraction=0.9, performance=0.4, params=params)
     assert d.risk_level is RiskLevel.high
     assert d.slot is ActionSlot.investigate
@@ -49,8 +49,8 @@ def test_tenant_policy_overrides_change_the_decision():
 
 
 def test_params_from_dict_ignores_unknown_keys():
-    p = PolicyParams.from_dict({"intervention_cost_usd": 500, "not_a_field": 1})
-    assert p.intervention_cost_usd == 500
+    p = PolicyParams.from_dict({"intervention_cost": 500, "not_a_field": 1})
+    assert p.intervention_cost == 500
     assert p.perf_threshold == 0.85  # default preserved
 
 

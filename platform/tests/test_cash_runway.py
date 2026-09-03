@@ -150,9 +150,9 @@ def test_uncovered_payroll_escalates_even_though_acting_does_not_pay_back():
     business with three weeks of payroll in the bank does not need a review.
     """
     decision = decide(PAYROLL_AT_RISK)
-    horizon = decision.expected_daily_loss_usd * PACK.economics.payback_days
+    horizon = decision.expected_daily_loss * PACK.economics.payback_days
 
-    assert horizon < PACK.economics.intervention_cost_usd, "the payback test should fail here"
+    assert horizon < PACK.economics.intervention_cost, "the payback test should fail here"
     assert decision.slot is ActionSlot.intervene, "and must be bypassed anyway"
     assert "not a cost-benefit decision" in decision.reason
     assert "Payroll covered" in decision.reason
@@ -185,7 +185,7 @@ def test_the_shortfall_is_derived_not_reported():
 
 
 def test_full_cover_carries_no_daily_loss():
-    assert decide(COMFORTABLE).expected_daily_loss_usd == 0.0
+    assert decide(COMFORTABLE).expected_daily_loss == 0.0
 
 
 def test_the_loss_tracks_the_gap_between_obligations_and_cash():
@@ -194,7 +194,7 @@ def test_the_loss_tracks_the_gap_between_obligations_and_cash():
     cover = values["cash_balance"]
     expected = (exposure - cover) * PACK.economics.daily_rate
 
-    assert decide(values).expected_daily_loss_usd == pytest.approx(expected, rel=1e-6)
+    assert decide(values).expected_daily_loss == pytest.approx(expected, rel=1e-6)
 
 
 def test_the_explanation_uses_the_domains_own_words_not_receivables():
@@ -210,7 +210,7 @@ def test_a_period_with_no_obligations_is_not_a_crisis():
     """Dividing by a zero exposure must not invent a loss."""
     values = dict(COMFORTABLE, committed_outflows_30d=0.0, cash_balance=0.0)
     decision = decide(values)
-    assert decision.expected_daily_loss_usd == 0.0
+    assert decision.expected_daily_loss == 0.0
     assert "no obligations reported" in decision.reason or decision.slot is ActionSlot.none
 
 
