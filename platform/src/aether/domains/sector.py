@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 
 import yaml
 
+from aether.domains import reference
+
 _SECTORS_FILE = pathlib.Path(__file__).parent / "sectors.yaml"
 
 # A tenant that has not chosen. Not a sector in the taxonomy sense — it is the
@@ -65,8 +67,44 @@ class Sector:
 
     @property
     def has_bands(self) -> bool:
-        """Whether a reference band can honestly be seeded for this sector."""
-        return self.bands == "available" and bool(self.damodaran)
+        """Whether a reference band can honestly be seeded for this sector.
+
+        Two ways to fail, and both must count. The file may declare the data
+        unusable — a curated judgement, as for advertising and banking. Or the
+        industries may name real figures that disagree too much for their
+        middle to describe any of them, which is computed rather than
+        declared: see `reference._represents`.
+
+        Checked against the data rather than trusted from the file, because a
+        sector that says it has bands and then produces none is the exact
+        shape of a promise a customer would rely on.
+        """
+        if self.bands != "available" or not self.damodaran:
+            return False
+        return any(
+            reference.for_industries(self.damodaran, column) is not None
+            for column in reference.COLUMNS
+        )
+
+    @property
+    def no_bands_reason(self) -> str:
+        """Why this sector has no reference band, in a sentence to show.
+
+        The declared reason where there is one, and otherwise the computed
+        one — which is worth spelling out, because "the industries we would
+        average disagree" is a more useful thing to read than silence.
+        """
+        if self.has_bands:
+            return ""
+        if self.bands_note:
+            return " ".join(self.bands_note.split())
+        if not self.damodaran:
+            return "No reference industries are mapped to this sector."
+        return (
+            f"The industries this sector covers do not agree closely enough for an "
+            f"average to describe any of them: {', '.join(self.damodaran)}. "
+            f"This business is judged against the pack's general bands instead."
+        )
 
     def as_dict(self) -> dict:
         payload = {
@@ -75,8 +113,8 @@ class Sector:
             "summary": self.summary,
             "has_bands": self.has_bands,
         }
-        if self.bands_note:
-            payload["bands_note"] = " ".join(self.bands_note.split())
+        if reason := self.no_bands_reason:
+            payload["bands_note"] = reason
         return payload
 
 

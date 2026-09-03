@@ -800,3 +800,57 @@ safe because it is convenient, and the distinction matters because
 `PUBLIC_PATHS` is the kind of list that grows by habit. Anything added there
 must be checked to be genuinely tenant-free first — the comment in `proxy.ts`
 says so at the point where somebody would be tempted.
+
+---
+
+## D43 — A sector's industries must agree before their median is treated as evidence
+
+Found while building 3.4, after 3.2 had already shipped the bug.
+
+The construction sector named Engineering/Construction and Homebuilding. The
+first bills clients and waits **100 days** holding almost no stock; the second
+sells houses for cash in **7 days** and holds **226 days** of land. Their
+median is 54 days, which describes neither, and Aether was presenting it as
+what is normal in construction.
+
+**The median does not protect against this.** It defends against one distorted
+industry among several — advertising among a group — but with two values the
+median sits exactly between them, and between two opposites is nowhere.
+Averaging opposites is a different failure and needed a different guard.
+
+`reference._represents` requires at least half a group's values to sit within
+25% of their median. That admits a group where most agree and one differs (three
+building-supply industries, where a retail outlier is correctly ignored) and
+refuses one where nothing is near the middle. Three sectors lost their
+receivables band as a result — construction, wholesale and healthcare — and
+each now says why.
+
+The general lesson, worth carrying into Phase 5: **a sector is a claim that its
+industries are alike.** Where the data says they are not, the sector is drawn
+wrongly or the evidence does not reach it, and either way an average is the
+wrong answer.
+
+---
+
+## D44 — Sector knowledge is looked up, not searched, and the corpus says so
+
+A tenant has exactly one sector. Asking a vector index which sector they are in
+returns the only candidate and calls it a match — theatre, and the kind that
+demos well.
+
+Similarity earns its place where there are many memories and the question is
+which few are relevant. Where the answer is "the one", `store.of_kind` is the
+honest mechanism.
+
+It is still written into the knowledge base rather than computed on demand,
+for three reasons: it is genuinely part of what the agent knows, it must show
+up in the chunk counts the fleet view reports (2.6), and the corpus is where
+real industry documents land once Phase 7 brings document ingest. At that
+point similarity starts doing real work here, and this stays correct.
+
+**Every sentence is derived from the committed reference table.** Nothing is
+written from general knowledge, however plausible. "Construction businesses
+have long payment cycles because of retentions" is probably true and cannot be
+cited, and a knowledge base mixing citable figures with confident-sounding
+invention is worse than one with fewer facts — nothing downstream can tell
+which is which.

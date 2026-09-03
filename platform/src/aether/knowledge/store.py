@@ -230,6 +230,46 @@ def recall(
     ]
 
 
+def of_kind(tenant_id: uuid.UUID, kind: str, *, limit: int = 20) -> list[Memory]:
+    """This tenant's memories of one kind, newest first, without a query.
+
+    Not everything worth remembering is worth *searching* for. A tenant has
+    exactly one sector, so asking a vector index which sector they are in
+    would be theatre: it would return the only candidate and call it a match.
+    Similarity search earns its place where there are many memories and the
+    question is which few are relevant; where the answer is "the one", a
+    lookup is the honest mechanism.
+
+    Scoped by row-level security like every other read here, so the tenant id
+    is what the statement can reach rather than a filter over more.
+    """
+    with tenant_session(tenant_id) as db:
+        rows = (
+            db.execute(
+                text(
+                    "SELECT id, kind, body, occurred_at, domain, source_id, meta "
+                    "FROM knowledge_chunks WHERE kind = :kind "
+                    "ORDER BY occurred_at DESC LIMIT :limit"
+                ),
+                {"kind": kind, "limit": limit},
+            )
+            .mappings()
+            .all()
+        )
+    return [
+        Memory(
+            id=r["id"],
+            kind=r["kind"],
+            body=r["body"],
+            occurred_at=r["occurred_at"],
+            domain=r["domain"],
+            source_id=r["source_id"],
+            meta=r["meta"],
+        )
+        for r in rows
+    ]
+
+
 def stats(tenant_id: uuid.UUID) -> dict:
     """How much this agent remembers, and how recently.
 

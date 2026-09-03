@@ -34,6 +34,7 @@ from aether.core.tenancy import authenticated, require_role
 from aether.core.throttle import client_ip, guard, refused, succeeded
 from aether.domains import preview
 from aether.domains import sector as sector_taxonomy
+from aether.knowledge import sector_corpus
 
 app = FastAPI(title="Aether Control Plane", version=__version__)
 
@@ -123,7 +124,12 @@ def signup(body: SignupRequest) -> TokenResponse:
         db.flush()
         db.add(Membership(user_id=user.id, tenant_id=tenant.id, role=Role.owner))
         token = issue_token(user.id, user.email, tenant.id, Role.owner)
-        return TokenResponse(access_token=token, tenant_id=tenant.id, role=Role.owner)
+        tenant_id, chosen = tenant.id, sector_taxonomy.get(tenant.sector)
+
+    # The agent should know what kind of business it is looking after from its
+    # first reading, not from whenever someone next edits a setting.
+    sector_corpus.index_sector(tenant_id, chosen)
+    return TokenResponse(access_token=token, tenant_id=tenant_id, role=Role.owner)
 
 
 class LoginRequest(BaseModel):
@@ -283,6 +289,12 @@ def update_tenant(
             sector=chosen.key,
             sector_label=chosen.label,
         )
+
+    if "sector" in changed:
+        # Replaces rather than adds: an agent remembering it was both a
+        # retailer and a builders' merchant has two normals and no way to
+        # choose. index_sector drops the old memory first.
+        sector_corpus.index_sector(principal.tenant_id, chosen)
 
     if changed:
         with tenant_session(principal.tenant_id) as db:

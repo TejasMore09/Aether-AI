@@ -69,8 +69,8 @@ def test_choosing_retail_says_it_means_a_stricter_standard():
     assert summary["changes_nothing"] is False
 
 
-def test_choosing_construction_says_it_buys_room():
-    summary = preview.summary_for(sector.get("construction"))
+def test_choosing_a_trade_supplier_says_it_buys_room():
+    summary = preview.summary_for(sector.get("building_supplies"))
     dso = next(c for c in summary["changes"] if c["metric"] == "dso_days")
     assert dso["stricter"] is False
     assert dso["sector_good"] > dso["pack_good"]
@@ -127,12 +127,12 @@ def test_the_catalogue_carries_the_effects_so_a_signup_form_can_show_them(client
 def test_a_business_can_change_its_mind(client):
     _, auth = new_org(client, sector="retail")
 
-    updated = client.patch("/v1/tenant", json={"sector": "construction"}, headers=auth)
+    updated = client.patch("/v1/tenant", json={"sector": "building_supplies"}, headers=auth)
     assert updated.status_code == 200, updated.text
-    assert updated.json()["sector"] == "construction"
-    assert updated.json()["sector_label"] == "Construction & trades"
+    assert updated.json()["sector"] == "building_supplies"
+    assert updated.json()["sector_label"] == "Building materials & supplies"
 
-    assert client.get("/v1/tenant", headers=auth).json()["sector"] == "construction"
+    assert client.get("/v1/tenant", headers=auth).json()["sector"] == "building_supplies"
 
 
 def test_changing_one_field_does_not_reset_the_other(client):
@@ -150,13 +150,13 @@ def test_a_sector_change_is_written_to_the_customers_own_audit_log(client):
     """An unexplained shift in verdicts should be traceable to the day someone
     changed this, rather than looking like the agent became erratic."""
     tenant_id, auth = new_org(client, sector="retail")
-    client.patch("/v1/tenant", json={"sector": "construction"}, headers=auth)
+    client.patch("/v1/tenant", json={"sector": "building_supplies"}, headers=auth)
 
     with tenant_session(tenant_id) as db:
         entries = db.scalars(select(AuditLog).where(AuditLog.action == "TENANT_UPDATED")).all()
 
     assert len(entries) == 1
-    assert entries[0].details["sector"] == {"from": "retail", "to": "construction"}
+    assert entries[0].details["sector"] == {"from": "retail", "to": "building_supplies"}
     assert entries[0].domain == "organization", "not a business function, and should not pretend"
 
 
@@ -209,7 +209,7 @@ def test_a_stored_reading_keeps_the_band_it_was_judged_against(client):
     first = ingest_reading(tenant_id, "receivables", reading, source="onboarding-test")
     assert first.accepted
 
-    client.patch("/v1/tenant", json={"sector": "construction"}, headers=auth)
+    client.patch("/v1/tenant", json={"sector": "building_supplies"}, headers=auth)
 
     from aether.core.models import Observation
 
@@ -223,5 +223,5 @@ def test_a_stored_reading_keeps_the_band_it_was_judged_against(client):
     with tenant_session(tenant_id) as db:
         stored = db.get(Observation, second.observation_id)
         band = stored.details["signals"]["per_metric"]["dso_days"]["band"]
-    assert "Construction" in band["basis"]
-    assert second.performance > first.performance, "40 days is easier for a builder than a shop"
+    assert "Building materials" in band["basis"]
+    assert second.performance > first.performance, "40 days is easier for a merchant than a shop"

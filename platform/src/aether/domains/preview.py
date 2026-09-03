@@ -97,11 +97,32 @@ def changes_for(sector: Sector) -> list[BandChange]:
     return out
 
 
+def _nothing_changes_because(sector: Sector) -> str:
+    """Why this sector moves no band, when it moves none.
+
+    Three different reasons, and they are not interchangeable. The data may be
+    unusable for this industry; the industries covered may disagree too much
+    for their middle to describe any of them; or the figures may be perfectly
+    good but describe something Aether does not measure yet. A customer told
+    "no adjustment applies" deserves to know which of those it is, and the
+    third is the least alarming of the three.
+    """
+    if reason := sector.no_bands_reason:
+        return reason
+    return (
+        "Reference figures exist for this industry, but not for anything Aether "
+        "measures today. They will apply as more business functions are covered."
+    )
+
+
 def summary_for(sector: Sector) -> dict:
     """The whole answer for one sector, ready to render."""
     changes = changes_for(sector)
+    payload = sector.as_dict()
+    if not changes:
+        payload["bands_note"] = _nothing_changes_because(sector)
     return {
-        **sector.as_dict(),
+        **payload,
         "changes": [c.as_dict() for c in changes],
         # Said once, here, so every surface that shows a band inherits the
         # caveat rather than each one remembering to add it.

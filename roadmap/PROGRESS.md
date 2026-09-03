@@ -7,6 +7,56 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.4: the agent knows what is normal in its industry
+
+`knowledge/sector_corpus.py`. Each tenant's knowledge base gains a paragraph
+about its industry, written at signup and rewritten when the sector changes.
+
+**It exists mainly to close a gap 3.2 left.** Scoring a retailer against 18
+days rather than 45 changed the verdict and said nothing about it, so an
+explanation would have called 30 days unhealthy against a threshold the
+customer had never been shown — the same failure as quoting the wrong band
+(D14), one layer along. Bands that are not the pack's default now say where
+they came from, and the industry paragraph reaches the prompt.
+
+**Every sentence is derived from the committed reference table** (D44).
+Nothing is written from general knowledge, however plausible it would sound. A
+knowledge base mixing citable figures with confident-sounding invention is
+worse than one with fewer facts, because nothing downstream can tell which is
+which.
+
+**It is a lookup, not a search, and the module says so.** A tenant has one
+sector; asking a vector index which one would return the only candidate and
+call it a match. It still lives in the knowledge base — it is genuinely part
+of what the agent knows, the fleet's chunk counts must see it, and it is where
+real industry documents land in Phase 7.
+
+## The bug this found in 3.2
+
+Construction named Engineering/Construction and Homebuilding. The first bills
+clients and waits **100 days** holding no stock; the second sells houses for
+cash in **7 days** and holds **226 days** of land. Their median was 54 days,
+described neither, and was being shipped as what is normal in construction.
+
+The median defends against one distorted industry among several. It does not
+defend against averaging opposites: with two values it sits exactly between
+them, and between two opposites is nowhere. `reference._represents` now
+requires half a group to sit within 25% of its median (D43). Three sectors
+lost their receivables band — construction, wholesale and healthcare — and each
+now says why, as do the two whose data was already known unusable.
+
+`has_bands` was also lying: it read the YAML rather than the data, so a sector
+could claim a band and produce none. It now checks.
+
+**Known and not fixed:** two fixture errors appeared once under a full suite
+run and did not reproduce. No error text was captured, so nothing has been
+diagnosed and nothing has been changed on a guess. Recorded against 6.9, which
+is where connection-pool sizing belongs.
+
+478 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.3: choosing a sector, and being told what it does
 
 `domains/preview.py`, `PATCH /v1/tenant`, a signup field and a settings page.

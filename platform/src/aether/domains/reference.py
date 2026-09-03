@@ -102,13 +102,52 @@ def _median(values: list[float]) -> float:
     return (ordered[middle - 1] + ordered[middle]) / 2
 
 
-def for_industries(names: tuple[str, ...] | list[str], column: str) -> float | None:
-    """The reference figure for a group of industries, or None if none have it.
+# How far a value may sit from the median and still be described by it, and
+# how much of the group must be that close. See `for_industries`.
+_AGREEMENT_TOLERANCE = 0.25
 
-    The median, for the reasons in the module docstring. Returns None rather
-    than a default so a caller can tell "no evidence" from "the evidence says
-    zero" — those are different situations and only one of them should reach a
-    customer as a band.
+
+def _represents(values: list[float]) -> bool:
+    """Whether the median actually describes this group, or merely sits in it.
+
+    Found the hard way. The construction sector names Engineering/Construction
+    and Homebuilding, whose collection periods are 100 and 7 days — a
+    contractor bills clients and waits, a homebuilder sells houses for cash.
+    Their median is 54 days, which describes neither of them, and Aether
+    shipped it as "what is normal in construction".
+
+    Averaging opposites is a different failure from a single distorted
+    industry, and the median does not protect against it: with two values the
+    median is exactly between them, and between two opposites is nowhere. So
+    the group has to agree before its middle is treated as evidence.
+
+    The rule is that at least half the values sit within a quarter of the
+    median. That admits a group where most agree and one differs — three
+    building-supply industries where a retail outlier is correctly ignored —
+    and refuses one where nothing is near the middle.
+    """
+    if len(values) < 2:
+        return True
+
+    middle = _median(values)
+    if middle == 0:
+        return all(v == 0 for v in values)
+
+    close = sum(1 for v in values if abs(v - middle) / abs(middle) <= _AGREEMENT_TOLERANCE)
+    return close * 2 >= len(values)
+
+
+def for_industries(names: tuple[str, ...] | list[str], column: str) -> float | None:
+    """The reference figure for a group of industries, or None if there is none.
+
+    The median, for the reasons in the module docstring — and only when the
+    industries agree closely enough for a middle to mean anything.
+
+    None rather than a default, so a caller can tell "no evidence" from "the
+    evidence says zero". Those are different situations and only one of them
+    should ever reach a customer as a band.
     """
     values = [v for name in names if (v := figure(name, column)) is not None]
-    return _median(values) if values else None
+    if not values or not _represents(values):
+        return None
+    return _median(values)

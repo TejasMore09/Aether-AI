@@ -18,6 +18,7 @@ from aether.core import money
 from aether.core.db import tenant_session
 from aether.core.models import Observation, PendingApproval, PolicyConfig
 from aether.domains.pack import get_pack
+from aether.knowledge import sector_corpus
 from aether.llm import gateway
 from aether.policy.decision_engine import PolicyParams
 
@@ -91,11 +92,16 @@ def _band_phrases(pack, observations: list[Observation]) -> list[str]:
                 continue
             origin = ""
         else:
-            origin = (
-                f" (this client's own normal, from {band.get('readings', 0)} readings)"
-                if band.get("source") == "tenant"
-                else ""
-            )
+            # Every band that is not the pack's published one says where it
+            # came from. Phase 3.2 started scoring a retailer against 18 days
+            # instead of 45 and this said nothing about it, so an explanation
+            # would have called 30 days unhealthy against a threshold the
+            # customer had never been shown — the same failure as quoting the
+            # wrong band outright, one layer along.
+            origin = {
+                "tenant": f" (this client's own normal, from {band.get('readings', 0)} readings)",
+                "sector": " (normal for this industry, not the general default)",
+            }.get(band.get("source", ""), "")
         direction = "below" if m.healthy_max is not None else "above"
         phrases.append(f"{m.label} healthy {direction} {good:g}{unit}{origin}")
     return phrases
@@ -162,6 +168,11 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
                 f"Never do: {'; '.join(pack.narrative.avoid)}\n\n"
             )
 
+        # What is normal in this business's industry. Lets an explanation say
+        # "50 days is ordinary for a builders' merchant" rather than quoting a
+        # threshold the reader has no way to judge.
+        industry_context = sector_corpus.context_line(tenant_id)
+
         # The whole business, not just this domain. Wrapped because a
         # diagnosis that explains one domain well beats no diagnosis at
         # all because the cross-domain layer had a bad day.
@@ -189,6 +200,7 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
 
         user_prompt = (
             context
+            + industry_context
             + business_instructions
             + memory_instructions
             + business_context

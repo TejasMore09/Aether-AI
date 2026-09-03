@@ -37,7 +37,7 @@ def test_two_businesses_reporting_the_same_number_get_different_verdicts():
     values = {"dso_days": 50.0, "overdue_ratio": 0.10, "ar_total": 200_000.0}
 
     retail, _ = derive_performance(PACK, values, [], sector.get("retail"))
-    construction, _ = derive_performance(PACK, values, [], sector.get("construction"))
+    construction, _ = derive_performance(PACK, values, [], sector.get("building_supplies"))
 
     assert retail < construction, "50 days should look worse for a shop than for a builder"
     assert construction - retail > 0.15, "the difference should be worth having, not noise"
@@ -47,8 +47,8 @@ def test_the_ordering_across_sectors_matches_how_those_businesses_actually_work(
     """The ordering is the part that transfers from public-company data to an
     SME; the levels are not. If the ordering were wrong, nothing here would be
     worth keeping."""
-    dso = {key: band_for(key).good for key in ("retail", "food_service", "construction")}
-    assert dso["retail"] < dso["food_service"] < dso["construction"]
+    dso = {key: band_for(key).good for key in ("retail", "food_service", "building_supplies")}
+    assert dso["retail"] < dso["food_service"] < dso["building_supplies"]
 
 
 def test_a_sector_band_actually_reaches_the_score():
@@ -127,9 +127,9 @@ def test_retail_is_capped_rather_than_believed_literally():
 
 
 def test_an_uncapped_band_does_not_claim_to_have_been_capped():
-    band = band_for("construction")
+    band = band_for("building_supplies")
     assert "capped" not in band.basis
-    assert "Construction" in band.basis
+    assert "Building materials" in band.basis
 
 
 # ── How the layers compose ────────────────────────────────────────────────────
@@ -141,29 +141,29 @@ def test_once_a_tenant_has_real_history_it_is_their_own_number_that_wins():
     changing the answer and starts only bounding it."""
     history = [58.0, 55.0, 54.0, 56.0, 57.0, 55.0, 53.0, 56.0, 55.0, 54.0]
 
-    theirs = calibrate(DSO, history, PACK, sector.get("construction"))
+    theirs = calibrate(DSO, history, PACK, sector.get("building_supplies"))
     generic = calibrate(DSO, history, PACK, None)
 
     assert theirs.source == "tenant"
     assert theirs.good == generic.good
     # But the provenance still records what it was read against, because that
     # is what a customer asking "compared to what?" is owed.
-    assert "Construction" in theirs.basis
-    assert "Construction" not in generic.basis
+    assert "Building materials" in theirs.basis
+    assert "Building materials" not in generic.basis
 
 
 def test_the_sector_changes_how_far_a_tenants_history_may_move_the_band():
     """Where the sector still bites once history exists: an unusual business
     is clamped, and where the clamp lands depends on the sector's normal.
 
-    A construction firm habitually collecting in 80 days is stretched for
+    A builders' merchant habitually collecting in 80 days is stretched for
     anyone — but the pack's default concedes less ground than construction's
     own normal does, and conceding the wrong amount is how a business either
     gets alarmed at forever or never at all.
     """
     stretched = [80.0, 82.0, 79.0, 81.0, 83.0, 80.0, 78.0, 81.0, 80.0, 82.0]
 
-    theirs = calibrate(DSO, stretched, PACK, sector.get("construction"))
+    theirs = calibrate(DSO, stretched, PACK, sector.get("building_supplies"))
     generic = calibrate(DSO, stretched, PACK, None)
 
     assert theirs.good > generic.good, "their sector should concede room the default does not"
@@ -173,7 +173,7 @@ def test_the_sector_changes_how_far_a_tenants_history_may_move_the_band():
 def test_thin_history_falls_through_to_the_sector_rather_than_the_pack():
     """Under the calibration minimum there is nothing honest to say about this
     tenant — but the sector is still known, and is better than a default."""
-    band = calibrate(DSO, [55.0, 54.0], PACK, sector.get("construction"))
+    band = calibrate(DSO, [55.0, 54.0], PACK, sector.get("building_supplies"))
     assert band.source == "sector"
     assert band.readings == 0
 
@@ -195,8 +195,8 @@ def test_every_band_can_say_where_it_came_from():
     history = [58.0, 55.0, 54.0, 56.0, 57.0, 55.0, 53.0, 56.0, 55.0, 54.0]
     layers = [
         pack_band(DSO),
-        sector_band(DSO, PACK, sector.get("construction")),
-        calibrate(DSO, history, PACK, sector.get("construction")),
+        sector_band(DSO, PACK, sector.get("building_supplies")),
+        calibrate(DSO, history, PACK, sector.get("building_supplies")),
     ]
     assert [b.source for b in layers] == ["pack", "sector", "tenant"]
     for band in layers[1:]:
@@ -296,3 +296,35 @@ def test_two_real_tenants_reporting_identical_numbers_are_scored_differently():
     assert shop.performance < builder.performance, (
         "50 days should score worse for a shop than for a builders' merchant"
     )
+
+
+def test_a_sector_whose_industries_disagree_gets_no_band_at_all():
+    """Found while building 3.4, after 3.2 had already shipped the bug.
+
+    Construction covers Engineering/Construction, which bills clients and
+    waits 100 days holding no stock, and Homebuilding, which sells houses for
+    cash and holds 226 days of land. Their median was 54 days and described
+    neither of them, and Aether was presenting it as what is normal in
+    construction. Averaging opposites is a different failure from a single
+    distorted industry, and the median does not protect against it.
+    """
+    industries = sector.get("construction").damodaran
+    apart = [reference.figure(name, "implied_dso_days") for name in industries]
+    assert max(apart) / min(apart) > 10, "the two really are opposite business models"
+
+    assert band_for("construction") is None
+    assert sector.get("construction").has_bands is False
+
+    values = {"dso_days": 50.0}
+    _, detail = derive_performance(PACK, values, [], sector.get("construction"))
+    assert detail["dso_days"]["band"]["source"] == "pack", "it must fall back, not average"
+
+
+def test_one_industry_out_of_step_is_still_tolerated():
+    """The rule has to refuse disagreement without refusing an outlier, or it
+    would throw away every sector that spans a retail arm."""
+    supplies = sector.get("building_supplies")
+    figures = sorted(reference.figure(n, "implied_dso_days") for n in supplies.damodaran)
+
+    assert figures[0] < 15, "the retail outlier is genuinely far from the others"
+    assert band_for("building_supplies") is not None, "and the sector still has a band"

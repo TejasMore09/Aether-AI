@@ -9,11 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 3
 
-Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.3 done** — a
-business chooses its currency and sector at signup, sees what that changes
-before saving, and two businesses reporting the same number get different
-verdicts. Next is 3.4, sector knowledge in the agent's knowledge base. 463
-tests, none skipped.
+Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.4 done** — a
+business chooses its currency and sector, sees what that changes, gets
+different verdicts from a business in another sector, and its agent knows what
+is normal in its industry. Next is 3.5, sector-specific metrics. 478 tests,
+none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -99,7 +99,8 @@ than left for someone to discover:
 - The store holds only what the system generated about itself — its own
   decisions. A business cannot give its agent their contracts, policies or
   reports. That arrives with document ingest in **7.1/7.2**.
-- It knows nothing about the sector the business is in. That is **3.4**.
+- ~~It knows nothing about the sector the business is in.~~ Done in **3.4**:
+  each agent now holds a paragraph on what is normal in its industry.
 - [ ] **2.7** Hybrid retrieval: keyword search alongside vectors, and a
   reranker. The embedding model reliably answers only "have we seen almost
   exactly this?" (D25), and this is the standard fix for exactly that.
@@ -129,7 +130,8 @@ Build the mechanism first so numbers can be filled in as they are learned.
   allowance so the ordering across sectors transfers and the levels do not (D39)
 - [x] **3.3** Sector chosen at signup and changeable in settings, with the effect on
   bands previewed before saving — including when it is nothing (D41, D42)
-- [ ] **3.4** Sector corpus in the knowledge base — what normal looks like in that industry
+- [x] **3.4** Sector knowledge in the agent's knowledge base, derived entirely from
+  the committed reference table, and reaching the explanation (D43, D44)
 - [ ] **3.5** Sector-specific metrics: a pack may declare metrics that only apply to some sectors
 - [ ] **3.6** Provenance everywhere: every band states whether it came from the pack, the sector, or the tenant's own history
 
@@ -203,7 +205,9 @@ cheap now and painful later.
 - [ ] **6.6** MFA, at least for owners
 - [ ] **6.7** Refresh tokens; 60-minute hard expiry is a support burden at scale
 - [ ] **6.8** GDPR: export and delete, as an obligation not a feature
-- [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence
+- [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence.
+  Two fixture errors appeared once under a full test run (2026-09-03) and did not
+  reproduce; no error text was captured. Worth chasing here rather than guessing
 - [ ] **6.10** Billing and subscription tiers
 
 ---
