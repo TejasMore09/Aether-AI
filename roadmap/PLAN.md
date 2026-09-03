@@ -9,9 +9,10 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 3
 
-Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0 done** — money is
-now the tenant's own currency everywhere. Next is 3.1, the sector taxonomy
-with crosswalks to NIC, NAICS/SIC and NACE. 399 tests, none skipped.
+Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0 and 3.1 done** —
+money is the tenant's own currency, and a business can say what kind of
+business it is. Next is 3.2, layering per-sector bands over pack defaults from
+`reference/`. 429 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -120,9 +121,9 @@ days; defensible numbers are the slow part and need Tejas's domain access.
 Build the mechanism first so numbers can be filled in as they are learned.
 
 - [x] **3.0** Multi-currency: money stops being USD-by-name (D31, D33)
-- [ ] **3.1** A coarse Aether sector taxonomy (tens, not hundreds) with a crosswalk
-  to NIC (India), NAICS/SIC (US) and NACE (EU). Serving three regions means none
-  of the three can be adopted wholesale (D31)
+- [x] **3.1** Sector taxonomy on the tenant: 21 sectors, crosswalked to ISIC (which
+  NIC and NACE share) and NAICS, with ambiguity declared rather than guessed
+  (D35, D36)
 - [ ] **3.2** Packs carry per-sector band overrides layered over their defaults
 - [ ] **3.3** Sector selected during onboarding, changeable, with the effect on bands shown honestly
 - [ ] **3.4** Sector corpus in the knowledge base — what normal looks like in that industry

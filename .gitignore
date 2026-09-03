@@ -2,6 +2,10 @@ venv/
 __pycache__/
 .env
 *.csv
+# except the reference tables, which are the artefact of record: they are
+# what the code reads and what a person reviews when next year's edition
+# lands. A binary .xls diff says "51200 bytes differ" and nothing else.
+!reference/*.csv
 
 # Platform
 platform/.venv/

@@ -7,6 +7,48 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.1: a business can say what kind of business it is
+
+`domains/sectors.yaml`, `domains/sector.py`, migration `0013`. Twenty-one
+sectors, chosen so an owner recognises themselves in one, crosswalked to the
+classifications India, the US and Europe actually use.
+
+**The crosswalk needs two columns, not three.** NIC 2008 is identical to ISIC
+Rev. 4 down to the four-digit class, and NACE Rev. 2 is ISIC with European
+sub-divisions, compatible at two. One list of ISIC divisions therefore serves
+India and Europe; only NAICS needs its own. Checked before building on it
+rather than assumed.
+
+**Granularity is capped by the evidence** (D35). A taxonomy finer than the
+data is false precision: two sectors would look different on screen while
+being seeded from the identical number, and a customer would reasonably read
+that difference as knowledge.
+
+**The validator caught a real ambiguity in the first draft.** ISIC 62 covers
+both software houses and IT services firms. The reference data puts them
+seventeen days apart on DSO, so the split is genuine and the code is
+ambiguous — and loading now fails unless the file declares which sector wins.
+Ambiguity resolves toward the more forgiving band, because a false alarm costs
+more trust than a missed one.
+
+**A sector may have no band and say so** (D36). Financial services carries
+none: banks compute to 0 days, brokerage to 512, non-bank financial services
+to 4,863, and four financial industries have blanks exactly where a
+working-capital figure belongs. It falls back to the pack's general bands with
+a sentence explaining why. A stock brokerage — the vision's own example — is
+precisely the sector no reference data answers for.
+
+**Reference data is now committed as CSV** (D38), with the workbook kept as
+the receipt and `reference/extract.py` keeping them honest. A binary diff says
+"51200 bytes differ" when next January's edition lands. It also removed a
+skipped test: the check that every referenced industry actually exists needed
+`xlrd`, so the one test that catches a typo silently seeding no band was not
+running at all.
+
+429 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.0: money stops being dollars by assumption
 
 Migration `0012`, `core/money.py`. A prerequisite for the rest of Phase 3

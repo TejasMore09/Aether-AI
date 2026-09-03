@@ -647,3 +647,73 @@ later: it is the thing that stops the two being merged again.
 
 The same split runs through both front ends — `money(value, currency)` for the
 customer's money, `usd(value)` for platform spend.
+
+---
+
+## D35 — Aether has its own sector taxonomy, as coarse as the evidence allows
+
+Serving India, the US and Europe (D31) means NIC, NAICS and NACE are all
+first-class, and adopting any one demotes the other two. They are also far
+finer than anything we can justify: NACE has hundreds of classes, NAICS over a
+thousand, and defensible band data exists for roughly ninety industries.
+
+**A taxonomy finer than the evidence is false precision.** Two sectors would
+appear different on screen while being seeded from the identical number, and a
+customer would reasonably read that difference as knowledge. So the rule is:
+split a sector only when there is data showing the split matters. Twenty-one
+sectors today.
+
+The worked example is software versus IT services. The official
+classifications do not separate them — ISIC 62 is both — but the reference
+data puts them seventeen days apart on DSO (about 61 against 78). That gap is
+material for a band, so both exist, and `sectors.yaml` declares which one an
+ambiguous code resolves to. Loading fails if any shared code lacks that
+declaration, so the choice cannot be made by iteration order.
+
+**The crosswalk has two columns, not three.** NIC 2008 is identical to ISIC
+Rev. 4 to four digits; NACE Rev. 2 is ISIC with European sub-divisions,
+compatible at two. One list of ISIC divisions serves India and Europe. Only
+NAICS needs its own.
+
+Ambiguous codes resolve to the *more forgiving* band where there is a choice.
+A business judged slightly generously is a missed alarm; one judged by a
+stricter sector's band is a false alarm, and at this stage a false alarm costs
+more trust than a missed one.
+
+---
+
+## D36 — A sector may say it has no band, and financial services does
+
+`bands: unavailable` is a first-class state, not a gap to fill in later.
+
+Measured on the reference table: banks compute to 0 days, brokerage to 512,
+non-bank financial services to 4,863 — and four financial industries carry
+blanks exactly where a working-capital figure belongs. Reported revenue in
+these businesses is not comparable to what they are owed, so the arithmetic
+that works everywhere else produces nonsense.
+
+Seeding anyway would put a number wrong by a factor of thousands in front of a
+customer. So the sector exists, carries no band, states why in a sentence the
+product can show, and falls back to the pack's general bands.
+
+Note where this bites: a stock brokerage is the vision's own example of a
+sector-aware agent, and it is precisely the sector no reference data answers
+for. Real bands there need real businesses, not a better dataset.
+
+---
+
+## D38 — Reference data is committed as CSV, with the workbook kept as the receipt
+
+The Damodaran workbook is a binary blob. Committed alone, next January's
+edition produces a diff that says "51200 bytes differ" — a band could move
+thirty days and no reviewer would see it.
+
+So `reference/extract.py` converts it to CSV, and the CSV is the artefact of
+record: it is what the code reads, what a person reviews, and what the sector
+crosswalk is tested against. The workbook stays alongside as provenance, and
+the script keeps the two honest.
+
+This also removed a dependency and a skipped test. Reading the workbook needed
+`xlrd`, which was not installed, so the check that every `damodaran:` entry
+actually exists — the one that catches a typo silently seeding no band — was
+skipping. A test that skips on the machine that runs it is not a test.

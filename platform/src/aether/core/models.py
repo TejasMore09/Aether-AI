@@ -55,6 +55,10 @@ class Tenant(Base):
     # see core/money.py for why an FX rate is a liability rather than a
     # feature here.
     currency: Mapped[str] = mapped_column(String(3), default="USD")
+    # A key from domains/sectors.yaml. Text rather than an enum so adding a
+    # sector is a pull request against a readable file, not a migration every
+    # deployment must apply in lockstep.
+    sector: Mapped[str] = mapped_column(String(40), default="other")
 
 
 class User(Base):

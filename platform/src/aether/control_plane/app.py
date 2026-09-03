@@ -31,6 +31,7 @@ from aether.core.security import (
 )
 from aether.core.tenancy import authenticated, require_role
 from aether.core.throttle import client_ip, guard, refused, succeeded
+from aether.domains import sector as sector_taxonomy
 
 app = FastAPI(title="Aether Control Plane", version=__version__)
 
@@ -64,6 +65,11 @@ class SignupRequest(BaseModel):
     # unrenderable code would surface much later as a failed explanation.
     currency: str = money.DEFAULT
 
+    # What kind of business this is. Optional, because a business that has not
+    # decided must still be able to sign up — 3.3 lets them set it later, and
+    # "other" behaves exactly as never having been asked.
+    sector: str = sector_taxonomy.UNSPECIFIED
+
     @field_validator("currency")
     @classmethod
     def _known_currency(cls, value: str) -> str:
@@ -71,6 +77,17 @@ class SignupRequest(BaseModel):
             return money.currency(value).code
         except money.UnsupportedCurrency as exc:
             raise ValueError(str(exc)) from None
+
+    @field_validator("sector")
+    @classmethod
+    def _known_sector(cls, value: str) -> str:
+        if not sector_taxonomy.is_known(value):
+            raise ValueError(
+                f"{value!r} is not a known sector. "
+                f"GET /v1/sectors lists them, with what each one can and cannot be "
+                f"given a reference band for."
+            )
+        return value
 
 
 class TokenResponse(BaseModel):
@@ -89,7 +106,12 @@ def signup(body: SignupRequest) -> TokenResponse:
         if db.scalar(select(User).where(User.email == body.email.lower())):
             raise HTTPException(status_code=409, detail="Email already registered")
 
-        tenant = Tenant(name=body.org_name, slug=body.org_slug, currency=body.currency)
+        tenant = Tenant(
+            name=body.org_name,
+            slug=body.org_slug,
+            currency=body.currency,
+            sector=body.sector,
+        )
         user = User(
             email=body.email.lower(),
             password_hash=hash_password(body.password),
@@ -156,6 +178,8 @@ class TenantInfo(BaseModel):
     name: str
     slug: str
     currency: str
+    sector: str
+    sector_label: str
 
 
 @app.get("/v1/tenant", response_model=TenantInfo)
@@ -164,9 +188,30 @@ def my_tenant(principal: Principal = Depends(authenticated)) -> TenantInfo:
         tenant = db.get(Tenant, principal.tenant_id)
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
+        chosen = sector_taxonomy.get(tenant.sector)
         return TenantInfo(
-            id=tenant.id, name=tenant.name, slug=tenant.slug, currency=tenant.currency
+            id=tenant.id,
+            name=tenant.name,
+            slug=tenant.slug,
+            currency=tenant.currency,
+            sector=chosen.key,
+            sector_label=chosen.label,
         )
+
+
+@app.get("/v1/sectors")
+def list_sectors() -> list[dict]:
+    """The sectors a business can be, and which have a reference band.
+
+    Unauthenticated on purpose: this is a fixed catalogue with no tenant data
+    in it, and a signup form needs it before anyone has an account.
+
+    `has_bands` is exposed rather than hidden. A sector we cannot seed a band
+    for is not a defect to conceal — it is the difference between a verdict
+    backed by evidence and one backed by a general default, and the customer
+    is entitled to know which they are getting (3.6).
+    """
+    return [s.as_dict() for s in sector_taxonomy.all_sectors()]
 
 
 class AgentCreate(BaseModel):

@@ -1,0 +1,259 @@
+# The sectors Aether recognises, and how the world's classifications map onto
+# them.
+#
+# READ THIS BEFORE EDITING. These are claims about how businesses group, and
+# the grouping decides which reference band a business is judged against. A
+# wrong mapping is not a cosmetic problem: it hands a builders' merchant a
+# software company's expectations.
+#
+# ── Why Aether has its own taxonomy at all ────────────────────────────────────
+#
+# Aether serves India, the US and Europe (D31). Each has its own official
+# classification, and adopting one makes the other two second-class. They are
+# also far too fine: NACE has hundreds of classes, NAICS over a thousand. We
+# have defensible band data for roughly ninety industries and no data at all
+# for most sub-classes, so a taxonomy finer than the evidence is false
+# precision — it would let two sectors differ on screen while being seeded
+# from the identical number.
+#
+# The rule for granularity is therefore: **as coarse as the evidence allows.**
+# Split a sector only when there is real data showing the split matters.
+#
+# ── Why the crosswalk has two columns and not three ───────────────────────────
+#
+# NIC 2008 (India) is identical to ISIC Rev. 4 down to the four-digit class,
+# and NACE Rev. 2 (Europe) is ISIC Rev. 4 with European sub-divisions, fully
+# compatible at the two-digit division level. So one list of ISIC divisions
+# serves both India and Europe. Only NAICS, which is the North American
+# classification and genuinely differently structured, needs its own list.
+#
+# ── Fields ────────────────────────────────────────────────────────────────────
+#
+#   isic       two-digit ISIC Rev. 4 divisions. Matches NIC and NACE.
+#   naics      NAICS codes, two or three digits, prefix-matched.
+#   damodaran  exact industry names from reference/damodaran-working-capital.
+#              A test asserts every one of these exists in that file, so a
+#              typo here fails the build rather than silently seeding nothing.
+#   bands      available | unavailable. See the note on financial services.
+
+version: 1
+
+# ── Codes that genuinely cover more than one sector ──────────────────────────
+#
+# ISIC 62 is "computer programming, consultancy and related activities", which
+# is both a software house and an IT services firm. The official
+# classifications do not separate them and the band data says they differ by
+# 17 days (software ~61, computer services ~78), so the split is real and the
+# code is ambiguous. Both remain sectors; the ambiguity is resolved here
+# rather than by whichever loop iteration happens to run first.
+#
+# Services wins each of these on two grounds: it is the larger SME population,
+# and its band is the more forgiving of the two — so a software company that
+# never corrects the guess is judged a little generously rather than flagged
+# for a DSO that is normal for it. A false alarm costs more trust than a
+# missed one at this stage.
+#
+# Any code claimed by two sectors MUST appear here. A missing entry fails at
+# load rather than silently picking one.
+defaults:
+  isic:
+    "62": it_services
+  naics:
+    "5415": it_services
+
+sectors:
+  # ── Trade ───────────────────────────────────────────────────────────────────
+  - key: retail
+    label: Retail
+    summary: Selling to the public, in a shop or online.
+    isic: ["47"]
+    naics: ["44", "45"]
+    damodaran: ["Retail (General)", "Retail (Special Lines)", "Retail (Grocery and Food)"]
+    bands: available
+
+  - key: wholesale
+    label: Wholesale & distribution
+    summary: Selling on to other businesses, usually on trade credit.
+    isic: ["46"]
+    naics: ["42"]
+    damodaran: ["Retail (Distributors)", "Food Wholesalers"]
+    bands: available
+
+  - key: automotive
+    label: Automotive trade & repair
+    summary: Vehicle sales, parts and garages.
+    isic: ["45"]
+    naics: ["441", "811"]
+    damodaran: ["Retail (Automotive)", "Auto Parts"]
+    bands: available
+
+  # ── Making things ───────────────────────────────────────────────────────────
+  - key: manufacturing
+    label: Manufacturing
+    summary: Making physical goods to order or to stock.
+    isic: ["13", "14", "16", "17", "20", "22", "25", "26", "27", "28", "31", "32"]
+    naics: ["31", "32", "33"]
+    damodaran: ["Machinery", "Electrical Equipment", "Packaging & Container", "Furn/Home Furnishings"]
+    bands: available
+
+  - key: food_production
+    label: Food & drink production
+    summary: Processing and packing food or beverages.
+    isic: ["10", "11"]
+    naics: ["311", "312"]
+    damodaran: ["Food Processing", "Beverage (Soft)", "Beverage (Alcoholic)"]
+    bands: available
+
+  - key: agriculture
+    label: Agriculture
+    summary: Farming, growing and primary production.
+    isic: ["01", "02", "03"]
+    naics: ["11"]
+    damodaran: ["Farming/Agriculture"]
+    bands: available
+
+  # ── Building ────────────────────────────────────────────────────────────────
+  - key: construction
+    label: Construction & trades
+    summary: Building work, civil engineering and the trades.
+    isic: ["41", "42", "43"]
+    naics: ["23"]
+    damodaran: ["Engineering/Construction", "Homebuilding"]
+    bands: available
+
+  - key: building_supplies
+    label: Building materials & supplies
+    summary: Merchants and makers of what the trades install.
+    isic: ["23", "24"]
+    naics: ["327", "444"]
+    damodaran: ["Building Materials", "Construction Supplies", "Retail (Building Supply)"]
+    bands: available
+
+  # ── Services to businesses ──────────────────────────────────────────────────
+  - key: professional_services
+    label: Professional services
+    summary: Consulting, legal, accounting and engineering practices.
+    isic: ["69", "70", "71", "74"]
+    naics: ["54"]
+    damodaran: ["Business & Consumer Services"]
+    bands: available
+
+  - key: marketing
+    label: Marketing & creative agencies
+    summary: Advertising, design and media buying.
+    isic: ["73"]
+    naics: ["5418"]
+    # Advertising's receivables ratio is inflated: agencies report commission
+    # revenue while carrying gross client billings. 3.2 must not seed a band
+    # from it without adjusting, or every agency starts at ~173 days.
+    damodaran: ["Advertising"]
+    bands: available
+
+  - key: software
+    label: Software products
+    summary: Software sold as a product or subscription.
+    isic: ["58", "62"]
+    naics: ["5112", "5415"]
+    damodaran: ["Software (System & Application)", "Software (Internet)"]
+    bands: available
+
+  - key: it_services
+    label: IT & managed services
+    summary: Building and running systems for other businesses.
+    isic: ["62", "63"]
+    naics: ["5415", "5182"]
+    damodaran: ["Computer Services", "Information Services"]
+    bands: available
+
+  # ── Moving and storing ──────────────────────────────────────────────────────
+  - key: logistics
+    label: Logistics & transport
+    summary: Freight, delivery and warehousing.
+    isic: ["49", "50", "51", "52", "53"]
+    naics: ["48", "49"]
+    damodaran: ["Trucking", "Transportation"]
+    bands: available
+
+  # ── Services to people ──────────────────────────────────────────────────────
+  - key: food_service
+    label: Restaurants & food service
+    summary: Serving food and drink, including catering.
+    isic: ["56"]
+    naics: ["722"]
+    damodaran: ["Restaurant/Dining"]
+    bands: available
+
+  - key: hospitality
+    label: Hotels & hospitality
+    summary: Accommodation and the businesses around it.
+    isic: ["55"]
+    naics: ["721"]
+    damodaran: ["Hotel/Gaming"]
+    bands: available
+
+  - key: healthcare
+    label: Healthcare services
+    summary: Clinics, dental practices, diagnostics and care.
+    isic: ["86", "87", "88"]
+    naics: ["62"]
+    damodaran: ["Healthcare Support Services", "Hospitals/Healthcare Facilities"]
+    bands: available
+
+  - key: education
+    label: Education & training
+    summary: Schools, coaching, training and courses.
+    isic: ["85"]
+    naics: ["61"]
+    damodaran: ["Education"]
+    bands: available
+
+  - key: personal_services
+    label: Personal services
+    summary: Salons, gyms, repairs and the local trades that serve households.
+    isic: ["93", "95", "96"]
+    naics: ["71", "812"]
+    damodaran: ["Recreation"]
+    bands: available
+
+  - key: real_estate_services
+    label: Property services
+    summary: Agency, letting and property management — not property investment.
+    isic: ["68"]
+    naics: ["53"]
+    damodaran: ["Real Estate (Operations & Services)"]
+    bands: available
+
+  # ── Where the evidence runs out ─────────────────────────────────────────────
+  - key: financial_services
+    label: Financial services
+    summary: Lending, broking, insurance and investment.
+    isic: ["64", "65", "66"]
+    naics: ["52"]
+    # Deliberately empty. Measured on the reference file: banks compute to 0
+    # days, REITs to 485, brokerage to 512, non-bank financial services to
+    # 4,863 — because reported revenue is not comparable to the receivable in
+    # these industries. A seeded band here would be wrong by a factor of
+    # thousands, so this sector uses the pack default and says so.
+    #
+    # Note where that bites: a stock brokerage is the vision's own example of
+    # a sector-aware agent, and it is exactly the sector no reference data
+    # answers for. Real bands here need real businesses.
+    damodaran: []
+    bands: unavailable
+    bands_note: >-
+      Reference working-capital data does not describe financial businesses:
+      what they report as revenue is not comparable to what they are owed.
+      This sector is judged against the pack's general bands until a real one
+      is known.
+
+  - key: other
+    label: Something else
+    summary: A business that does not sit in any of the above.
+    isic: []
+    naics: []
+    damodaran: []
+    bands: unavailable
+    bands_note: >-
+      No sector was chosen, so no sector-specific band applies. The pack's
+      general bands are used, and this business's own history calibrates them
+      as usual.
