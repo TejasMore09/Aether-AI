@@ -30,6 +30,8 @@ export async function signup(_prev: FormState, form: FormData): Promise<FormStat
     email: str(form, 'email'),
     password: str(form, 'password'),
     display_name: str(form, 'display_name'),
+    currency: str(form, 'currency') || 'USD',
+    sector: str(form, 'sector') || 'other',
   }
   if (!payload.org_name || !payload.org_slug || !payload.email || !payload.password) {
     return { error: 'All fields except your name are required.' }
@@ -52,6 +54,22 @@ export async function signup(_prev: FormState, form: FormData): Promise<FormStat
     email: payload.email,
   })
   redirect('/')
+}
+
+export async function updateBusiness(sector: string, currency: string): Promise<FormState> {
+  const result = await api.control<unknown>('/v1/tenant', {
+    method: 'PATCH',
+    body: JSON.stringify({ sector, currency }),
+  })
+  if (!result.ok) return { error: result.message }
+
+  // Readings already stored keep the band they were judged against, so nothing
+  // historical moves — but every page showing a band or a threshold is now
+  // stale, and a customer who just changed this expects to see it.
+  revalidatePath('/settings')
+  revalidatePath('/domains')
+  revalidatePath('/')
+  return null
 }
 
 export async function login(_prev: FormState, form: FormData): Promise<FormState> {

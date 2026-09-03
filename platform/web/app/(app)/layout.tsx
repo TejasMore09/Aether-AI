@@ -14,6 +14,7 @@ const NAV = [
   { href: '/connections', label: 'Connections' },
   { href: '/activity', label: 'Activity' },
   { href: '/usage', label: 'AI usage' },
+  { href: '/settings', label: 'Settings' },
 ]
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

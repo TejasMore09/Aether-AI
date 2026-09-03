@@ -18,6 +18,7 @@ from aether.core.db import session, tenant_session
 from aether.core.models import (
     AgentInstance,
     AgentKind,
+    AuditLog,
     Membership,
     Role,
     Tenant,
@@ -31,6 +32,7 @@ from aether.core.security import (
 )
 from aether.core.tenancy import authenticated, require_role
 from aether.core.throttle import client_ip, guard, refused, succeeded
+from aether.domains import preview
 from aether.domains import sector as sector_taxonomy
 
 app = FastAPI(title="Aether Control Plane", version=__version__)
@@ -201,17 +203,103 @@ def my_tenant(principal: Principal = Depends(authenticated)) -> TenantInfo:
 
 @app.get("/v1/sectors")
 def list_sectors() -> list[dict]:
-    """The sectors a business can be, and which have a reference band.
+    """The sectors a business can be, and exactly what each one would change.
 
     Unauthenticated on purpose: this is a fixed catalogue with no tenant data
     in it, and a signup form needs it before anyone has an account.
 
-    `has_bands` is exposed rather than hidden. A sector we cannot seed a band
-    for is not a defect to conceal — it is the difference between a verdict
-    backed by evidence and one backed by a general default, and the customer
-    is entitled to know which they are getting (3.6).
+    Each entry carries the bands it moves and the caveat on where those figures
+    came from. A dropdown that silently changes how a business is judged is
+    worse than no dropdown — someone choosing Retail is agreeing to a stricter
+    collection standard than the default, and someone choosing Marketing is
+    getting no adjustment at all. Both are worth knowing while choosing rather
+    than discovering from an alert three weeks later.
     """
-    return [s.as_dict() for s in sector_taxonomy.all_sectors()]
+    return [preview.summary_for(s) for s in sector_taxonomy.all_sectors()]
+
+
+class TenantUpdate(BaseModel):
+    """What a business may change about itself after signing up.
+
+    Both fields are optional: sending one must not silently reset the other.
+    """
+
+    sector: str | None = None
+    currency: str | None = None
+
+    @field_validator("sector")
+    @classmethod
+    def _known_sector(cls, value: str | None) -> str | None:
+        if value is not None and not sector_taxonomy.is_known(value):
+            raise ValueError(f"{value!r} is not a known sector; GET /v1/sectors lists them")
+        return value
+
+    @field_validator("currency")
+    @classmethod
+    def _known_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return money.currency(value).code
+        except money.UnsupportedCurrency as exc:
+            raise ValueError(str(exc)) from None
+
+
+@app.patch("/v1/tenant", response_model=TenantInfo)
+def update_tenant(
+    body: TenantUpdate,
+    principal: Principal = Depends(require_role(Role.owner)),
+) -> TenantInfo:
+    """Change what kind of business this is, or what money it counts in.
+
+    Owner-only, and written to the tenant's own audit log. A sector change
+    moves the bands every future reading is judged against, so an unexplained
+    shift in verdicts should be traceable to the day somebody changed this
+    rather than looking like the agent became erratic.
+
+    Readings already stored keep the band they were scored against. That is
+    deliberate — the same reasoning that stamps currency onto an approval — and
+    it means changing sector never rewrites history, only what happens next.
+    """
+    with session() as db:
+        tenant = db.get(Tenant, principal.tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+
+        changed: dict[str, dict[str, str]] = {}
+        if body.sector is not None and body.sector != tenant.sector:
+            changed["sector"] = {"from": tenant.sector, "to": body.sector}
+            tenant.sector = body.sector
+        if body.currency is not None and body.currency != tenant.currency:
+            changed["currency"] = {"from": tenant.currency, "to": body.currency}
+            tenant.currency = body.currency
+
+        chosen = sector_taxonomy.get(tenant.sector)
+        info = TenantInfo(
+            id=tenant.id,
+            name=tenant.name,
+            slug=tenant.slug,
+            currency=tenant.currency,
+            sector=chosen.key,
+            sector_label=chosen.label,
+        )
+
+    if changed:
+        with tenant_session(principal.tenant_id) as db:
+            db.add(
+                AuditLog(
+                    tenant_id=principal.tenant_id,
+                    # Not a business function, so not a domain. Named rather
+                    # than left blank so it is filterable and obvious.
+                    domain="organization",
+                    action="TENANT_UPDATED",
+                    triggered_by=principal.email,
+                    risk_level="LOW",
+                    details=changed,
+                    status="completed",
+                )
+            )
+    return info
 
 
 class AgentCreate(BaseModel):

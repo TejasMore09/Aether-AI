@@ -101,7 +101,37 @@ export const api = {
 
 // ── Response shapes (mirror the FastAPI models) ──────────────────────────────
 
-export type TenantInfo = { id: string; name: string; slug: string }
+export type TenantInfo = {
+  id: string
+  name: string
+  slug: string
+  currency: string
+  sector: string
+  sector_label: string
+}
+
+export type BandChange = {
+  domain: string
+  domain_label: string
+  metric: string
+  metric_label: string
+  unit: string
+  pack_good: number
+  sector_good: number
+  stricter: boolean
+  basis: string
+}
+
+export type SectorOption = {
+  key: string
+  label: string
+  summary: string
+  has_bands: boolean
+  bands_note?: string
+  changes: BandChange[]
+  source_note: string
+  changes_nothing: boolean
+}
 
 export type AgentInfo = {
   id: string

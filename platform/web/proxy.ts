@@ -17,8 +17,14 @@ import { SESSION_COOKIE, parseSession } from './lib/session'
  *
  * /explore is the public surface — a worked example on mock data, no API calls
  * and no tenant data — so a stranger can judge the product without an account.
+ *
+ * /api/sectors is the sector catalogue the signup form needs before anyone has
+ * an account. It is safe to expose for the same reason /explore is: it holds
+ * no tenant data at all, only what the platform can and cannot judge. Adding a
+ * path here is a decision about disclosure, not convenience — check that the
+ * thing behind it is genuinely tenant-free before extending this list.
  */
-const PUBLIC_PATHS = ['/login', '/signup', '/explore']
+const PUBLIC_PATHS = ['/login', '/signup', '/explore', '/api/sectors']
 
 /**
  * Public *and* pointless once signed in, so a session bounces away from them.

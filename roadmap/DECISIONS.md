@@ -767,3 +767,36 @@ the pack's general bands.
 Two of twenty-one sectors now say they do not know: financial services (D36)
 and marketing. That is not a gap to close by finding a better dataset — both
 need real businesses.
+
+---
+
+## D41 — A sector change moves future readings only, never past ones
+
+Bands are stored on each observation when it is ingested, so changing sector
+does not re-score anything already recorded.
+
+This is deliberate and it is the same reasoning that stamps currency onto an
+approval (D31). Re-scoring history under a new sector would silently rewrite
+verdicts a customer has already seen, possibly acted on, and possibly
+discussed with their accountant. A number in the audit log that changes
+because a dropdown moved is not an audit log.
+
+The consequence is stated on the settings page rather than hidden: readings
+already stored keep the band they were judged against, and only new readings
+change. The change itself is written to the tenant's own audit log, so an
+unexplained shift in verdicts is traceable to the day somebody changed it
+rather than looking like the agent became erratic.
+
+---
+
+## D42 — `/api/sectors` is reachable without a session, and that list is a disclosure decision
+
+The signup form needs the sector catalogue before anyone has an account, so
+the BFF exposes one unauthenticated route and `proxy.ts` lets it through.
+
+That is safe for exactly the reason `/explore` is: the catalogue holds no
+tenant data at all, only what the platform can and cannot judge. It is not
+safe because it is convenient, and the distinction matters because
+`PUBLIC_PATHS` is the kind of list that grows by habit. Anything added there
+must be checked to be genuinely tenant-free first — the comment in `proxy.ts`
+says so at the point where somebody would be tempted.

@@ -95,6 +95,52 @@ export function AuthShell({
   )
 }
 
+export function AuthSelect({
+  label,
+  hint,
+  name,
+  options,
+  defaultValue,
+  onChange,
+}: {
+  label: string
+  hint?: React.ReactNode
+  name: string
+  options: { value: string; label: string }[]
+  defaultValue?: string
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[12.5px] font-medium" style={{ color: 'var(--color-ink-soft)' }}>
+        {label}
+      </span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        onChange={onChange}
+        className="mt-2 w-full rounded-[12px] px-[14px] py-[11px] text-[14.5px] outline-none"
+        style={{
+          background: 'var(--color-ground)',
+          boxShadow: 'var(--press-sm)',
+          color: 'var(--color-ink)',
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {hint ? (
+        <span className="mt-[6px] block text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+          {hint}
+        </span>
+      ) : null}
+    </label>
+  )
+}
+
 export function AuthField({
   label,
   hint,

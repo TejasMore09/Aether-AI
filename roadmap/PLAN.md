@@ -9,10 +9,10 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 3
 
-Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.2 done** — money
-is the tenant's own currency, a business can say what it does, and two
-businesses reporting the same number now get different verdicts. Next is 3.3,
-choosing a sector during onboarding and showing its effect honestly. 449
+Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.3 done** — a
+business chooses its currency and sector at signup, sees what that changes
+before saving, and two businesses reporting the same number get different
+verdicts. Next is 3.4, sector knowledge in the agent's knowledge base. 463
 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
@@ -127,7 +127,8 @@ Build the mechanism first so numbers can be filled in as they are learned.
   (D35, D36)
 - [x] **3.2** Per-sector bands layered over pack defaults, clamped to the pack's
   allowance so the ordering across sectors transfers and the levels do not (D39)
-- [ ] **3.3** Sector selected during onboarding, changeable, with the effect on bands shown honestly
+- [x] **3.3** Sector chosen at signup and changeable in settings, with the effect on
+  bands previewed before saving — including when it is nothing (D41, D42)
 - [ ] **3.4** Sector corpus in the knowledge base — what normal looks like in that industry
 - [ ] **3.5** Sector-specific metrics: a pack may declare metrics that only apply to some sectors
 - [ ] **3.6** Provenance everywhere: every band states whether it came from the pack, the sector, or the tenant's own history

@@ -7,6 +7,47 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.3: choosing a sector, and being told what it does
+
+`domains/preview.py`, `PATCH /v1/tenant`, a signup field and a settings page.
+
+**A dropdown that silently changes how a business is judged is worse than no
+dropdown.** So the catalogue at `/v1/sectors` carries the effect of each
+choice, and both surfaces render it live as someone browses: choosing Retail
+says *DSO healthy below 18 days rather than 45 — stricter than the default*,
+and choosing Construction says *53.8 rather than 45 — more room*.
+
+Two things a vendor would leave out are on the page. That the figures describe
+US public companies and only the ordering transfers, and that for Marketing
+and Financial Services there is **no adjustment at all**, with the measured
+reason. A customer who picks their own industry and gets nothing deserves to
+be told why rather than left assuming it worked.
+
+**Changing your mind never rewrites the past** (D41). Bands are stored on each
+observation at ingestion, so a sector change moves future readings only. The
+settings page says so where someone is about to save, and the change is
+written to the tenant's own audit log — an unexplained shift in verdicts
+should be traceable to the day somebody changed a setting rather than looking
+like the agent became erratic. A test proves a stored reading keeps its
+original band while the next one picks up the new sector.
+
+Verified in the browser rather than assumed: signed up as a builders' merchant
+in rupees, watched the preview switch from 50.3 days to 18 on changing to
+Retail, saved, and confirmed it persisted.
+
+Found while doing it: the BFF's `proxy.ts` was redirecting the catalogue route
+to `/login`, which would have shipped a signup form permanently missing its
+sector field. `/api/sectors` is now explicitly public, with a note at the point
+of temptation that `PUBLIC_PATHS` is a disclosure decision and not a
+convenience (D42).
+
+Partial updates were an obvious trap and are tested: sending only a sector must
+not silently reset the currency.
+
+463 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.2: the same number, two different verdicts
 
 `domains/reference.py`, `sector_band()` in `domains/calibration.py`. The gap
