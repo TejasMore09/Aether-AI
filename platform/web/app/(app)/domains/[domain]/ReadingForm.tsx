@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { submitReading } from '@/lib/actions'
-import type { DomainPack, MetricSpec, QualityIssue } from '@/lib/api'
+import type { DomainPack, MetricSpec, QualityIssue, UsedBand } from '@/lib/api'
 
 /**
  * The reading form is generated from the domain pack, not written per domain:
@@ -17,11 +17,25 @@ import type { DomainPack, MetricSpec, QualityIssue } from '@/lib/api'
  * rejected reading is a fact they need immediately, with the reason.
  */
 
-function hint(metric: MetricSpec): string {
+/**
+ * What "healthy" means for *this* business, not what the pack publishes.
+ *
+ * The form used to print the pack's default beside every field while the cards
+ * above showed the band the engine actually used — 45 days here, 18 there, on
+ * one screen. Whoever typed a figure in would calibrate against the wrong one.
+ *
+ * `band` is what the last reading was judged against, which is the best
+ * available answer to "what will this be measured against" before it is sent.
+ */
+function hint(metric: MetricSpec, band?: UsedBand): string {
   const [min, max] = metric.healthy_range
-  const unit = metric.unit === 'days' ? ' days' : metric.unit === 'ratio' ? '' : ''
-  if (max !== null && max !== undefined) return `healthy below ${max}${unit}`
-  if (min !== null && min !== undefined) return `healthy above ${min}${unit}`
+  const unit = metric.unit === 'days' ? ' days' : ''
+  const where = band
+    ? { pack: '', sector: ' for your industry', tenant: ' for you' }[band.source]
+    : ''
+
+  if (max !== null && max !== undefined) return `healthy below ${band?.good ?? max}${unit}${where}`
+  if (min !== null && min !== undefined) return `healthy above ${band?.good ?? min}${unit}${where}`
   return 'context only'
 }
 
@@ -36,7 +50,15 @@ type Verdict =
   | { kind: 'quarantined'; errors: QualityIssue[] }
   | null
 
-export function ReadingForm({ domain, pack }: { domain: string; pack: DomainPack }) {
+export function ReadingForm({
+  domain,
+  pack,
+  bands = {},
+}: {
+  domain: string
+  pack: DomainPack
+  bands?: Record<string, UsedBand>
+}) {
   const [busy, setBusy] = useState(false)
   const [verdict, setVerdict] = useState<Verdict>(null)
   const reduced = useReducedMotion()
@@ -123,7 +145,7 @@ export function ReadingForm({ domain, pack }: { domain: string; pack: DomainPack
               className="mt-[6px] block text-[11px]"
               style={{ color: 'var(--color-ink-faint)' }}
             >
-              {hint(metric)}
+              {hint(metric, bands[metric.key])}
             </span>
           </label>
         ))}

@@ -917,3 +917,29 @@ and refusing it would turn a fixable mistake into a permanent one.
 This was found as an intermittent test failure and twice written off as
 probable connection-pool pressure. It was a product bug both times. An
 intermittent that is not reproduced is not diagnosed.
+
+---
+
+## D47 — The threshold shown is always the threshold used
+
+A surface that displays a band must display the one the engine scored
+against, never the pack's published default, and must say which of the three
+layers it came from.
+
+This was already true of the diagnosis prompt (fixed in 3.4) and was still
+false on the dashboard, in two places on one screen: a metric card printed
+"healthy below 45 days" beside a figure it had marked unhealthy at 30, and the
+reading form printed 45 beside a card showing 18. Since sector bands landed
+the pack default is frequently *not* the number used, so quoting it is not a
+simplification — it is a contradiction, and the same failure as quoting the
+wrong band in prose (D14).
+
+The band comes from what was stored with the reading, not recomputed. A
+customer asking about a reading from March is asking what we said in March;
+recomputing would answer "what we would say today" and quietly rewrite a
+verdict they may have acted on. Changing sector therefore leaves old readings
+displaying their original band, which is the same guarantee D41 makes.
+
+The general rule, since this has now been fixed three times in three places:
+**any number a customer can compare against a verdict must come from the same
+place the verdict did.**

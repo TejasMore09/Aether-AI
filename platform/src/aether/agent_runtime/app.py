@@ -327,9 +327,32 @@ def list_observations(
                 "status": o.status,
                 "metrics": o.metrics or {},
                 "issues": (o.issues or {}).get("issues", []),
+                # The band each metric was actually judged against, and where
+                # it came from. Without this a dashboard can only show the
+                # pack's published threshold, which since 3.2 is often not the
+                # one used — a customer would read "healthy below 45 days"
+                # beside a figure marked unhealthy at 30. Answering "why is
+                # this amber?" needs the band the engine used, not a default.
+                "bands": _bands_of(o),
             }
             for o in rows
         ]
+
+
+def _bands_of(observation: Observation) -> dict:
+    """Per-metric bands from a stored reading, or {} if none were recorded.
+
+    Read from what was written at ingestion rather than recomputed. A band
+    recomputed now would answer "what would we say today", and the question a
+    customer is asking about a reading from March is "what did you say then".
+    """
+    signals = (observation.details or {}).get("signals") or {}
+    per_metric = signals.get("per_metric") or {}
+    return {
+        key: entry["band"]
+        for key, entry in per_metric.items()
+        if isinstance(entry.get("band"), dict)
+    }
 
 
 # ── Decision loop ─────────────────────────────────────────────────────────────

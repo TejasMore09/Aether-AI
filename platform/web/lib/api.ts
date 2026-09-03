@@ -171,6 +171,23 @@ export type QualityIssue = {
   message: string
 }
 
+/**
+ * The band a metric was actually judged against, and where it came from.
+ *
+ * `source` is the answer to "compared to what?" — the pack's published
+ * default, this business's industry, or their own history. Showing the pack's
+ * threshold when the engine used another one is the same failure as quoting
+ * the wrong band in an explanation: a customer who spots the contradiction is
+ * right to stop trusting the rest of the page.
+ */
+export type UsedBand = {
+  good: number
+  bad: number
+  source: 'pack' | 'sector' | 'tenant'
+  readings: number
+  basis?: string
+}
+
 export type ObservationRow = {
   id: string
   observed_at: string
@@ -180,6 +197,7 @@ export type ObservationRow = {
   status: 'accepted' | 'quarantined'
   metrics: Record<string, number>
   issues: QualityIssue[]
+  bands: Record<string, UsedBand>
 }
 
 export type MetricSpec = {

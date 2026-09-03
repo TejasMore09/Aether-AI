@@ -7,13 +7,13 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ---
 
-## ▶ CURRENT POSITION: Phase 3
+## ▶ CURRENT POSITION: Phase 4
 
-Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.5 done** — a
-business chooses its currency and sector, sees what that changes, gets
-different verdicts from a business in another sector, its agent knows what is
-normal in its industry, and metrics that mean nothing for its kind of business
-are not scored. Next is 3.6, provenance on every band. 493 tests, none skipped.
+Phases 0–3 complete, plus 6.4 pulled forward. Two businesses reporting the same
+number now receive different, defensible verdicts, and every threshold on
+screen says where it came from. Next is Phase 4, forecasting — and note the
+constraint below: 4.6's backtest needs real history, which nothing has yet.
+501 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -113,7 +113,7 @@ So: **structurally complete now, genuinely complete after Phase 7**, with
 
 ---
 
-## Phase 3 — Sector awareness `[ ]` NEXT
+## Phase 3 — Sector awareness `[x]` COMPLETE
 
 Currently a stock brokerage and a bakery receive byte-identical packs. This is
 the specific gap Tejas called out, and there is no hook to hang it on yet.
@@ -134,7 +134,8 @@ Build the mechanism first so numbers can be filled in as they are learned.
   the committed reference table, and reaching the explanation (D43, D44)
 - [x] **3.5** Sector-specific metrics: a metric declares the traits a business must
   have for it to mean anything, and sectors declare their traits (D45)
-- [ ] **3.6** Provenance everywhere: every band states whether it came from the pack, the sector, or the tenant's own history
+- [x] **3.6** Provenance everywhere: the threshold shown is always the threshold
+  used, and says which of the three layers it came from (D47)
 
 **Done when:** two tenants in different sectors reporting identical numbers
 receive different, defensible verdicts — and each can see why.

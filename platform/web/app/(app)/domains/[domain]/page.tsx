@@ -18,6 +18,7 @@ import {
   type AuditEntry,
   type DomainPack,
   type MetricSpec,
+  type UsedBand,
   type ObservationRow,
 } from '@/lib/api'
 
@@ -33,11 +34,41 @@ function fmt(value: number, unit: string): string {
   return String(value)
 }
 
-function breached(metric: MetricSpec, value: number): boolean {
+/**
+ * Was this value outside the band the engine actually used?
+ *
+ * The band, not the pack's published default. Since sector bands landed, the
+ * two are often different — a shop is judged against 18 days where the pack
+ * says 45 — and marking a figure against a threshold that played no part in
+ * the decision is how a page contradicts the verdict printed beside it.
+ */
+function breached(metric: MetricSpec, value: number, band?: UsedBand): boolean {
   const [min, max] = metric.healthy_range
-  if (max !== null && max !== undefined) return value > max
-  if (min !== null && min !== undefined) return value < min
+  const ceiling = band ? band.good : max
+  const floor = band ? band.good : min
+
+  if (max !== null && max !== undefined) return value > (ceiling ?? max)
+  if (min !== null && min !== undefined) return value < (floor ?? min)
   return false
+}
+
+/** Where a threshold came from, in words a customer can act on. */
+function provenance(band: UsedBand | undefined, metric: MetricSpec): string {
+  const [min, max] = metric.healthy_range
+  if (!band) {
+    return max !== null && max !== undefined
+      ? `healthy below ${fmt(max, metric.unit)}`
+      : min !== null && min !== undefined
+        ? `healthy above ${fmt(min, metric.unit)}`
+        : ''
+  }
+  const direction = max !== null && max !== undefined ? 'below' : 'above'
+  const where = {
+    pack: 'the general default',
+    sector: 'normal for your industry',
+    tenant: `your own normal, from ${band.readings} readings`,
+  }[band.source]
+  return `healthy ${direction} ${fmt(band.good, metric.unit)} — ${where}`
 }
 
 export default async function DomainPage({
@@ -127,8 +158,8 @@ export default async function DomainPage({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {reported.map((metric) => {
               const value = latest.metrics[metric.key]
-              const bad = breached(metric, value)
-              const [min, max] = metric.healthy_range
+              const band = latest.bands?.[metric.key]
+              const bad = breached(metric, value, band)
               return (
                 <Bezel key={metric.key} radius={18} pad={4}>
                   <div className="px-5 py-4" title={metric.description}>
@@ -142,12 +173,12 @@ export default async function DomainPage({
                     >
                       {fmt(value, metric.unit)}
                     </div>
-                    <p className="mt-2 text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
-                      {max !== null && max !== undefined
-                        ? `healthy below ${fmt(max, metric.unit)}`
-                        : min !== null && min !== undefined
-                          ? `healthy above ${fmt(min, metric.unit)}`
-                          : ''}
+                    <p
+                      className="mt-2 text-[11.5px]"
+                      style={{ color: 'var(--color-ink-faint)' }}
+                      title={band?.basis ?? undefined}
+                    >
+                      {provenance(band, metric)}
                     </p>
                   </div>
                 </Bezel>
@@ -158,7 +189,7 @@ export default async function DomainPage({
       ) : null}
 
       <div className="mb-9 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        {pack ? <ReadingForm domain={domain} pack={pack} /> : <div />}
+        {pack ? <ReadingForm domain={domain} pack={pack} bands={latest?.bands ?? {}} /> : <div />}
         <MonitoringControls domain={domain} />
       </div>
 

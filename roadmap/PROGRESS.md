@@ -7,6 +7,44 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.6: the threshold shown is the threshold used
+
+Bands now travel out with each stored reading, and every surface that displays
+one shows the band the engine scored against rather than the pack's published
+default — plus which of the three layers it came from.
+
+**The dashboard was contradicting itself, twice on one screen.** A metric card
+printed "healthy below 45 days" beside a figure it had marked unhealthy at 30,
+and the reading form printed 45 beside a card showing 18. Since sector bands
+landed in 3.2 the pack default is frequently not the number used, so quoting
+it is not a simplification but a contradiction — the same failure as quoting
+the wrong band in prose (D14), which had already been fixed in the prompt and
+not here.
+
+The card now reads *30d – healthy below 18d, normal for your industry*, and the
+form beside it agrees. Verified in the browser rather than assumed.
+
+**The band comes from what was stored, never recomputed.** A customer asking
+about a reading from March is asking what we said in March; recomputing would
+answer "what we would say today" and quietly rewrite a verdict they may have
+acted on. Changing sector leaves old readings showing their original band.
+
+Since this is now the third place the same lie has been found and fixed, it is
+written as a rule (D47): **any number a customer can compare against a verdict
+must come from the same place the verdict did.**
+
+Found while verifying: two `uvicorn` processes left running from the 3.3 check
+were still bound to the API ports, so the newly started servers silently failed
+to bind and the old code answered. The "services up" health check passed
+against the stale build. Worth remembering the next time a browser check
+disagrees with the tests.
+
+**Phase 3 is complete.**
+
+501 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.5: a shop is not scored on things shops do not have
 
 A metric now declares the traits a business must have for it to mean anything,
