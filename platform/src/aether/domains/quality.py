@@ -14,6 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aether.domains.sector import Sector
 
 from aether.domains.pack import DomainPack
 
@@ -60,11 +64,11 @@ class QualityReport:
         }
 
 
-def validate_metrics(pack: DomainPack, raw: dict) -> QualityReport:
+def validate_metrics(pack: DomainPack, raw: dict, sector: Sector | None = None) -> QualityReport:
     """Check a metric payload against its pack.
 
     Rules applied, in order of how often they catch real problems:
-      1. required metrics present
+      1. required metrics present, where they apply to this kind of business
       2. values are numbers, not strings or nulls
       3. values inside the metric's declared physical range
       4. unknown keys flagged (a renamed field upstream is a silent killer)
@@ -75,6 +79,12 @@ def validate_metrics(pack: DomainPack, raw: dict) -> QualityReport:
     known = {m.key for m in pack.metrics}
 
     for key in pack.required_metrics:
+        # A metric that does not apply to this business cannot be required of
+        # it. Demanding a shop's top-five customer concentration would reject
+        # every reading they ever send, for a figure that would tell us nothing.
+        spec = pack.metric(key)
+        if spec is not None and not spec.applies_to(sector):
+            continue
         if raw.get(key) is None:
             issues.append(
                 Issue(

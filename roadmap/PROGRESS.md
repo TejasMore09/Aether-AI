@@ -7,6 +7,61 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.5: a shop is not scored on things shops do not have
+
+A metric now declares the traits a business must have for it to mean anything,
+and sectors declare their traits. Neither names the other (D45), because a
+metric listing the fifteen sectors it applies to is a list somebody must
+remember to edit when a sixteenth appears — and forgetting is silent.
+
+**The concrete case, which is why this is not speculative configuration.**
+Top-five customer concentration is a real risk for a wholesaler: one slow
+payer becomes a cash-flow event. For a corner shop with thousands of customers
+it is near zero by arithmetic, and scoring it would award a perfect mark on a
+0.75-weight metric that says nothing about them, pulling their composite *up*.
+Disputed share of the book is the same story — a business paid at the till has
+no book to dispute.
+
+The exclusion reaches four places, and reaching three would have looked like
+it worked: the score, the quality gate (a metric that does not apply cannot be
+*required* either), the catalogue a customer builds an integration against,
+and the diagnosis prompt.
+
+One test was rewritten because it proved nothing: no shipped pack yet requires
+a scoped metric, so the quality-gate check passed through an escape hatch. It
+now builds a pack that does — which is exactly what Phase 5's inventory pack
+will look like.
+
+## The intermittent was a product bug, twice written off
+
+Two fixture errors had appeared under full test runs and been recorded as
+probable connection-pool pressure. They were neither.
+
+The monitor evaluates the latest reading for a domain, ordered by
+`observed_at`. Two readings can share it, and `created_at` ties with it because
+both come from one call to the clock. With nothing left to order by, the
+database returned whichever row it liked. Measured on this machine: two
+readings recorded back to back collided about a quarter of the time, and the
+wrong one was evaluated in half of those — **the same data gated an action or
+did not, roughly one time in eight.**
+
+Migration `0014` adds a monotonic `seq` (D46). `observed_at` is the customer's
+fact about when a reading refers to; `seq` is ours about when we were told,
+and the later arrival wins because it is the later information about that
+moment. Reproduced at 35/40 before and 60/60 after, with a test pinning it and
+three consecutive clean suite runs.
+
+Running the code found a second thing the tests would not have: the app role
+had no privilege on the new sequence, because 0001 granted default privileges
+for tables and there had never been a sequence to cover.
+
+**An intermittent that is not reproduced is not diagnosed.** Recording it
+against a plausible cause twice was the mistake.
+
+493 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.4: the agent knows what is normal in its industry
 
 `knowledge/sector_corpus.py`. Each tenant's knowledge base gains a paragraph

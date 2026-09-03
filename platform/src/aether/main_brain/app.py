@@ -287,7 +287,9 @@ def tenant_observations(
     _gated(principal, tenant_id, "observations")
     with tenant_session(tenant_id) as db:
         rows = db.scalars(
-            select(Observation).order_by(Observation.observed_at.desc()).limit(min(limit, 200))
+            select(Observation)
+            .order_by(Observation.observed_at.desc(), Observation.seq.desc())
+            .limit(min(limit, 200))
         ).all()
         return [
             {

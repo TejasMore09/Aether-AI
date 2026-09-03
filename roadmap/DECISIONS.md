@@ -854,3 +854,66 @@ have long payment cycles because of retentions" is probably true and cannot be
 cited, and a knowledge base mixing citable figures with confident-sounding
 invention is worse than one with fewer facts — nothing downstream can tell
 which is which.
+
+---
+
+## D45 — Metrics scope by sector *traits*, not by lists of sectors
+
+A metric declares what a business must be like for the metric to mean
+anything: `requires_traits: [invoices_customers]`. Sectors declare what they
+are like. Neither names the other.
+
+The alternative — a metric listing the fifteen sectors it applies to — has a
+silent failure mode. Adding a sixteenth sector means editing every such list,
+and forgetting means the metric quietly stops applying to a business it should
+cover, with nothing to notice. A sector declaring its own traits is checked at
+load: omitting `traits` is a startup error, not a default.
+
+Both sides are validated. An unknown trait on a sector or on a metric fails
+when the file loads, because a misspelled trait makes the metric apply to
+nobody, which is indistinguishable from a metric correctly scoped to a sector
+that happens to have no tenants.
+
+`KNOWN_TRAITS` is deliberately one entry long. A trait earns its place when a
+metric actually depends on it; inventing a taxonomy of business properties in
+advance is how configuration becomes fiction.
+
+**The concrete case, which is why this is not speculative.** Top-five customer
+concentration is a real risk for a wholesaler — one slow payer becomes a
+cash-flow event. For a corner shop with thousands of customers it is near zero
+by arithmetic, and scoring it would award a perfect mark on a 0.75-weight
+metric that says nothing about them, pulling their composite *up*. Not scoring
+beats scoring something meaningless.
+
+The exclusion has to reach four places, and reaching three would look like it
+worked: the score, the quality gate (a metric that does not apply cannot be
+*required*), the catalogue a customer builds an integration against, and the
+diagnosis prompt.
+
+---
+
+## D46 — `observed_at` is the customer's fact; `seq` is ours, and it settles ties
+
+Two readings can carry the same `observed_at` — a connector posting a batch, a
+source with second precision, a coarse system clock — and `created_at` ties
+with it, because both come from the same call to the clock.
+
+With both equal there was nothing left to order by, so "the latest reading"
+was whichever row the database returned. Measured: two readings recorded back
+to back collided about a quarter of the time on this machine, and the wrong
+one was evaluated in half of those. **The same data gated an action or did
+not, roughly one time in eight.**
+
+A monotonic sequence is the only thing that can settle it, so migration 0014
+adds one. `observed_at` says when a reading refers to and belongs to the
+customer; `seq` says when we were told and belongs to us. Where two readings
+claim the same moment, the later arrival wins — it is the later information
+about that moment, which is what a correction looks like.
+
+Deliberately **not** a unique constraint on `(tenant, domain, observed_at)`.
+Resending a reading for a moment already recorded is a legitimate correction,
+and refusing it would turn a fixable mistake into a permanent one.
+
+This was found as an intermittent test failure and twice written off as
+probable connection-pool pressure. It was a product bug both times. An
+intermittent that is not reproduced is not diagnosed.

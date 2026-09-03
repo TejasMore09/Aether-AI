@@ -63,7 +63,7 @@ def _recent_metric_history(
             Observation.status == "accepted",
             Observation.observed_at < before,
         )
-        .order_by(Observation.observed_at.desc())
+        .order_by(Observation.observed_at.desc(), Observation.seq.desc())
         .limit(pack_window)
     ).all()
     return [dict(r.metrics or {}) for r in rows]
@@ -89,7 +89,14 @@ def ingest_reading(
             "or add a pack for this domain."
         )
 
-    report = validate_metrics(pack, metrics)
+    # Which sector this business says it is in. Needed before validation, not
+    # only after it: a metric that does not apply to this kind of business must
+    # not be *required* of them either.
+    with tenant_session(tenant_id) as db:
+        tenant = db.get(Tenant, tenant_id)
+        chosen = sector_taxonomy.get(tenant.sector if tenant else None)
+
+    report = validate_metrics(pack, metrics, chosen)
 
     with tenant_session(tenant_id) as db:
         if not report.accepted:
@@ -116,10 +123,6 @@ def ingest_reading(
             )
 
         history = _recent_metric_history(db, domain, pack.baseline_window, when)
-        # Which sector this business says it is in, so its readings are
-        # judged against that sector's normal rather than a general default.
-        tenant = db.get(Tenant, tenant_id)
-        chosen = sector_taxonomy.get(tenant.sector if tenant else None)
         signals = derive_signals(pack, report.cleaned, history, chosen)
 
         obs = Observation(

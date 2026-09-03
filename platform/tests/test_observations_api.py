@@ -5,7 +5,7 @@ import uuid
 import pytest
 import sqlalchemy
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from aether.core.db import get_engine
 
@@ -84,3 +84,57 @@ def test_invalid_domain_name_rejected_at_edge(clients, token):
         headers=token,
     )
     assert r.status_code == 422
+
+
+@pytest.mark.postgres
+def test_two_readings_claiming_the_same_moment_resolve_to_the_later_one():
+    """Found as an intermittent test failure that turned out to be a product
+    bug (migration 0014).
+
+    The monitor evaluates the latest reading for a domain. Two readings can
+    carry the same `observed_at` — a connector posting a batch, a source with
+    second precision, or a coarse system clock — and `created_at` ties with it
+    because both come from one call to the clock. With nothing left to order
+    by, the database returned whichever row it liked, and the same data gated
+    an action about one time in eight.
+
+    `seq` settles it: observed_at is the customer's fact about when a reading
+    refers to, and seq is ours about when we were told. The later arrival wins,
+    because it is the later information about that moment.
+    """
+    import datetime
+
+    from aether.core.db import tenant_session
+    from aether.core.models import Observation
+    from aether.services.evaluation import evaluate_domain
+
+    tenant_id = uuid.uuid4()
+    moment = datetime.datetime.now(datetime.UTC)
+
+    with tenant_session(tenant_id) as db:
+        for drift, performance in ((0.3, 0.8), (0.7, 0.45)):
+            db.add(
+                Observation(
+                    tenant_id=tenant_id,
+                    domain="revenue",
+                    observed_at=moment,
+                    created_at=moment,
+                    drift_fraction=drift,
+                    performance=performance,
+                    source="tie-test",
+                )
+            )
+            db.flush()
+
+    # Genuinely indistinguishable by either timestamp.
+    with tenant_session(tenant_id) as db:
+        rows = db.scalars(select(Observation)).all()
+        assert len({o.observed_at for o in rows}) == 1
+        assert len({o.created_at for o in rows}) == 1
+        assert len({o.seq for o in rows}) == 2, "insertion order must still be recorded"
+
+    for _ in range(12):
+        out = evaluate_domain(tenant_id, "revenue", triggered_by="tie-test")
+        with tenant_session(tenant_id) as db:
+            evaluated = db.get(Observation, out.observation_id)
+            assert evaluated.drift_fraction == 0.7, "the later reading must win, every time"

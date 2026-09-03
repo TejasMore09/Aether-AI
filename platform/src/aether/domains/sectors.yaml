@@ -66,6 +66,7 @@ sectors:
   - key: retail
     label: Retail
     summary: Selling to the public, in a shop or online.
+    traits: []
     isic: ["47"]
     naics: ["44", "45"]
     damodaran: ["Retail (General)", "Retail (Special Lines)", "Retail (Grocery and Food)"]
@@ -74,6 +75,7 @@ sectors:
   - key: wholesale
     label: Wholesale & distribution
     summary: Selling on to other businesses, usually on trade credit.
+    traits: [invoices_customers]
     isic: ["46"]
     naics: ["42"]
     damodaran: ["Retail (Distributors)", "Food Wholesalers"]
@@ -82,6 +84,7 @@ sectors:
   - key: automotive
     label: Automotive trade & repair
     summary: Vehicle sales, parts and garages.
+    traits: [invoices_customers]
     isic: ["45"]
     naics: ["441", "811"]
     damodaran: ["Retail (Automotive)", "Auto Parts"]
@@ -91,6 +94,7 @@ sectors:
   - key: manufacturing
     label: Manufacturing
     summary: Making physical goods to order or to stock.
+    traits: [invoices_customers]
     isic: ["13", "14", "16", "17", "20", "22", "25", "26", "27", "28", "31", "32"]
     naics: ["31", "32", "33"]
     damodaran: ["Machinery", "Electrical Equipment", "Packaging & Container", "Furn/Home Furnishings"]
@@ -99,6 +103,7 @@ sectors:
   - key: food_production
     label: Food & drink production
     summary: Processing and packing food or beverages.
+    traits: [invoices_customers]
     isic: ["10", "11"]
     naics: ["311", "312"]
     damodaran: ["Food Processing", "Beverage (Soft)", "Beverage (Alcoholic)"]
@@ -107,6 +112,7 @@ sectors:
   - key: agriculture
     label: Agriculture
     summary: Farming, growing and primary production.
+    traits: [invoices_customers]
     isic: ["01", "02", "03"]
     naics: ["11"]
     damodaran: ["Farming/Agriculture"]
@@ -116,6 +122,7 @@ sectors:
   - key: construction
     label: Construction & trades
     summary: Building work, civil engineering and the trades.
+    traits: [invoices_customers]
     isic: ["41", "42", "43"]
     naics: ["23"]
     damodaran: ["Engineering/Construction", "Homebuilding"]
@@ -124,6 +131,7 @@ sectors:
   - key: building_supplies
     label: Building materials & supplies
     summary: Merchants and makers of what the trades install.
+    traits: [invoices_customers]
     isic: ["23", "24"]
     naics: ["327", "444"]
     damodaran: ["Building Materials", "Construction Supplies", "Retail (Building Supply)"]
@@ -133,6 +141,7 @@ sectors:
   - key: professional_services
     label: Professional services
     summary: Consulting, legal, accounting and engineering practices.
+    traits: [invoices_customers]
     isic: ["69", "70", "71", "74"]
     naics: ["54"]
     damodaran: ["Business & Consumer Services"]
@@ -141,6 +150,7 @@ sectors:
   - key: marketing
     label: Marketing & creative agencies
     summary: Advertising, design and media buying.
+    traits: [invoices_customers]
     isic: ["73"]
     naics: ["5418"]
     # Deliberately empty, and this was measured rather than assumed. The only
@@ -165,6 +175,7 @@ sectors:
   - key: software
     label: Software products
     summary: Software sold as a product or subscription.
+    traits: [invoices_customers]
     isic: ["58", "62"]
     naics: ["5112", "5415"]
     damodaran: ["Software (System & Application)", "Software (Internet)"]
@@ -173,6 +184,7 @@ sectors:
   - key: it_services
     label: IT & managed services
     summary: Building and running systems for other businesses.
+    traits: [invoices_customers]
     isic: ["62", "63"]
     naics: ["5415", "5182"]
     damodaran: ["Computer Services", "Information Services"]
@@ -182,6 +194,7 @@ sectors:
   - key: logistics
     label: Logistics & transport
     summary: Freight, delivery and warehousing.
+    traits: [invoices_customers]
     isic: ["49", "50", "51", "52", "53"]
     naics: ["48", "49"]
     damodaran: ["Trucking", "Transportation"]
@@ -191,6 +204,7 @@ sectors:
   - key: food_service
     label: Restaurants & food service
     summary: Serving food and drink, including catering.
+    traits: []
     isic: ["56"]
     naics: ["722"]
     damodaran: ["Restaurant/Dining"]
@@ -199,6 +213,7 @@ sectors:
   - key: hospitality
     label: Hotels & hospitality
     summary: Accommodation and the businesses around it.
+    traits: []
     isic: ["55"]
     naics: ["721"]
     damodaran: ["Hotel/Gaming"]
@@ -207,6 +222,7 @@ sectors:
   - key: healthcare
     label: Healthcare services
     summary: Clinics, dental practices, diagnostics and care.
+    traits: [invoices_customers]
     isic: ["86", "87", "88"]
     naics: ["62"]
     damodaran: ["Healthcare Support Services", "Hospitals/Healthcare Facilities"]
@@ -215,6 +231,7 @@ sectors:
   - key: education
     label: Education & training
     summary: Schools, coaching, training and courses.
+    traits: [invoices_customers]
     isic: ["85"]
     naics: ["61"]
     damodaran: ["Education"]
@@ -223,6 +240,7 @@ sectors:
   - key: personal_services
     label: Personal services
     summary: Salons, gyms, repairs and the local trades that serve households.
+    traits: []
     isic: ["93", "95", "96"]
     naics: ["71", "812"]
     damodaran: ["Recreation"]
@@ -231,6 +249,7 @@ sectors:
   - key: real_estate_services
     label: Property services
     summary: Agency, letting and property management — not property investment.
+    traits: [invoices_customers]
     isic: ["68"]
     naics: ["53"]
     damodaran: ["Real Estate (Operations & Services)"]
@@ -240,6 +259,7 @@ sectors:
   - key: financial_services
     label: Financial services
     summary: Lending, broking, insurance and investment.
+    traits: [invoices_customers]
     isic: ["64", "65", "66"]
     naics: ["52"]
     # Deliberately empty. Measured on the reference file: banks compute to 0
@@ -262,6 +282,7 @@ sectors:
   - key: other
     label: Something else
     summary: A business that does not sit in any of the above.
+    traits: []
     isic: []
     naics: []
     damodaran: []

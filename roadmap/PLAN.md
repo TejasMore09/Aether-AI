@@ -9,11 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 3
 
-Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.4 done** — a
+Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.5 done** — a
 business chooses its currency and sector, sees what that changes, gets
-different verdicts from a business in another sector, and its agent knows what
-is normal in its industry. Next is 3.5, sector-specific metrics. 478 tests,
-none skipped.
+different verdicts from a business in another sector, its agent knows what is
+normal in its industry, and metrics that mean nothing for its kind of business
+are not scored. Next is 3.6, provenance on every band. 493 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -132,7 +132,8 @@ Build the mechanism first so numbers can be filled in as they are learned.
   bands previewed before saving — including when it is nothing (D41, D42)
 - [x] **3.4** Sector knowledge in the agent's knowledge base, derived entirely from
   the committed reference table, and reaching the explanation (D43, D44)
-- [ ] **3.5** Sector-specific metrics: a pack may declare metrics that only apply to some sectors
+- [x] **3.5** Sector-specific metrics: a metric declares the traits a business must
+  have for it to mean anything, and sectors declare their traits (D45)
 - [ ] **3.6** Provenance everywhere: every band states whether it came from the pack, the sector, or the tenant's own history
 
 **Done when:** two tenants in different sectors reporting identical numbers
@@ -205,9 +206,7 @@ cheap now and painful later.
 - [ ] **6.6** MFA, at least for owners
 - [ ] **6.7** Refresh tokens; 60-minute hard expiry is a support burden at scale
 - [ ] **6.8** GDPR: export and delete, as an obligation not a feature
-- [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence.
-  Two fixture errors appeared once under a full test run (2026-09-03) and did not
-  reproduce; no error text was captured. Worth chasing here rather than guessing
+- [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence
 - [ ] **6.10** Billing and subscription tiers
 
 ---

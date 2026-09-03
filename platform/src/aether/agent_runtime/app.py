@@ -86,8 +86,20 @@ def get_policy(domain: DomainName, principal: Principal = Depends(authenticated)
 
 @app.get("/v1/catalogue")
 def catalogue(principal: Principal = Depends(authenticated)) -> list[dict]:
-    """Business functions the platform can watch, and what each one expects."""
+    """Business functions the platform can watch, and what each one expects.
+
+    Scoped to what applies to *this* business. Listing a shop's top-five
+    customer concentration would send somebody off to build an integration for
+    a figure the platform will not score, and the effort would be wasted twice
+    over — once building it and once wondering why it changed nothing.
+    """
+    from aether.core.models import Tenant
+    from aether.domains import sector as sector_taxonomy
     from aether.domains.pack import list_packs
+
+    with tenant_session(principal.tenant_id) as db:
+        tenant = db.get(Tenant, principal.tenant_id)
+        chosen = sector_taxonomy.get(tenant.sector if tenant else None)
 
     return [
         {
@@ -107,6 +119,7 @@ def catalogue(principal: Principal = Depends(authenticated)) -> list[dict]:
                     "description": m.description.strip(),
                 }
                 for m in p.metrics
+                if m.applies_to(chosen)
             ],
             "actions": [
                 {"slot": slot.value, "label": spec.label, "description": spec.description.strip()}
@@ -239,7 +252,10 @@ def list_domains(principal: Principal = Depends(authenticated)) -> list[dict]:
             obs = db.scalars(
                 select(Observation)
                 .where(Observation.domain == domain)
-                .order_by(Observation.observed_at.desc())
+                .order_by(
+                    Observation.observed_at.desc(),
+                    Observation.seq.desc(),
+                )
                 .limit(1)
             ).first()
             entry["latest_drift_fraction"] = obs.drift_fraction if obs else None
@@ -298,7 +314,9 @@ def list_observations(
         query = select(Observation).where(Observation.domain == domain)
         if status:
             query = query.where(Observation.status == status)
-        rows = db.scalars(query.order_by(Observation.observed_at.desc()).limit(limit)).all()
+        rows = db.scalars(
+            query.order_by(Observation.observed_at.desc(), Observation.seq.desc()).limit(limit)
+        ).all()
         return [
             {
                 "id": str(o.id),

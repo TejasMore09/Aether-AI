@@ -308,7 +308,7 @@ def load_series(tenant_id: uuid.UUID, limit_per_domain: int = 60) -> dict[tuple[
         rows = db.scalars(
             select(Observation)
             .where(Observation.status == "accepted")
-            .order_by(Observation.observed_at.desc())
+            .order_by(Observation.observed_at.desc(), Observation.seq.desc())
             .limit(limit_per_domain * 12)
         ).all()
 

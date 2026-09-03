@@ -94,6 +94,10 @@ metrics:
     healthy_max: 0.45
     critical_max: 0.75
     weight: 0.75
+    # Meaningless where customers pay at the till: a shop's five largest
+    # customers are a rounding error, so the figure would be near zero and
+    # score a perfect 1.0 while saying nothing about the business.
+    requires_traits: [invoices_customers]
     description: >
       Share of the book owed by the five largest customers. High concentration
       turns one slow payer into a cash-flow event.
@@ -107,6 +111,10 @@ metrics:
     healthy_max: 0.03
     critical_max: 0.15
     weight: 0.75
+    # A business paid at the point of sale has no book to dispute. Returns
+    # and chargebacks are a real thing and a different one, and would need
+    # their own metric rather than borrowing this one's bands.
+    requires_traits: [invoices_customers]
     description: >
       Fraction under active dispute. Disputes rarely resolve in the creditor's
       favour at full value, so this is a leading indicator of write-offs.

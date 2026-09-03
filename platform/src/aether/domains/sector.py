@@ -49,6 +49,26 @@ UNSPECIFIED = "other"
 # see the module docstring.
 SCHEMES = ("isic", "naics")
 
+# What a sector is like, in the few ways a metric can depend on.
+#
+# Traits rather than lists of sector keys on each metric, and the reason is the
+# failure mode of the alternative. A metric saying "applies to these fifteen
+# sectors" is a list somebody must remember to edit when a sixteenth is added,
+# and forgetting is silent — the metric simply stops applying to a business it
+# should. A sector declaring what it is like is checked at load, so adding one
+# forces the question rather than defaulting to an answer.
+#
+# Deliberately short. A trait earns its place when a metric or a pack actually
+# depends on it; inventing a taxonomy of business properties in advance is how
+# configuration becomes fiction.
+KNOWN_TRAITS = ("invoices_customers",)
+
+
+# A sentinel, so "nobody filled this in" is distinguishable from "this sector
+# genuinely has none of the traits". The first is a mistake and the second is
+# an answer, and they must not look alike.
+_MISSING_TRAITS = ("<unset>",)
+
 
 class UnknownSector(ValueError):
     """A sector key the taxonomy does not define."""
@@ -61,9 +81,13 @@ class Sector:
     summary: str
     isic: tuple[str, ...] = ()
     naics: tuple[str, ...] = ()
+    traits: tuple[str, ...] = ()
     damodaran: tuple[str, ...] = ()
     bands: str = "available"
     bands_note: str = ""
+
+    def has_trait(self, trait: str) -> bool:
+        return trait in self.traits
 
     @property
     def has_bands(self) -> bool:
@@ -145,6 +169,20 @@ def _validate(sectors: tuple[Sector, ...], defaults: dict[str, dict[str, str]]) 
     if UNSPECIFIED not in set(keys):
         raise ValueError(f"the taxonomy must define {UNSPECIFIED!r} for businesses that fit none")
 
+    for sector in sectors:
+        if sector.traits == _MISSING_TRAITS:
+            raise ValueError(
+                f"sector {sector.key!r} does not declare `traits`. Declare it, using [] "
+                f"if none apply — an omission would silently decide which metrics reach "
+                f"this sector's businesses. Known traits: {', '.join(KNOWN_TRAITS)}"
+            )
+        for trait in sector.traits:
+            if trait not in KNOWN_TRAITS:
+                raise ValueError(
+                    f"sector {sector.key!r} declares unknown trait {trait!r}; "
+                    f"known: {', '.join(KNOWN_TRAITS)}"
+                )
+
     known = {s.key for s in sectors}
     for scheme in SCHEMES:
         claimed: dict[str, list[str]] = {}
@@ -182,6 +220,7 @@ def taxonomy() -> Taxonomy:
             summary=" ".join(entry.get("summary", "").split()),
             isic=tuple(str(c) for c in entry.get("isic") or ()),
             naics=tuple(str(c) for c in entry.get("naics") or ()),
+            traits=tuple(entry["traits"] or ()) if "traits" in entry else _MISSING_TRAITS,
             damodaran=tuple(entry.get("damodaran") or ()),
             bands=entry.get("bands", "available"),
             bands_note=" ".join((entry.get("bands_note") or "").split()),

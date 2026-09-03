@@ -16,7 +16,8 @@ from sqlalchemy import select
 
 from aether.core import money
 from aether.core.db import tenant_session
-from aether.core.models import Observation, PendingApproval, PolicyConfig
+from aether.core.models import Observation, PendingApproval, PolicyConfig, Tenant
+from aether.domains import sector as sector_taxonomy
 from aether.domains.pack import get_pack
 from aether.knowledge import sector_corpus
 from aether.llm import gateway
@@ -60,7 +61,7 @@ def _fallback_text(approval: PendingApproval, observations: list[Observation]) -
     )
 
 
-def _band_phrases(pack, observations: list[Observation]) -> list[str]:
+def _band_phrases(pack, observations: list[Observation], sector=None) -> list[str]:
     """Describe the bands the engine actually scored against.
 
     Quoting the pack's published band here would be quietly wrong for any
@@ -83,6 +84,12 @@ def _band_phrases(pack, observations: list[Observation]) -> list[str]:
 
     phrases: list[str] = []
     for m in pack.scored_metrics:
+        # A band that was never used must not be quoted as though it were. The
+        # engine skipped this metric for this kind of business, and listing its
+        # threshold would invite the model to reason about a number that played
+        # no part in the decision.
+        if not m.applies_to(sector):
+            continue
         band = (used.get(m.key) or {}).get("band") or {}
         good = band.get("good")
         unit = f" {m.unit}".rstrip() if m.unit not in ("ratio", "") else ""
@@ -129,7 +136,10 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
                     # rejected reading silently distorts the reported trend.
                     Observation.status == "accepted",
                 )
-                .order_by(Observation.observed_at.desc())
+                .order_by(
+                    Observation.observed_at.desc(),
+                    Observation.seq.desc(),
+                )
                 .limit(5)
             )
         )
@@ -157,9 +167,15 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
         if not obs_lines:
             obs_lines = ["- (no stored readings; decision came from explicit values)"]
 
+        # Which kind of business this is, so a metric that does not apply to
+        # them is not quoted as though the engine had weighed it.
+        chosen_sector = sector_taxonomy.get(
+            row.sector if (row := db.get(Tenant, tenant_id)) else None
+        )
+
         context = ""
         if pack:
-            bands = "; ".join(_band_phrases(pack, observations))
+            bands = "; ".join(_band_phrases(pack, observations, chosen_sector))
             context = (
                 f"Business function: {pack.label}. {pack.summary}\n"
                 f"Reference bands: {bands}\n"
@@ -240,7 +256,10 @@ def diagnose_approval(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> str:
                         Observation.domain == approval.domain,
                         Observation.status == "accepted",
                     )
-                    .order_by(Observation.observed_at.desc())
+                    .order_by(
+                        Observation.observed_at.desc(),
+                        Observation.seq.desc(),
+                    )
                     .limit(5)
                 )
             )

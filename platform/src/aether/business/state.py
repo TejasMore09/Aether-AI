@@ -234,7 +234,11 @@ def load(tenant_id: uuid.UUID) -> BusinessState:
         rows = db.scalars(
             select(Observation)
             .where(Observation.status == "accepted")
-            .order_by(Observation.domain, Observation.observed_at.desc())
+            .order_by(
+                Observation.domain,
+                Observation.observed_at.desc(),
+                Observation.seq.desc(),
+            )
             .distinct(Observation.domain)
         ).all()
 

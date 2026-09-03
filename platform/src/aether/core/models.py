@@ -17,6 +17,7 @@ import enum
 import uuid
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -27,6 +28,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -187,6 +189,11 @@ class Observation(Base, TenantScoped):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     observed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Insertion order, assigned by the database. observed_at is the customer's
+    # fact about when a reading refers to; this is ours about when we were
+    # told, and it is what settles "which of these is current" when two
+    # readings claim the same moment. See migration 0014.
+    seq: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
     domain: Mapped[str] = mapped_column(String(100), index=True)
     drift_fraction: Mapped[float] = mapped_column(Float)
     performance: Mapped[float] = mapped_column(Float)

@@ -96,7 +96,16 @@ def evaluate_domain(
             obs = db.scalars(
                 select(Observation)
                 .where(Observation.domain == domain, Observation.status == "accepted")
-                .order_by(Observation.observed_at.desc())
+                # Two readings can carry the same observed_at — a connector
+                # sending a batch, or simply a coarse clock. Without a
+                # tiebreak, which one the monitor evaluates is whatever the
+                # database happened to return, so the same data could gate an
+                # action or not. Later insert wins, because it is the later
+                # information about the same moment.
+                .order_by(
+                    Observation.observed_at.desc(),
+                    Observation.seq.desc(),
+                )
                 .limit(1)
             ).first()
             if obs is None:

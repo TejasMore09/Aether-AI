@@ -66,6 +66,11 @@ def derive_performance(
         value = values.get(spec.key)
         if value is None:
             continue
+        # Sent, stored, and deliberately not scored. A business may report a
+        # figure that carries no information for its kind of business, and
+        # scoring it would let a meaningless perfect mark pull the composite up.
+        if not spec.applies_to(sector):
+            continue
         band: Band | None = calibrate(spec, history_for(spec.key, past), pack, sector)
         if band is None:
             continue

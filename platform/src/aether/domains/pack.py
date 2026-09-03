@@ -19,8 +19,12 @@ import functools
 import pathlib
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from aether.domains.sector import Sector
 
 _PACK_DIR = pathlib.Path(__file__).parent / "packs"
 
@@ -84,6 +88,14 @@ class MetricSpec:
     # read, and reference/ supplies the numbers. Most metrics have no
     # reference figure and simply use the pack's own band.
     reference: str = ""
+    # Sector traits this metric needs to mean anything. Empty means it applies
+    # everywhere, which is the common case.
+    #
+    # Not scoring a metric is better than scoring it at a value that carries no
+    # information: a corner shop's top-five customer concentration is near zero
+    # because it has thousands of customers, which would score a perfect 1.0 on
+    # a metric that says nothing about them and pull their composite up.
+    requires_traits: tuple[str, ...] = ()
     # Some breaches are not cost-benefit decisions. Missing payroll is not a
     # daily carrying charge that can be weighed against the cost of acting —
     # it is terminal, and the loss model has no way to express that because a
@@ -95,6 +107,19 @@ class MetricSpec:
     # off, which is the failure this flag exists to avoid in the other
     # direction.
     existential: bool = False
+
+    def applies_to(self, sector: Sector | None) -> bool:
+        """Whether this metric means anything for this kind of business.
+
+        A sector of None is the honest unknown — no tenant context, or a
+        business that has not said what it does — and everything applies, which
+        is exactly how the platform behaved before traits existed.
+        """
+        if not self.requires_traits:
+            return True
+        if sector is None:
+            return True
+        return all(sector.has_trait(trait) for trait in self.requires_traits)
 
     def breached_critically(self, value: float) -> bool:
         """Past the pack's critical bound. Never the calibrated one — critical
@@ -249,6 +274,28 @@ def _reference_column(raw: dict) -> str:
     return column
 
 
+def _traits(raw: dict) -> tuple[str, ...]:
+    """Validate at load, so a typo is a startup error rather than a silence.
+
+    A misspelled trait would make the metric apply to nobody, and nothing
+    downstream could tell that from a metric legitimately scoped to a sector
+    that happens to have no tenants.
+    """
+    declared = tuple(raw.get("requires_traits") or ())
+    if not declared:
+        return ()
+
+    from aether.domains.sector import KNOWN_TRAITS
+
+    for trait in declared:
+        if trait not in KNOWN_TRAITS:
+            raise ValueError(
+                f"metric {raw['key']!r} requires unknown trait {trait!r}; "
+                f"known: {', '.join(KNOWN_TRAITS)}"
+            )
+    return declared
+
+
 def _spec_from_dict(raw: dict) -> MetricSpec:
     return MetricSpec(
         key=raw["key"],
@@ -266,6 +313,7 @@ def _spec_from_dict(raw: dict) -> MetricSpec:
         description=raw.get("description", ""),
         existential=bool(raw.get("existential", False)),
         reference=_reference_column(raw),
+        requires_traits=_traits(raw),
     )
 
 
