@@ -78,6 +78,12 @@ class MetricSpec:
     critical_max: float | None = None
     weight: float = 1.0
     description: str = ""
+    # Which column of the committed reference table this metric corresponds
+    # to, if any. The pack declares the correspondence because only the pack
+    # knows what its metric means; the sector supplies which industries to
+    # read, and reference/ supplies the numbers. Most metrics have no
+    # reference figure and simply use the pack's own band.
+    reference: str = ""
     # Some breaches are not cost-benefit decisions. Missing payroll is not a
     # daily carrying charge that can be weighed against the cost of acting —
     # it is terminal, and the loss model has no way to express that because a
@@ -222,6 +228,27 @@ _GENERIC_ACTIONS: dict[ActionSlot, ActionSpec] = {
 }
 
 
+def _reference_column(raw: dict) -> str:
+    """Validate the reference column at load, not at first use.
+
+    A typo here would seed no sector band and look entirely correct — the
+    metric would quietly fall back to the pack's default for every tenant in
+    every sector, forever. Failing at load turns that into a startup error.
+    """
+    column = raw.get("reference", "")
+    if not column:
+        return ""
+
+    from aether.domains.reference import COLUMNS
+
+    if column not in COLUMNS:
+        raise ValueError(
+            f"metric {raw['key']!r} names reference column {column!r}, "
+            f"which does not exist. Known: {', '.join(COLUMNS)}"
+        )
+    return column
+
+
 def _spec_from_dict(raw: dict) -> MetricSpec:
     return MetricSpec(
         key=raw["key"],
@@ -238,6 +265,7 @@ def _spec_from_dict(raw: dict) -> MetricSpec:
         weight=float(raw.get("weight", 1.0)),
         description=raw.get("description", ""),
         existential=bool(raw.get("existential", False)),
+        reference=_reference_column(raw),
     )
 
 

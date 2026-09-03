@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from aether.core.db import tenant_session
-from aether.core.models import Observation
+from aether.core.models import Observation, Tenant
+from aether.domains import sector as sector_taxonomy
 from aether.domains.derive import derive_signals
 from aether.domains.pack import get_pack
 from aether.domains.quality import QualityReport, validate_metrics
@@ -115,7 +116,11 @@ def ingest_reading(
             )
 
         history = _recent_metric_history(db, domain, pack.baseline_window, when)
-        signals = derive_signals(pack, report.cleaned, history)
+        # Which sector this business says it is in, so its readings are
+        # judged against that sector's normal rather than a general default.
+        tenant = db.get(Tenant, tenant_id)
+        chosen = sector_taxonomy.get(tenant.sector if tenant else None)
+        signals = derive_signals(pack, report.cleaned, history, chosen)
 
         obs = Observation(
             tenant_id=tenant_id,

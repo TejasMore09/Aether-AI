@@ -9,10 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 3
 
-Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0 and 3.1 done** —
-money is the tenant's own currency, and a business can say what kind of
-business it is. Next is 3.2, layering per-sector bands over pack defaults from
-`reference/`. 429 tests, none skipped.
+Phases 0, 1 and 2 complete, plus 6.4 pulled forward. **3.0–3.2 done** — money
+is the tenant's own currency, a business can say what it does, and two
+businesses reporting the same number now get different verdicts. Next is 3.3,
+choosing a sector during onboarding and showing its effect honestly. 449
+tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -124,7 +125,8 @@ Build the mechanism first so numbers can be filled in as they are learned.
 - [x] **3.1** Sector taxonomy on the tenant: 21 sectors, crosswalked to ISIC (which
   NIC and NACE share) and NAICS, with ambiguity declared rather than guessed
   (D35, D36)
-- [ ] **3.2** Packs carry per-sector band overrides layered over their defaults
+- [x] **3.2** Per-sector bands layered over pack defaults, clamped to the pack's
+  allowance so the ordering across sectors transfers and the levels do not (D39)
 - [ ] **3.3** Sector selected during onboarding, changeable, with the effect on bands shown honestly
 - [ ] **3.4** Sector corpus in the knowledge base — what normal looks like in that industry
 - [ ] **3.5** Sector-specific metrics: a pack may declare metrics that only apply to some sectors

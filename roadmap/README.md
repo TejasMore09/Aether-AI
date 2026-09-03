@@ -25,7 +25,7 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 3 — Sector awareness.** Phases 0, 1 and 2 are complete.
 >
-> 429 tests, none skipped. An agent now remembers its own business: pgvector
+> 449 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
@@ -33,10 +33,10 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > **6.4 was pulled forward** out of Phase 6: password endpoints accepted
 > unlimited guesses, which was a live hole rather than a missing feature.
 >
-> **Phase 3 has started.** `3.0`–`3.1` done: money is the tenant's own
-> currency throughout (INR/USD/EUR/GBP, no FX conversion anywhere), and a
-> business can declare its sector, crosswalked to ISIC and NAICS. Next is 3.2,
-> seeding per-sector bands from `reference/`.
+> **Phase 3 is underway.** `3.0`–`3.2` done: money is the tenant's own
+> currency throughout (INR/USD/EUR/GBP, no FX conversion anywhere), a business
+> can declare its sector, and **a bakery and a builders' merchant reporting the
+> same 50-day DSO now get different verdicts.** Next is 3.3, onboarding.
 >
 > Next: Phase 3, where a stock brokerage and a bakery stop receiving
 > byte-identical packs. The code is days; the defensible numbers are not,

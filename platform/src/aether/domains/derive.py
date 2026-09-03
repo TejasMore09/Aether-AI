@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from aether.domains.calibration import Band, calibrate, history_for, score_against
 from aether.domains.pack import DomainPack
+from aether.domains.sector import Sector
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ def derive_performance(
     pack: DomainPack,
     values: dict[str, float],
     history: list[dict[str, float]] | None = None,
+    sector: Sector | None = None,
 ) -> tuple[float, dict]:
     """Weighted health across the pack's scored metrics.
 
@@ -64,7 +66,7 @@ def derive_performance(
         value = values.get(spec.key)
         if value is None:
             continue
-        band: Band | None = calibrate(spec, history_for(spec.key, past), pack)
+        band: Band | None = calibrate(spec, history_for(spec.key, past), pack, sector)
         if band is None:
             continue
         score = score_against(spec, value, band)
@@ -150,8 +152,9 @@ def derive_signals(
     pack: DomainPack,
     values: dict[str, float],
     history: list[dict[str, float]] | None = None,
+    sector: Sector | None = None,
 ) -> DerivedSignals:
-    performance, detail = derive_performance(pack, values, history)
+    performance, detail = derive_performance(pack, values, history, sector)
     drift, drifted, baseline_used = derive_drift(pack, values, history or [])
 
     for key in drifted:

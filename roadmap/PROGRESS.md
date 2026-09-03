@@ -7,6 +7,53 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-03 — Phase 3.2: the same number, two different verdicts
+
+`domains/reference.py`, `sector_band()` in `domains/calibration.py`. The gap
+the vision named is closed for receivables: a bakery and a builders' merchant
+both collecting in 50 days no longer get the same answer.
+
+Bands now layer pack –> sector –> tenant, each anchored to the one beneath.
+The seeded figures, median across each sector's named industries:
+
+    retail            18.0     construction      53.8
+    food service      19.4     manufacturing     63.9
+    automotive        35.9     professional      67.3
+    logistics         44.6     IT services       72.0
+
+**The clamp is the honest part** (D39). Reference figures describe US public
+companies, whose levels an SME does not share — but the ordering across
+sectors does transfer. Allowing a sector band to move only as far as the
+pack's existing calibration allowance takes the ordering and declines the
+level. Published retail DSO is 6.4 days; judging a corner shop against that
+would flag every ordinary week, so retail lands at 18 — far stricter than the
+default of 45, without betting on 6.4. Where the clamp bites, the band says so.
+
+**A second sector admitted it does not know** (D40). Marketing's only matching
+industry is Advertising at 172.9 days implied DSO and 168.3 DPO: agencies
+carry clients' gross media spend as both receivable and payable while
+reporting only commission as revenue, so every figure in the row is inflated.
+No defensible adjustment exists, and inventing a multiplier would be the
+confident guessing this project refuses. Two of twenty-one sectors now say
+they do not know, and neither gap closes with a better dataset.
+
+**A test failure corrected a real misunderstanding.** With ten readings of
+history a tenant's own number wins outright regardless of sector — and that is
+right, because their own readings are better evidence about them than an
+industry average. The sector then stops changing the answer and only bounds
+how far their history may move it. The test now pins both behaviours rather
+than the one I assumed.
+
+Reference columns are validated when a pack loads. A typo would seed no band
+for every tenant in every sector, forever, while looking entirely correct.
+
+Only DSO has a published reference figure today. Payables and inventory join
+it in Phase 5 from the same file, and the mechanism is already general.
+
+449 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.1: a business can say what kind of business it is
 
 `domains/sectors.yaml`, `domains/sector.py`, migration `0013`. Twenty-one

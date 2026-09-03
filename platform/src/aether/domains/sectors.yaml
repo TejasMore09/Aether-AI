@@ -143,11 +143,24 @@ sectors:
     summary: Advertising, design and media buying.
     isic: ["73"]
     naics: ["5418"]
-    # Advertising's receivables ratio is inflated: agencies report commission
-    # revenue while carrying gross client billings. 3.2 must not seed a band
-    # from it without adjusting, or every agency starts at ~173 days.
-    damodaran: ["Advertising"]
-    bands: available
+    # Deliberately empty, and this was measured rather than assumed. The only
+    # matching industry is Advertising, whose apparent DSO is 172.9 days and
+    # DPO 168.3 — agencies report commission revenue while carrying gross
+    # client billings on both sides, so receivables and payables are inflated
+    # together. Every figure in the row is distorted, not just one.
+    #
+    # There is no defensible adjustment available. Inventing a multiplier to
+    # bring 173 days down to something plausible would be exactly the
+    # confident guessing this project refuses, so the sector says it does not
+    # know instead.
+    damodaran: []
+    bands: unavailable
+    bands_note: >-
+      Reference data for advertising is distorted by pass-through billing:
+      agencies carry clients' gross media spend as both receivable and
+      payable while reporting only commission as revenue, which puts the
+      apparent collection period near six months. This sector is judged
+      against the pack's general bands until a real one is known.
 
   - key: software
     label: Software products

@@ -717,3 +717,53 @@ This also removed a dependency and a skipped test. Reading the workbook needed
 `xlrd`, which was not installed, so the check that every `damodaran:` entry
 actually exists — the one that catches a typo silently seeding no band — was
 skipping. A test that skips on the machine that runs it is not a test.
+
+---
+
+## D39 — The sector band is clamped, and the clamp is what makes it honest
+
+A sector's reference figure may move the healthy bound only as far as the
+pack's existing calibration allowance — the same limit a tenant's own history
+gets, for the same reason.
+
+The reference table describes US *public* companies. An SME's levels are
+simply different: smaller firms have worse terms and less leverage over
+customers. What does transfer is the **ordering** across sectors — grocery
+retail collects in days, engineering firms in months. Clamping takes the
+ordering and declines the level, which is precisely the distinction
+`roadmap/DATA.md` records about this source.
+
+The worked case is retail. Published retail DSO is 6.4 days; judging a corner
+shop against that would flag every ordinary week. Clamped, retail lands at 18
+days — still far stricter than the pack's 45, without betting on 6.4 being
+true of a shop in Nashik.
+
+Where the clamp bites, the band says so in its `basis`, because a customer
+looking at an unexpected verdict deserves to know the reference and the pack
+disagreed.
+
+The layering is pack → sector → tenant, each anchored to the one beneath. Once
+a tenant has enough history their own number wins outright, which is correct:
+eight months of their readings is better evidence about them than an industry
+average. The sector then stops changing the answer and only bounds how far
+their history may move it.
+
+---
+
+## D40 — Marketing has no sector band either, and this was measured
+
+The only industry matching creative agencies is Advertising, whose implied DSO
+is 172.9 days and implied DPO 168.3. Agencies carry clients' gross media spend
+as both receivable and payable while reporting only commission as revenue, so
+*every* working-capital figure in that row is inflated, not just one.
+
+Seeding it would tell every agency that half a year to collect is normal.
+
+No defensible adjustment exists. Inventing a multiplier to bring 173 days down
+to something plausible would be exactly the confident guessing this project
+refuses, so the sector declares `bands: unavailable` with the reason and uses
+the pack's general bands.
+
+Two of twenty-one sectors now say they do not know: financial services (D36)
+and marketing. That is not a gap to close by finding a better dataset — both
+need real businesses.
