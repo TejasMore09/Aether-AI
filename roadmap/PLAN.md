@@ -7,13 +7,17 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ---
 
-## ▶ CURRENT POSITION: Phase 4
+## ▶ CURRENT POSITION: Phase 6
 
-Phases 0–3 complete, plus 6.4 pulled forward. **4.1–4.5 done** — a metric's
-trend, when it is due to cross, seven ways of saying nothing, seasonality that
-mostly refuses, and a trajectory that brings attention forward without
-inflating the exposure. Only 4.6 remains, and its backtest needs real history
-that nothing has. 538 tests, none skipped.
+Phases 0–4 complete, plus 6.4 pulled forward. Phase 4 closed with a real
+finding: the backtest showed the 80% intervals covering only 52% on a random
+walk and 12% on a curve, so `fit` now refuses both shapes rather than quoting
+a confidence it has not earned (D53).
+
+**Next is Phase 6** — the largest fully unblocked block, and where
+"production-level" actually lives. 9 of 10 items open. Phase 5 needs no new
+data (two bands already sit in `reference/`) and can follow. 550 tests, none
+skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -142,7 +146,7 @@ receive different, defensible verdicts — and each can see why.
 
 ---
 
-## Phase 4 — Forecasting `[ ]`
+## Phase 4 — Forecasting `[x]` COMPLETE
 
 The system is entirely reactive. It cannot say "at this rate you cross
 critical in six weeks", which is most of what "future precautions" means.
@@ -160,7 +164,8 @@ seasonality and nothing heavier.
   never raise what is said to be at stake, and never reach `intervene` (D51)
 - [x] **4.5** Refusing is a family of answers with a sentence each, not one silence
   (D50). Steady, improving and drifting are different news
-- [ ] **4.6** Backtest harness — measure forecast error, publish it, do not hide it
+- [x] **4.6** Backtest harness. It found the intervals lying on two ordinary
+  series shapes, and the fix was to refuse them rather than document it (D53)
 
 **Done when:** a decision can be justified by where a metric is heading, with
 a stated confidence, and the system declines when it does not know.

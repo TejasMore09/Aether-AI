@@ -7,6 +7,51 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-04 — Phase 4.6: the backtest caught the forecasts lying
+
+Building this was meant to be bookkeeping. It found a real defect, which is
+the best argument for having built it.
+
+Measured coverage of the stated 80% interval, walk-forward, ten independent
+series each:
+
+    line plus independent noise      0.78    honest
+    random walk                      0.52    badly overconfident
+    accelerating curve               0.12    uselessly overconfident
+
+The interval is trustworthy only where a metric behaves as the model assumes,
+and both failing shapes are ordinary: a cash balance wanders close to a random
+walk, and a deteriorating book usually accelerates rather than sliding in a
+straight line.
+
+**Documenting it would not have been enough** (D53). A 0.12 coverage quoted as
+"80% confidence" is a lie told at scale, so `fit` now detects both shapes and
+declines: positive lag-1 autocorrelation for a walk, bowing residuals for a
+curve. After the guard both get **no forecast at all**, while an honest
+straight line is still forecast at 0.74 coverage across 559 forecasts. Some
+legitimate windows are refused too, which is the right side to err on — a
+missing forecast costs a look, a lying one costs trust.
+
+The one-sided autocorrelation test was itself a correction. The first version
+rejected *negative* autocorrelation as well, which refused every zigzagging
+series in the test suite — nineteen failures — and was simply wrong: alternating
+residuals make an interval conservative rather than overconfident.
+
+`measure_fleet` reports what a figure was measured on and returns nothing at
+all today, which is honest: no real business has used this system, so any
+number now would describe how well the forecast predicts invented data.
+
+A no-peeking test was rewritten after passing for the wrong reason. It had
+corrupted the back half of a series and watched the error move — but the
+corruption was being caught by the new shape guard, not by the horizon. It now
+asserts directly on what `fit` is handed.
+
+**Phase 4 is complete.**
+
+550 tests, none skipped.
+
+---
+
 ## 2026-09-04 — Phase 4.3: seasonality, which mostly refuses
 
 Detected on the residuals of the trend line rather than the raw values — on

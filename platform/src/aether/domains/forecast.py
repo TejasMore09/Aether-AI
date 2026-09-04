@@ -162,6 +162,7 @@ class NoForecast(StrEnum):
     heading_away = "heading_away"
     too_few_cycles = "too_few_cycles"
     no_seasonal_effect = "no_seasonal_effect"
+    not_a_straight_line = "not_a_straight_line"
 
 
 REASONS: dict[NoForecast, str] = {
@@ -195,6 +196,11 @@ REASONS: dict[NoForecast, str] = {
     NoForecast.no_seasonal_effect: (
         "No repeating pattern that stands out from ordinary variation. This metric "
         "does not appear to have a season."
+    ),
+    NoForecast.not_a_straight_line: (
+        "This metric is not moving in a straight line, so a straight line cannot "
+        "say where it is going. Projecting anyway would quote a confidence the "
+        "arithmetic has not earned."
     ),
 }
 
@@ -463,6 +469,58 @@ def _ols(points: list[tuple[datetime.datetime, float]]) -> _Line | NoForecast:
     )
 
 
+def _wrong_shape(line: _Line, confidence: float) -> bool:
+    """Whether a straight line is visibly the wrong model for these readings.
+
+    Found by the backtest (D53), and worth the arithmetic. Coverage of the 80%
+    interval measured 0.52 on a random walk and 0.12 on an accelerating curve
+    — the interval is honest only where the metric behaves as the model
+    assumes, and both of those shapes are ordinary in business data.
+
+    Two signatures, because the two failures look different in the residuals.
+
+    **Positive autocorrelation** catches a random walk. Its residuals carry
+    over from one reading to the next, because the "trend" is really the last
+    value plus a step. Independent residuals give a lag-1 correlation near zero
+    with a standard error of about 1/sqrt(n); twice that is the usual line.
+
+    Deliberately one-sided. *Negative* autocorrelation — readings alternating
+    above and below the line — makes the interval conservative rather than
+    overconfident, because consecutive errors partly cancel. Rejecting it would
+    refuse forecasts that were never in danger of lying, which is the mistake
+    the first version of this made.
+
+    **Bowing** catches a curve. A line through an accelerating series
+    under-predicts at both ends and over-predicts through the middle, so the
+    residuals bow. The ends and the middle are compared with the same t-based
+    margin used everywhere else in this module.
+    """
+    residuals = list(line.residuals)
+    n = len(residuals)
+    if n < MIN_POINTS or line.residual_sd == 0:
+        return False
+
+    mean = sum(residuals) / n
+    spread = sum((r - mean) ** 2 for r in residuals)
+    if spread > 0:
+        lag1 = sum((residuals[i] - mean) * (residuals[i - 1] - mean) for i in range(1, n)) / spread
+        if lag1 > 2 / math.sqrt(n):
+            return True
+
+    third = n // 3
+    if third >= 2:
+        ends = residuals[:third] + residuals[-third:]
+        middle = residuals[third:-third]
+        if middle:
+            error = line.residual_sd * math.sqrt(1 / len(ends) + 1 / len(middle))
+            if error > 0:
+                bow = (sum(ends) / len(ends) - sum(middle) / len(middle)) / error
+                if abs(bow) > _t_value(n - 2, confidence):
+                    return True
+
+    return False
+
+
 def fit(
     points: list[tuple[datetime.datetime, float]],
     *,
@@ -485,6 +543,9 @@ def fit(
     line = _ols(points)
     if isinstance(line, NoForecast):
         return line
+
+    if _wrong_shape(line, confidence):
+        return NoForecast.not_a_straight_line
 
     n = len(points)
     slope, intercept = line.slope, line.intercept

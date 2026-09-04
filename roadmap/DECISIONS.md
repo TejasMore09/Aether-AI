@@ -1061,3 +1061,43 @@ A phase counts when its mean residual is further from zero than ordinary
 scatter would put it — the same t-based test the prediction interval uses, so
 there is one notion of "distinguishable from noise" in this module rather than
 two that could drift apart.
+
+---
+
+## D53 — The backtest found the forecasts lying, and the fix was to refuse
+
+Building the harness was supposed to be bookkeeping. It found a real defect.
+
+Measured coverage of the stated 80% prediction interval, walk-forward, ten
+independent series each:
+
+    line plus independent noise      0.78    honest
+    random walk                      0.52    badly overconfident
+    accelerating curve               0.12    uselessly overconfident
+
+The interval is trustworthy only where the metric behaves the way the model
+assumes. Both failing shapes are ordinary in business data — a cash balance
+wanders close to a random walk, and a book that is deteriorating usually
+accelerates rather than sliding in a straight line.
+
+**Documenting that would not have been enough.** A 0.12 coverage figure quoted
+as "80% confidence" is a lie the product tells at scale, and this module's
+whole posture is that refusing is a real answer. So `fit` now detects the two
+shapes and declines:
+
+- **Positive lag-1 autocorrelation** catches a walk: its residuals persist,
+  because the "trend" is really the last value plus a step. One-sided
+  deliberately — *negative* autocorrelation makes the interval conservative
+  rather than overconfident, and the first version rejected it wrongly.
+- **Bowing residuals** catch a curve: a line under-predicts at both ends of an
+  accelerating series and over-predicts through the middle.
+
+After the guard, both shapes get **no forecast at all**, while an honest
+straight line is still forecast at 0.74 coverage across 559 forecasts. Some
+legitimate windows are refused as a result, and that is the right side to err
+on: a missing forecast costs a look, a lying one costs trust.
+
+**The general lesson.** Every other refusal in this module was reasoned from
+first principles. This one was invisible until it was measured, and it was the
+worst of them. A harness that only ever confirms good news is decoration —
+there is now a test asserting it can still detect a lie.
