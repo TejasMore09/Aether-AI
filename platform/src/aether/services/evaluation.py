@@ -11,6 +11,7 @@ tenant-pinned transaction (RLS enforced by Postgres).
 """
 
 import datetime
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -19,8 +20,11 @@ from sqlalchemy import select
 from aether.core import money
 from aether.core.db import tenant_session
 from aether.core.models import AuditLog, Observation, PendingApproval, PolicyConfig
+from aether.domains import forecast
 from aether.domains.pack import get_pack
 from aether.policy.decision_engine import PolicyParams, evaluate
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -42,6 +46,11 @@ class EvaluationOutcome:
         if self.observed_at is not None:
             out["observed_at"] = self.observed_at
         return out
+
+
+# How much history a trend is fitted over. A year of weekly readings, which is
+# also roughly where a straight line stops being a defensible shape.
+FORECAST_WINDOW = 52
 
 
 # An autonomous run refuses to act on data older than this: deciding on a
@@ -71,6 +80,38 @@ def record_observation(
         db.add(obs)
         db.flush()
         return obs.id
+
+
+def _trajectories(db, domain: str, pack, within_days: float) -> dict:
+    """Each scored metric's history for this domain, fitted and checked.
+
+    Accepted readings only, for the same reason every other layer uses them: a
+    reading the quality gate refused is not evidence, and a rejected outlier
+    would tilt a trend more than it would tilt an average.
+
+    Never raises. A forecast makes a decision earlier; its absence makes the
+    decision later, which is where the product already was.
+    """
+    if pack is None:
+        return {}
+    try:
+        rows = db.scalars(
+            select(Observation)
+            .where(Observation.domain == domain, Observation.status == "accepted")
+            .order_by(Observation.observed_at.desc(), Observation.seq.desc())
+            .limit(FORECAST_WINDOW)
+        ).all()
+
+        series: dict[str, list[tuple[datetime.datetime, float]]] = {}
+        for obs in reversed(rows):  # oldest first
+            for key, value in (obs.metrics or {}).items():
+                if isinstance(value, int | float):
+                    series.setdefault(key, []).append((obs.observed_at, float(value)))
+
+        return forecast.approaching(pack, series, within_days=within_days)
+    except Exception:  # noqa: BLE001 - see the docstring
+        logger.warning("trajectories unavailable for %s", domain, exc_info=True)
+        return {}
 
 
 def evaluate_domain(
@@ -135,8 +176,21 @@ def evaluate_domain(
 
         assert drift_fraction is not None and performance is not None
         currency = money.for_tenant(tenant_id, db)
+
+        # Where each metric is heading, so a business can be told to look
+        # before the level goes bad rather than after. The window is the
+        # payback horizon rather than a new constant: it is already this
+        # tenant's answer to "how far ahead is worth acting on".
+        trajectories = _trajectories(db, domain, pack, params.payback_days)
+
         decision = evaluate(
-            drift_fraction, performance, params, pack=pack, values=metric_values, currency=currency
+            drift_fraction,
+            performance,
+            params,
+            pack=pack,
+            values=metric_values,
+            currency=currency,
+            trajectories=trajectories,
         )
         result = decision.as_dict()
 

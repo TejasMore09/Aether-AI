@@ -1002,3 +1002,33 @@ needs:
 The failure this guards against is a forecast that reports the tilt of a line
 through noise as a direction. A line always tilts; saying so is inventing a
 signal, and a business may act on it.
+
+---
+
+## D51 — A forecast changes when we act, never what we say is at stake
+
+A trajectory can bring attention forward. It cannot raise the money at risk,
+and it cannot reach `intervene` on its own.
+
+**Not the money.** Today's exposure is today's money. A breach expected in
+three weeks has cost nothing yet, and folding a forecast into the loss figure
+would inflate a number the customer cannot reconcile against their own books —
+the same failure as summing exposures across domains, arriving from a
+different direction. So the escalated message says explicitly that nothing has
+been counted against it.
+
+**Not to `intervene`.** That slot gates a human decision and spends money.
+Acting on an 80% prediction interval would trade a real cost for a predicted
+one, and at this stage a false alarm costs more trust than a missed one.
+Getting somebody to *look* early is the entire value, and looking is free. If
+the level then deteriorates for real, the ordinary path escalates as it always
+did.
+
+**Never twice for the same problem.** A metric that is bad now *and* getting
+worse is one problem. The escalation applies only where the level has not
+already asked for attention, so a struggling business is not told off twice
+for one thing.
+
+The window is the tenant's payback horizon rather than a new constant. That
+number already answers "how far ahead is worth acting on" for this business,
+and inventing a second one would make the two drift apart.

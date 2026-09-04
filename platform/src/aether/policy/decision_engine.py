@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from aether.core import money
+from aether.domains.forecast import Crossing
 from aether.domains.pack import (
     _GENERIC_ACTIONS,
     ActionSlot,
@@ -78,6 +79,12 @@ class RiskLevel(StrEnum):
     low = "LOW"
     medium = "MEDIUM"
     high = "HIGH"
+
+
+# Severity order, so "raise this to at least medium" is expressible. A StrEnum
+# compares alphabetically, which would put HIGH below LOW and silently
+# downgrade anything relying on it.
+_RISK_ORDER = {RiskLevel.low: 0, RiskLevel.medium: 1, RiskLevel.high: 2}
 
 
 @dataclass(frozen=True)
@@ -184,6 +191,49 @@ def _existential_breaches(
     return breaches
 
 
+def _trajectory_escalation(
+    slot: ActionSlot,
+    risk_level: RiskLevel,
+    trajectories: dict[str, Crossing],
+    pack: DomainPack | None,
+    currency: str,
+) -> tuple[ActionSlot, RiskLevel, str] | None:
+    """Bring forward *when* a person looks, without changing what is at stake.
+
+    Two rules, and both matter.
+
+    **A trajectory never raises the money at risk.** Today's exposure is
+    today's money; a breach expected in three weeks has not cost anything yet.
+    Folding a forecast into the loss figure would inflate it exactly the way
+    summing exposures across domains would, and the customer would be quoted a
+    number they cannot reconcile with their own books.
+
+    **A trajectory never reaches `intervene` on its own.** That slot gates a
+    human decision and spends money, and acting on a forecast with an 80%
+    interval would trade real cost for a predicted one. Getting somebody to
+    *look* early is the whole value, and looking is free. If the level then
+    deteriorates for real, the ordinary path escalates as it always did.
+    """
+    if not trajectories or slot in (ActionSlot.investigate, ActionSlot.intervene):
+        return None
+
+    soonest = min(trajectories.values(), key=lambda c: c.earliest_days)
+    metric = next(k for k, v in trajectories.items() if v is soonest)
+    label = spec.label if pack and (spec := pack.metric(metric)) else metric
+
+    weeks = soonest.earliest_days / 7
+    reason = (
+        f"{label} is within its band today, but on the current trend it reaches "
+        f"{soonest.threshold:g} in about {soonest.expected_days / 7:.0f} weeks and "
+        f"possibly in {weeks:.0f}. Worth looking now, while it is still cheap to "
+        f"change. Nothing is at risk yet, so no cost has been counted against it."
+    )
+    raised = (
+        risk_level if _RISK_ORDER[risk_level] >= _RISK_ORDER[RiskLevel.medium] else RiskLevel.medium
+    )
+    return ActionSlot.investigate, raised, reason
+
+
 def evaluate(
     drift_fraction: float,
     performance: float,
@@ -191,12 +241,16 @@ def evaluate(
     pack: DomainPack | None = None,
     values: dict[str, float] | None = None,
     currency: str = money.DEFAULT,
+    trajectories: dict[str, Crossing] | None = None,
 ) -> Decision:
     """Evaluate one domain's state against a tenant's policy.
 
     drift_fraction: share of tracked metrics that moved against baseline, 0..1
     performance:    composite health, 0..1, higher is better
     values:         raw metric values, used by exposure-based economics
+    trajectories:   metrics due to breach their critical bound soon. These move
+                    *when* the system asks for attention, never how much it
+                    says is at stake.
     """
     drift_fraction = max(0.0, min(drift_fraction, 1.0))
     perf_degradation = max(0.0, params.perf_threshold - performance) / params.perf_threshold
@@ -264,6 +318,15 @@ def evaluate(
         slot = ActionSlot.none
         reason = "Operating within acceptable bounds."
 
+    # Applied last, and only where the level has not already asked for more.
+    # A metric that is both bad now and getting worse is one problem, not two,
+    # and must not be escalated twice for it.
+    escalated = _trajectory_escalation(slot, risk_level, trajectories or {}, pack, currency)
+    trajectory_note = ""
+    if escalated is not None:
+        slot, risk_level, trajectory_note = escalated
+        reason = trajectory_note
+
     spec = pack.action(slot) if pack else _generic_action(slot)
 
     return Decision(
@@ -280,6 +343,11 @@ def evaluate(
             "drift_fraction": drift_fraction,
             "performance": performance,
             "loss_basis": basis,
+            **(
+                {"trajectory": {k: v.as_dict() for k, v in trajectories.items()}}
+                if trajectories
+                else {}
+            ),
         },
     )
 

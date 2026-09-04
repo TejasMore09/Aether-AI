@@ -455,3 +455,52 @@ def crosses(
         latest_days=None if late is None else max(0.0, late),
         trend=trend,
     )
+
+
+# ── Which metrics are heading for their critical bound ───────────────────────
+
+
+def approaching(
+    pack,
+    series: dict[str, list[tuple[datetime.datetime, float]]],
+    *,
+    within_days: float,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> dict[str, Crossing]:
+    """Scored metrics due to breach their critical bound within `within_days`.
+
+    Against the *pack's* critical bound, never a calibrated one. Critical is
+    the absolute line and does not move per tenant (see calibration), so a
+    trajectory heading for it means the same thing for every business.
+
+    `series` carries timestamps, unlike the values-only history the calibration
+    and drift layers take. A trend has to be fitted against elapsed time rather
+    than reading number, so this is a different shape on purpose rather than an
+    inconsistency to tidy away.
+
+    Metrics with no trend, no critical bound, or a breach further out than the
+    window are simply absent. An empty result is the normal state of a healthy
+    business and carries no meaning of its own.
+    """
+    out: dict[str, Crossing] = {}
+    for spec in pack.scored_metrics:
+        bound = spec.critical_max if spec.critical_max is not None else spec.critical_min
+        if bound is None:
+            continue
+
+        points = series.get(spec.key)
+        if not points:
+            continue
+
+        trend = fit(points, confidence=confidence)
+        if isinstance(trend, NoForecast):
+            continue
+
+        crossing = crosses(trend, bound, rising_is_bad=spec.critical_max is not None)
+        if isinstance(crossing, NoForecast):
+            continue
+        if crossing.already_past or crossing.earliest_days > within_days:
+            continue
+
+        out[spec.key] = crossing
+    return out

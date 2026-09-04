@@ -239,3 +239,116 @@ def test_direction_is_read_the_right_way_round_for_a_metric_where_higher_is_bett
 
     misread = forecast.crosses(falling, 0.70, rising_is_bad=True)
     assert misread is NoForecast.heading_away
+
+
+# ── Reaching the decision engine ──────────────────────────────────────────────
+
+
+def test_a_metric_heading_for_critical_is_found_within_the_window():
+    from aether.domains.pack import get_pack
+
+    pack = get_pack("receivables")
+    series = {"dso_days": weekly(STEEP)}  # critical_max is 90
+
+    found = forecast.approaching(pack, series, within_days=90)
+    assert "dso_days" in found
+    assert found["dso_days"].threshold == 90
+
+
+def test_a_breach_beyond_the_window_is_not_reported():
+    """Everything drifts somewhere eventually. Only a breach close enough to
+    act on is worth interrupting somebody for."""
+    from aether.domains.pack import get_pack
+
+    found = forecast.approaching(
+        get_pack("receivables"), {"dso_days": weekly(RISING)}, within_days=21
+    )
+    assert found == {}
+
+
+def test_a_healthy_steady_business_has_no_trajectories():
+    from aether.domains.pack import get_pack
+
+    found = forecast.approaching(
+        get_pack("receivables"), {"dso_days": weekly(STEADY)}, within_days=90
+    )
+    assert found == {}
+
+
+def test_a_trajectory_brings_a_look_forward_without_moving_the_money():
+    """The rule that keeps this honest. Today's exposure is today's money; a
+    breach expected in three weeks has not cost anything yet, and folding a
+    forecast into the loss figure would inflate a number the customer cannot
+    reconcile with their own books."""
+    from aether.domains.pack import get_pack
+    from aether.policy.decision_engine import ActionSlot, PolicyParams, evaluate
+
+    pack = get_pack("receivables")
+    params = PolicyParams.for_pack(pack, None)
+    healthy = {"dso_days": 40.0, "overdue_ratio": 0.08, "ar_total": 200_000.0}
+
+    quiet = evaluate(0.1, 0.95, params, pack=pack, values=healthy)
+    trajectories = forecast.approaching(pack, {"dso_days": weekly(STEEP)}, within_days=90)
+    warned = evaluate(0.1, 0.95, params, pack=pack, values=healthy, trajectories=trajectories)
+
+    assert quiet.slot is ActionSlot.none
+    assert warned.slot is ActionSlot.investigate, "a look, brought forward"
+    assert warned.expected_daily_loss == quiet.expected_daily_loss, (
+        "the money at risk must not move because of a forecast"
+    )
+    assert "on the current trend" in warned.reason
+    assert "no cost has been counted" in warned.reason
+
+
+def test_a_trajectory_never_reaches_intervene_on_its_own():
+    """That slot gates a human decision and spends money. Acting on an 80%
+    interval would trade a real cost for a predicted one."""
+    from aether.domains.pack import get_pack
+    from aether.policy.decision_engine import ActionSlot, PolicyParams, evaluate
+
+    pack = get_pack("receivables")
+    params = PolicyParams.for_pack(pack, None)
+    trajectories = forecast.approaching(pack, {"dso_days": weekly(STEEP)}, within_days=90)
+
+    decision = evaluate(
+        0.1, 0.95, params, pack=pack, values={"dso_days": 40.0}, trajectories=trajectories
+    )
+    assert decision.slot is not ActionSlot.intervene
+
+
+def test_a_business_already_in_trouble_is_not_escalated_twice_for_it():
+    """A metric that is both bad now and getting worse is one problem, not
+    two. The level has already asked for attention; the trend must not raise
+    the same alarm again."""
+    from aether.domains.pack import get_pack
+    from aether.policy.decision_engine import PolicyParams, evaluate
+
+    pack = get_pack("receivables")
+    params = PolicyParams.for_pack(pack, None)
+    bad = {"dso_days": 85.0, "overdue_ratio": 0.5, "ar_total": 400_000.0}
+    trajectories = forecast.approaching(pack, {"dso_days": weekly(STEEP)}, within_days=90)
+
+    without = evaluate(0.9, 0.2, params, pack=pack, values=bad)
+    with_trend = evaluate(0.9, 0.2, params, pack=pack, values=bad, trajectories=trajectories)
+
+    assert with_trend.slot is without.slot
+    assert with_trend.risk_level is without.risk_level
+    assert with_trend.reason == without.reason, "the level's explanation already stands"
+
+
+def test_the_trajectory_is_recorded_on_the_decision():
+    """So an audit entry says why attention was asked for early, rather than
+    leaving a reader to wonder what changed."""
+    from aether.domains.pack import get_pack
+    from aether.policy.decision_engine import PolicyParams, evaluate
+
+    pack = get_pack("receivables")
+    params = PolicyParams.for_pack(pack, None)
+    trajectories = forecast.approaching(pack, {"dso_days": weekly(STEEP)}, within_days=90)
+
+    decision = evaluate(
+        0.1, 0.95, params, pack=pack, values={"dso_days": 40.0}, trajectories=trajectories
+    )
+    recorded = decision.as_dict()["inputs"]["trajectory"]["dso_days"]
+    assert recorded["threshold"] == 90
+    assert recorded["earliest_days"] < recorded["expected_days"]

@@ -9,11 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 4
 
-Phases 0–3 complete, plus 6.4 pulled forward. **4.1, 4.2 and 4.5 done** — a
-metric's trend, when it is due to cross a threshold, and five distinct ways of
-saying nothing. Next is 4.4, letting a trajectory reach the decision engine.
-4.6's backtest still needs real history, which nothing has. 522 tests, none
-skipped.
+Phases 0–3 complete, plus 6.4 pulled forward. **4.1, 4.2, 4.4 and 4.5 done**
+— a metric's trend, when it is due to cross, five ways of saying nothing, and
+a trajectory that brings attention forward without inflating the exposure.
+Remaining: 4.3 seasonality, and 4.6's backtest which needs real history that
+nothing has. 529 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -155,7 +155,8 @@ seasonality and nothing heavier.
 - [x] **4.2** Time-to-critical, as a range rather than a date — the early edge is
   the one worth acting on
 - [ ] **4.3** Seasonality, where enough history exists to justify claiming it
-- [ ] **4.4** Forecasts enter the decision engine — act earlier when the trajectory is bad, not only when the level is
+- [x] **4.4** Trajectories reach the decision engine: they bring a look forward,
+  never raise what is said to be at stake, and never reach `intervene` (D51)
 - [x] **4.5** Refusing is a family of answers with a sentence each, not one silence
   (D50). Steady, improving and drifting are different news
 - [ ] **4.6** Backtest harness — measure forecast error, publish it, do not hide it

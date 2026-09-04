@@ -7,6 +7,46 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-04 — Phase 4.4: acting on where a metric is heading
+
+A trajectory now reaches the decision engine, so a business can be told to
+look at something *before* the level goes bad rather than after.
+
+**It changes when we act, never what we say is at stake** (D51). Today's
+exposure is today's money; a breach expected in three weeks has cost nothing
+yet. Folding a forecast into the loss figure would inflate a number the
+customer cannot reconcile against their own books — the same failure as
+summing exposures across domains, arriving from a different direction. The
+escalated message says so out loud: *"Nothing is at risk yet, so no cost has
+been counted against it."*
+
+**It never reaches `intervene` on its own.** That slot gates a human decision
+and spends money, and acting on an 80% interval would trade a real cost for a
+predicted one. Getting somebody to look early is the whole value, and looking
+is free. If the level then deteriorates for real, the ordinary path escalates
+as it always did.
+
+**And never twice for one problem.** A metric that is bad now *and* getting
+worse is one problem, so the escalation applies only where the level has not
+already asked for attention. A test pins that the slot, risk level and reason
+are all unchanged in that case.
+
+The window is the tenant's payback horizon rather than a new constant — that
+number already answers "how far ahead is worth acting on" for this business,
+and a second one would drift from it.
+
+Two things fixed while writing it. `RiskLevel` is a `StrEnum`, so comparing
+severities with `max()` would have ordered them alphabetically and put HIGH
+below LOW, silently downgrading anything relying on it; there is now an
+explicit order. And `approaching()` first took the values-only history shape
+the calibration layer uses, which carries no timestamps — a trend fitted
+against reading number rather than elapsed time is exactly the bug 4.1 already
+has a test for.
+
+529 tests, none skipped.
+
+---
+
 ## 2026-09-04 — Phase 4.1, 4.2, 4.5: where a metric is heading
 
 `domains/forecast.py`. Ordinary least squares against elapsed time, which is
