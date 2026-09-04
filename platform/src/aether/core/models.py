@@ -74,6 +74,29 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class PasswordReset(Base):
+    """One issued reset token, stored as a hash.
+
+    Not tenant-scoped: a person resetting a password has not signed in, so
+    there is no tenant context to scope by. See migration 0015.
+    """
+
+    __tablename__ = "password_resets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    # SHA-256 of the token. The plaintext lives in the email and nowhere else.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    # Consumed rather than deleted: "already used" and "never existed" deserve
+    # different handling, and a burst of resets is a signal worth keeping.
+    used_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    requested_from: Mapped[str] = mapped_column(String(64), default="")
+
+
 class Role(enum.StrEnum):
     owner = "owner"
     operator = "operator"

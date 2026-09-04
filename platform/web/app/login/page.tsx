@@ -1,13 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Suspense, useActionState } from 'react'
 
 import { AuthField, AuthShell, AuthSubmit } from '@/components/AuthShell'
 import { login } from '@/lib/actions'
 
-export default function LoginPage() {
+function LoginForm() {
   const [state, action] = useActionState(login, null)
+  // Somebody who just set a new password arrives here with no idea whether it
+  // worked. Signing them in automatically would be the other way to close
+  // that gap, and it is the wrong one: a reset proves control of a mailbox,
+  // and the password they just chose is what proves control of the account.
+  const justReset = useSearchParams().get('reset') === '1'
 
   return (
     <AuthShell
@@ -20,12 +26,17 @@ export default function LoginPage() {
             Create an organization
           </Link>
           {' · '}
+          <Link href="/forgot" style={{ color: 'var(--color-ink-faint)' }}>
+            Forgot your password?
+          </Link>
+          {' · '}
           <Link href="/explore" style={{ color: 'var(--color-ink-faint)' }}>
             See it without signing up
           </Link>
         </>
       }
       error={state?.error}
+      notice={justReset ? 'Password changed. Sign in with your new one.' : undefined}
       action={action}
     >
       <AuthField label="Work email" name="email" type="email" autoComplete="username" required />
@@ -44,5 +55,13 @@ export default function LoginPage() {
       />
       <AuthSubmit pending="Signing in…">Sign in</AuthSubmit>
     </AuthShell>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }

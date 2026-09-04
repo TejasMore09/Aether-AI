@@ -24,7 +24,7 @@ import { SESSION_COOKIE, parseSession } from './lib/session'
  * path here is a decision about disclosure, not convenience — check that the
  * thing behind it is genuinely tenant-free before extending this list.
  */
-const PUBLIC_PATHS = ['/login', '/signup', '/explore', '/api/sectors']
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot', '/reset', '/explore', '/api/sectors']
 
 /**
  * Public *and* pointless once signed in, so a session bounces away from them.

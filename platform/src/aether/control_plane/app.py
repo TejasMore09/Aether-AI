@@ -13,7 +13,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from aether import __version__
-from aether.core import money
+from aether.core import money, recovery
+from aether.core.config import get_settings
 from aether.core.db import session, tenant_session
 from aether.core.models import (
     AgentInstance,
@@ -31,7 +32,15 @@ from aether.core.security import (
     verify_password,
 )
 from aether.core.tenancy import authenticated, require_role
-from aether.core.throttle import client_ip, guard, refused, succeeded
+from aether.core.throttle import (
+    SCOPE_RESET_EMAIL,
+    SCOPE_RESET_IP,
+    client_ip,
+    counted,
+    guard,
+    refused,
+    succeeded,
+)
 from aether.domains import preview
 from aether.domains import sector as sector_taxonomy
 from aether.knowledge import sector_corpus
@@ -130,6 +139,69 @@ def signup(body: SignupRequest) -> TokenResponse:
     # first reading, not from whenever someone next edits a setting.
     sector_corpus.index_sector(tenant_id, chosen)
     return TokenResponse(access_token=token, tenant_id=tenant_id, role=Role.owner)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+@app.post("/v1/auth/forgot", status_code=202)
+def forgot_password(body: ForgotPasswordRequest, request: Request) -> dict[str, str]:
+    """Ask for a reset link. Answers identically whether or not the account
+    exists — see `core.recovery`, where the reasoning lives."""
+    who = {SCOPE_RESET_EMAIL: body.email.lower(), SCOPE_RESET_IP: client_ip(request)}
+    guard(who)
+    # Before the work, not after: every request spends an attempt, and a
+    # caller who is about to be locked should not get one last email out.
+    counted(who)
+
+    recovery.request_reset(
+        body.email,
+        base_url=get_settings().web_base_url,
+        requested_from=client_ip(request),
+    )
+    return {"detail": "If that address has an account, a reset link is on its way."}
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.post("/v1/auth/reset")
+def reset_password(body: ResetPasswordRequest, request: Request) -> dict[str, str]:
+    """Use a reset link.
+
+    Throttled by address, but say what that is worth: both front ends are
+    BFFs, so `client_ip` is empty unless `client_ip_source` is configured, and
+    where it is empty this guard does nothing. It is depth, not the defence —
+    the defence is that the token is 256 bits of randomness and a guess has no
+    better strategy than chance.
+    """
+    who = {SCOPE_RESET_IP: client_ip(request)}
+    guard(who)
+
+    problem = recovery.complete_reset(body.token, body.password)
+    if problem is None:
+        return {"detail": "Password changed. Sign in with it."}
+
+    counted(who)
+    if problem == recovery.WEAK_PASSWORD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be at least {recovery.MIN_PASSWORD_LENGTH} characters.",
+        )
+    raise HTTPException(status_code=400, detail=_RESET_PROBLEMS[problem])
+
+
+# Phrased for the person who is trying to get into their own account: "already
+# used" and "expired" are different instructions to them, and neither says
+# whose account the link was for.
+_RESET_PROBLEMS = {
+    recovery.UNKNOWN_TOKEN: "That reset link is not valid. Request a new one.",
+    recovery.ALREADY_USED: "That reset link has already been used. Request a new one.",
+    recovery.EXPIRED: "That reset link has expired. Request a new one.",
+}
 
 
 class LoginRequest(BaseModel):

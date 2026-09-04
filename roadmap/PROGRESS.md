@@ -7,6 +7,49 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-04 — Phase 6.5: a way back into your own account
+
+A customer who forgot their password had no route back, and no route to
+support either, because nothing in the product could issue them one.
+
+Hashed single-use tokens with a 45-minute life; requesting a second kills the
+first; the form answers identically whether or not the address exists; and
+completing a reset clears the login lockout, so somebody who guessed six times
+and then correctly reset is not still standing at a bolted door.
+
+Reset was also what had been holding **6.4's lockout cap at fifteen minutes** —
+a longer lock is only defensible once there is a way out. It is an hour now.
+
+Two things worth recording because neither was in the plan:
+
+**Reset needed its own throttle counters** (D54). Sharing the login ones would
+have let anyone lock a named person out of signing in just by asking to reset
+their password — the exact denial of service the throttle exists to prevent,
+re-entered through the door built to escape it. And every reset request counts,
+not only failed ones: the endpoint has no failures by design, and what is
+rationed is mail to somebody's inbox.
+
+**The test suite was sending real email** (D55). Unifying the two send paths
+made a test that had always passed — because the machine had no SMTP host —
+start using the live Resend key instead, and it made a genuine outbound call.
+It was stopped only by the unverified sending domain. `tests/conftest.py` now
+clears every transport by default and makes any real send fail loudly. Same
+lesson as D46: a test that passes for a reason nobody chose is not evidence.
+
+**What this does not do.** It cannot revoke a session that is already running.
+Tokens are stateless JWTs with a sixty-minute life, so for up to an hour a
+password change does not evict an attacker who already has a session. That
+needs server-side session state — 6.7 — and until then the product must not
+imply that resetting a password secures a compromised account (D56).
+
+Still blocked on Tejas: **a verified sending domain**. Resend's shared sender
+only delivers to the account owner, so today a reset email to a real customer
+reports success and arrives nowhere.
+
+562 tests, none skipped.
+
+---
+
 ## 2026-09-04 — Phase 4.6: the backtest caught the forecasts lying
 
 Building this was meant to be bookkeeping. It found a real defect, which is

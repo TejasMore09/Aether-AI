@@ -9,15 +9,17 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 6
 
-Phases 0–4 complete, plus 6.4 pulled forward. Phase 4 closed with a real
-finding: the backtest showed the 80% intervals covering only 52% on a random
-walk and 12% on a curve, so `fit` now refuses both shapes rather than quoting
-a confidence it has not earned (D53).
+Phases 0–4 complete, plus 6.4 and 6.5. Phase 4 closed with a real finding:
+the backtest showed the 80% intervals covering only 52% on a random walk and
+12% on a curve, so `fit` now refuses both shapes rather than quoting a
+confidence it has not earned (D53).
 
-**Next is Phase 6** — the largest fully unblocked block, and where
-"production-level" actually lives. 9 of 10 items open. Phase 5 needs no new
-data (two bands already sit in `reference/`) and can follow. 550 tests, none
-skipped.
+**Phase 6 is where "production-level" actually lives.** 8 of 10 items open.
+6.5 also closed a hole nobody was looking for: pointing notifications at the
+one mail module made the *test suite* start sending real email through the
+live Resend key, and it was only stopped by an unverified sending domain
+(D55). Phase 5 needs no new data (two bands already sit in `reference/`) and
+can follow. 562 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -213,7 +215,12 @@ cheap now and painful later.
 - [x] **6.4** Login throttling per account, with backoff. Per-address is built but
   inert until a deployment can name the client (see PROGRESS 2026-09-02).
   General per-endpoint rate limiting belongs at the proxy in 6.1 and is not done
-- [ ] **6.5** Password reset — a locked-out user currently cannot be helped at all
+- [x] **6.5** Password reset. Hashed single-use tokens, 45-minute life, no
+  enumeration oracle, its own throttle counters so asking to reset somebody's
+  password cannot lock them out of logging in, and completing one clears the
+  login lockout. Raised the account lockout cap from 15 minutes to an hour,
+  which 6.4 had deliberately held down. **Does not revoke live sessions** —
+  JWTs are stateless; that gap belongs to 6.7
 - [ ] **6.6** MFA, at least for owners
 - [ ] **6.7** Refresh tokens; 60-minute hard expiry is a support burden at scale
 - [ ] **6.8** GDPR: export and delete, as an obligation not a feature

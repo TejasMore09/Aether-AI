@@ -115,15 +115,16 @@ def _wait_for(email: str) -> int:
 
 
 def test_a_lock_is_capped_so_a_mistyped_password_is_never_permanent():
-    """Without password reset (6.5), an unbounded lock means a real customer
-    cannot be helped at all."""
+    """Doubling without a ceiling reaches days, then weeks. The cap was fifteen
+    minutes while there was no password reset to escape through; now that 6.5
+    exists it is an hour, and this asserts it is still bounded at all."""
     email = unique("hammered")
     for _ in range(40):
         record_failure({SCOPE_EMAIL: email})
         unlock(SCOPE_EMAIL, email)
     record_failure({SCOPE_EMAIL: email})
 
-    assert _wait_for(email) <= 15 * 60
+    assert _wait_for(email) <= 60 * 60
 
 
 def test_failures_stop_counting_once_the_window_has_passed():

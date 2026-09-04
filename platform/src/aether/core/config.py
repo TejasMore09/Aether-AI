@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = ""
 
+    # Where a customer's browser reaches the web app. Password reset links are
+    # built from this and deliberately *not* from the incoming request: an
+    # attacker who can set the Host header would otherwise choose where a
+    # reset link points, and the customer would follow it.
+    web_base_url: str = "http://localhost:3000"
+
     # Temporal (durable workflow engine) — the autonomous monitor loop.
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"

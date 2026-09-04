@@ -16,6 +16,15 @@ import { createSession, destroySession, readSession, type Session } from './sess
 
 export type FormState = { error: string } | null
 
+/**
+ * Password reset needs a third answer. Its whole design is that requesting a
+ * link succeeds identically whether or not the address exists, so there is no
+ * error to report and no data to show — only reassurance. Kept separate from
+ * `FormState` because no other action here can produce one, and widening the
+ * shared type would have made every caller narrow for a case it cannot hit.
+ */
+export type AuthFormState = FormState | { notice: string }
+
 type TokenResponse = { access_token: string; tenant_id: string; role: Session['role'] }
 
 function str(form: FormData, key: string): string {
@@ -70,6 +79,57 @@ export async function updateBusiness(sector: string, currency: string): Promise<
   revalidatePath('/domains')
   revalidatePath('/')
   return null
+}
+
+/**
+ * Ask for a reset link.
+ *
+ * Always reports the same thing. The API is careful never to say whether an
+ * address has an account, and a UI that helpfully rendered "no such user"
+ * would hand back the exact fact the API withheld — the leak would be here,
+ * not there.
+ */
+export async function forgotPassword(
+  _prev: AuthFormState,
+  form: FormData,
+): Promise<AuthFormState> {
+  const email = str(form, 'email')
+  if (!email) return { error: 'Enter the email address you sign in with.' }
+
+  const result = await api.control<{ detail: string }>('/v1/auth/forgot', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    auth: false,
+  })
+  // Rate limiting is the one refusal worth surfacing: it is about the caller,
+  // not about whether the account exists.
+  if (!result.ok && result.status === 429) return { error: result.message }
+
+  return {
+    notice:
+      'If that address has an account, a reset link is on its way. ' +
+      'It expires in 45 minutes, and asking again replaces it.',
+  }
+}
+
+export async function resetPassword(_prev: FormState, form: FormData): Promise<FormState> {
+  const token = str(form, 'token')
+  const password = str(form, 'password')
+  if (!token) return { error: 'That link is incomplete. Request a new one.' }
+  if (password.length < 10) return { error: 'Use a password of at least 10 characters.' }
+  if (password !== str(form, 'confirm')) return { error: 'The two passwords do not match.' }
+
+  const result = await api.control<{ detail: string }>('/v1/auth/reset', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+    auth: false,
+  })
+  if (!result.ok) return { error: result.message }
+
+  // Deliberately not signed in here. Completing a reset proves control of the
+  // mailbox, not of the account, and the password just set is the thing that
+  // proves the second — so it gets used once, immediately.
+  redirect('/login?reset=1')
 }
 
 export async function login(_prev: FormState, form: FormData): Promise<FormState> {

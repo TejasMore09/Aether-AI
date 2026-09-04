@@ -1101,3 +1101,78 @@ on: a missing forecast costs a look, a lying one costs trust.
 first principles. This one was invisible until it was measured, and it was the
 worst of them. A harness that only ever confirms good news is decoration —
 there is now a test asserting it can still detect a lie.
+
+
+---
+
+## D54 — Password reset gets its own throttle counters, not the login ones
+
+Reusing the login throttle for `/v1/auth/forgot` was the obvious move and
+would have built an attack.
+
+The login throttle counts failures per email address. If reset requests
+counted against the same tally, anyone could hammer the reset form for a named
+person — no password guessing, no failures, nothing that looks like an attack
+— and that person would be locked out of signing in. That is precisely the
+denial of service the two-scope design in `throttle.py` exists to prevent,
+re-entered through the door built to escape it.
+
+So reset has `reset_email` and `reset_ip` scopes of its own.
+
+**And every reset request counts, not only failed ones.** For a login, only
+failures are worth counting: a successful sign-in is not evidence of anything
+bad. For a reset, there is no such thing as a failure from the caller's side —
+the endpoint answers 202 whether or not the address exists, by design. What is
+being rationed is *mail to somebody's inbox*, and an attacker who knows a real
+address never fails at all. Counting failures there would count nothing, and
+the reset form would be an open mail relay pointed at one victim.
+
+Three requests per address per fifteen minutes, then backoff.
+
+---
+
+## D55 — No test may send real email, and this is not hypothetical
+
+Pointing `notifications` at the unified `core.mail` module broke a test that
+had passed for two weeks — `test_unconfigured_smtp_records_skip_not_silence`.
+It passed because the developer's machine had no `AETHER_SMTP_HOST`. It never
+asserted that; it inherited it from the environment.
+
+With the send path unified, the same test found the live Resend key in `.env`
+instead and **made a real outbound API call trying to mail a made-up address**.
+It failed only because the sending domain is not verified yet. With a verified
+domain — the next item on Tejas's list — a full test run would have quietly
+emailed strangers, and nothing in the suite would have said so.
+
+`tests/conftest.py` now clears both transports for every test by default and
+replaces `_via_resend` and `_via_smtp` with something that raises. A test that
+wants to observe sending patches `mail.send`, which sits above both. Setting a
+transport is now the loud, deliberate act it should always have been.
+
+**The lesson is the same one D46 recorded about the intermittent failure:** a
+test that passes for a reason nobody chose is not evidence. The reason has to
+be pinned inside the test, not left to whatever happens to be in the
+environment — because the environment changes, and the test keeps its green
+tick while it stops meaning anything.
+
+---
+
+## D56 — Completing a password reset does not sign you in
+
+The reset endpoint returns "password changed, sign in with it" rather than a
+session token, and the web page redirects to `/login`.
+
+Auto-signing-in is friendlier by one click and wrong. A reset link proves
+control of a **mailbox**. It does not prove control of the **account** — that
+is what the password proves, and the person has just chosen one. Making them
+use it immediately turns the reset into a complete proof instead of half of
+one, and it means a reset link intercepted in transit still does not hand over
+a live session without the attacker also setting, and knowing, a password the
+real owner will notice is broken.
+
+**The gap this leaves, stated plainly.** Session tokens are stateless JWTs
+with a sixty-minute life, so a reset does *not* end a session an attacker
+already has. For up to an hour, changing the password does not evict them.
+That is a real weakness and it cannot be fixed here — it needs server-side
+session state, which is 6.7. Until then the product must not imply that
+resetting a password secures a compromised account.

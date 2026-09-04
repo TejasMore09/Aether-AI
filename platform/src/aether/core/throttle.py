@@ -17,11 +17,21 @@ directions: too short to matter, or long enough that a real person who
 mistyped is stuck. Doubling from a short base keeps an honest mistake cheap
 and makes sustained guessing expensive, without either extreme.
 
-**The cap is deliberately low, for a reason that will expire.** Fifteen
-minutes for an account bounds the attack rate without stranding anyone —
-because password reset does not exist yet (6.5), a longer lock has no escape
-hatch and a locked-out customer genuinely cannot be helped. Raise it when
-there is a way out.
+**The account cap was held down by a missing feature, and no longer is.** It
+sat at fifteen minutes because password reset did not exist: a longer lock had
+no escape hatch, so a customer who locked themselves out genuinely could not
+be helped. Now that 6.5 exists the cap is an hour, which at the doubling below
+takes eleven wrong passwords to reach and leaves a real person a way back in
+the whole time.
+
+**Reset requests are counted separately, and every one counts.** They have
+their own scopes rather than sharing the login counters, because sharing gives
+an attacker a way to lock a named person out of logging in by repeatedly
+asking to reset their password — the denial of service this file exists to
+avoid, re-entered through the door built to escape it. And unlike a login,
+where only failures count, every reset request is counted whether or not the
+address exists: what is being rationed there is mail sent to somebody's inbox,
+and an attacker who knows a real address needs no failures to flood it.
 
 And say plainly what this does not do: it bounds the *rate* of guessing. It
 does not stop a patient attacker with a good wordlist. The answer to that is
@@ -50,17 +60,28 @@ logger = logging.getLogger(__name__)
 SCOPE_EMAIL = "email"
 SCOPE_IP = "ip"
 
-# Failures allowed inside one window before a lock begins.
-LIMITS = {SCOPE_EMAIL: 5, SCOPE_IP: 20}
+# Password reset. Separate counters, for the reason in the docstring: sharing
+# them lets a reset request lock somebody out of logging in.
+SCOPE_RESET_EMAIL = "reset_email"
+SCOPE_RESET_IP = "reset_ip"
+
+# Attempts allowed inside one window before a lock begins. For the login
+# scopes these are failures; for the reset scopes, every request.
+LIMITS = {SCOPE_EMAIL: 5, SCOPE_IP: 20, SCOPE_RESET_EMAIL: 3, SCOPE_RESET_IP: 20}
 
 # How long a run of failures stays counted. A slow trickle should not
 # accumulate into a lock over a week.
 WINDOW = datetime.timedelta(minutes=15)
 
 _BASE_LOCK = datetime.timedelta(minutes=1)
-# See the module docstring: the account cap is held down by the absence of
-# password reset, not by what would otherwise be ideal.
-_MAX_LOCK = {SCOPE_EMAIL: datetime.timedelta(minutes=15), SCOPE_IP: datetime.timedelta(hours=1)}
+# An hour everywhere. The account cap was fifteen minutes only while there was
+# no password reset to escape through; see the module docstring.
+_MAX_LOCK = {
+    SCOPE_EMAIL: datetime.timedelta(hours=1),
+    SCOPE_IP: datetime.timedelta(hours=1),
+    SCOPE_RESET_EMAIL: datetime.timedelta(hours=1),
+    SCOPE_RESET_IP: datetime.timedelta(hours=1),
+}
 
 # Rows nobody could still be throttled by. Swept opportunistically.
 _STALE_AFTER = datetime.timedelta(days=2)
@@ -274,3 +295,13 @@ def refused(identifiers: dict[str, str]) -> None:
 
 def succeeded(email: str) -> None:
     record_success(email)
+
+
+def counted(identifiers: dict[str, str]) -> None:
+    """Spend one attempt whether or not anything went wrong.
+
+    Password reset uses this rather than `refused`, because what is rationed
+    there is mail to somebody's inbox: an attacker who knows a real address
+    never fails at all, so counting only failures would count nothing.
+    """
+    record_failure(identifiers)

@@ -54,7 +54,14 @@ def gated_approval(org):
     return out.approval_id
 
 
-def test_unconfigured_smtp_records_skip_not_silence(org, gated_approval):
+def test_unconfigured_mail_records_skip_not_silence(org, gated_approval):
+    """An alert that cannot be delivered must still be recorded as one that
+    could not be delivered. Silence and success look identical afterwards.
+
+    "Unconfigured" is now guaranteed by `conftest`, not assumed from the
+    environment — this test used to pass because the developer's machine had
+    no SMTP host, and started sending real mail the day the send path changed.
+    """
     tenant_id, owner_email, _ = org
     result = notifications.notify_approval_created(tenant_id, gated_approval)
     assert result["recipients"] == 1
@@ -68,7 +75,7 @@ def test_unconfigured_smtp_records_skip_not_silence(org, gated_approval):
         assert rows[0].ref_id == gated_approval
 
 
-def test_configured_smtp_sends_and_is_idempotent(org, gated_approval, monkeypatch):
+def test_configured_mail_sends_and_is_idempotent(org, gated_approval, monkeypatch):
     tenant_id, owner_email, _ = org
     sent: list[tuple] = []
 

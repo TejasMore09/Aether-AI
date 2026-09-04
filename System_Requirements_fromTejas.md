@@ -124,7 +124,7 @@ of 30 Nano + 10 Mega tenants.
 |---|---|---|---|---|
 | 1 | **Gemini API key** | Diagnosis prose | Metered per tenant | ✅ **Done.** Supplied, tested, and it found two real bugs — see below |
 | 2 | **Resend API key** | Password reset (6.5), alert delivery | Free tier | ✅ Supplied and working — but see #3, it can only reach *your own* address |
-| 3 | **A domain name**, verified at resend.com/domains | Reaching anyone but you | ~$10/year | 🔴 **BLOCKING 6.5.** Resend's shared sender `onboarding@resend.dev` delivers only to the account owner's address. A password reset to a real customer is silently undeliverable until a domain is verified |
+| 3 | **A domain name**, verified at resend.com/domains | Reaching anyone but you | ~$10/year | 🔴 **6.5 is now built and this is what stops it working.** Password reset ships: hashed single-use tokens, the pages, the throttling, 12 tests. But Resend's shared sender `onboarding@resend.dev` delivers only to *your* address, so a reset email to a real customer reports success and arrives nowhere. Nothing in the code can detect that. This is the single item between a working password reset and a decorative one |
 | 4 | **Sentry** (or equivalent) | Error tracking, 6.3 | Free tier | 🟠 Phase 6 |
 
 **On #1 — this was run, and it was worth running.** The model had been stubbed

@@ -11,14 +11,11 @@ Design rules:
 """
 
 import logging
-import smtplib
 import uuid
-from email.mime.text import MIMEText
 
 from sqlalchemy import select
 
-from aether.core import money
-from aether.core.config import get_settings
+from aether.core import mail, money
 from aether.core.db import session, tenant_session
 from aether.core.models import Membership, Notification, PendingApproval, Role, User
 
@@ -40,27 +37,15 @@ def _tenant_owner_emails(tenant_id: uuid.UUID) -> list[str]:
 
 
 def _send_email(recipient: str, subject: str, body: str) -> tuple[str, str]:
-    """Returns (status, detail)."""
-    s = get_settings()
-    if not s.smtp_host:
-        return "skipped_unconfigured", "SMTP not configured (AETHER_SMTP_HOST empty)"
-    try:
-        msg = MIMEText(body, "plain", "utf-8")
-        msg["Subject"] = subject
-        msg["From"] = s.smtp_from
-        msg["To"] = recipient
-        with smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=15) as smtp:
-            smtp.ehlo()
-            if s.smtp_starttls:
-                smtp.starttls()
-                smtp.ehlo()
-            if s.smtp_username:
-                smtp.login(s.smtp_username, s.smtp_password)
-            smtp.sendmail(s.smtp_from, [recipient], msg.as_string())
-        return "sent", ""
-    except Exception as exc:
-        logger.error("email send failed to %s: %s", recipient, exc)
-        return "failed", f"{type(exc).__name__}: {exc}"
+    """Returns (status, detail).
+
+    Delegates to `core.mail`, which is the one way out of the building. This
+    used to speak SMTP directly while a Resend key sat in the configuration
+    doing nothing — two send paths meant two places to misconfigure and a
+    product where alerts and password resets could each work while the other
+    silently did not.
+    """
+    return mail.send(recipient, subject, body)
 
 
 def notify_approval_created(tenant_id: uuid.UUID, approval_id: uuid.UUID) -> dict:

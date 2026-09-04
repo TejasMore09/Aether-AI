@@ -16,6 +16,7 @@ export function AuthShell({
   lede,
   footer,
   error,
+  notice,
   action,
   children,
 }: {
@@ -23,6 +24,10 @@ export function AuthShell({
   lede: string
   footer: React.ReactNode
   error?: string
+  // Confirmation rather than failure. Password reset needs it: the whole
+  // design of that form is that it succeeds identically whether or not the
+  // address exists, so there is nothing to report except reassurance.
+  notice?: string
   action: (formData: FormData) => void
   children: React.ReactNode
 }) {
@@ -82,6 +87,19 @@ export function AuthShell({
               }}
             >
               {error}
+            </div>
+          ) : null}
+          {notice ? (
+            <div
+              role="status"
+              className="rounded-[12px] px-4 py-3 text-[13.5px]"
+              style={{
+                background: 'var(--color-ground)',
+                boxShadow: 'var(--press)',
+                color: 'var(--color-ink-soft)',
+              }}
+            >
+              {notice}
             </div>
           ) : null}
           {children}
