@@ -9,11 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 4
 
-Phases 0–3 complete, plus 6.4 pulled forward. Two businesses reporting the same
-number now receive different, defensible verdicts, and every threshold on
-screen says where it came from. Next is Phase 4, forecasting — and note the
-constraint below: 4.6's backtest needs real history, which nothing has yet.
-501 tests, none skipped.
+Phases 0–3 complete, plus 6.4 pulled forward. **4.1, 4.2 and 4.5 done** — a
+metric's trend, when it is due to cross a threshold, and five distinct ways of
+saying nothing. Next is 4.4, letting a trajectory reach the decision engine.
+4.6's backtest still needs real history, which nothing has. 522 tests, none
+skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -150,11 +150,14 @@ critical in six weeks", which is most of what "future precautions" means.
 Classical methods, not deep learning — 52 points a year supports trend and
 seasonality and nothing heavier.
 
-- [ ] **4.1** Per-metric trend extrapolation with honest confidence intervals
-- [ ] **4.2** Time-to-critical: when the current trajectory crosses the band
+- [x] **4.1** Per-metric trend extrapolation, with a prediction interval rather than
+  a confidence interval and a horizon that never exceeds the history (D48, D49)
+- [x] **4.2** Time-to-critical, as a range rather than a date — the early edge is
+  the one worth acting on
 - [ ] **4.3** Seasonality, where enough history exists to justify claiming it
 - [ ] **4.4** Forecasts enter the decision engine — act earlier when the trajectory is bad, not only when the level is
-- [ ] **4.5** Refuse to forecast on thin history rather than guessing; say so plainly
+- [x] **4.5** Refusing is a family of answers with a sentence each, not one silence
+  (D50). Steady, improving and drifting are different news
 - [ ] **4.6** Backtest harness — measure forecast error, publish it, do not hide it
 
 **Done when:** a decision can be justified by where a metric is heading, with

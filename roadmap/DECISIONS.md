@@ -943,3 +943,62 @@ displaying their original band, which is the same guarantee D41 makes.
 The general rule, since this has now been fixed three times in three places:
 **any number a customer can compare against a verdict must come from the same
 place the verdict did.**
+
+---
+
+## D48 — Forecasts report a prediction interval, not a confidence interval
+
+They answer different questions and the difference is not academic. A
+confidence interval says where the *average* future reading probably sits; a
+prediction interval says where *next Tuesday's* reading probably sits, and
+includes the scatter of individual readings about the line.
+
+An owner asking "where will my DSO be in six weeks" is asking the second.
+Measured on a representative series the prediction interval is **1.76×** the
+width of the confidence interval, so answering the wrong question would
+present every forecast as nearly twice as precise as the data supports.
+
+Default confidence is 80% rather than 95%, and that is a trade rather than a
+convention: a 95% interval on a dozen noisy weekly readings is wide enough to
+contain both "fine" and "in trouble" — true, and useless to act on. The level
+is carried on every forecast so nobody has to guess which was used.
+
+---
+
+## D49 — The horizon cap covers what the interval structurally cannot
+
+A projection never reaches further ahead than the history behind it.
+
+This is not belt-and-braces over the interval, and the distinction is the
+whole point. **A prediction interval measures uncertainty given that a line is
+the right shape.** It has no way to express "a straight line is the wrong
+model by then" — which is the assumption that fails first on business data.
+
+Measured: twelve noisy weekly readings project to 117–153 days DSO at a year
+out, with 80% confidence. Arithmetically correct, and a confident-sounding
+claim no metric earns from three months of history. The interval widens
+honestly but never widens *enough*, because the error it cannot see is model
+error rather than sampling error.
+
+One-to-one is the rule because it is defensible and easy to state: twelve
+weeks of readings support a twelve-week projection.
+
+---
+
+## D50 — Refusing is a family of answers, not one silence
+
+`NoForecast` is an enum with a sentence for each member, because the reasons
+are not interchangeable and collapsing them loses information a customer
+needs:
+
+- **too few readings** — a matter of time, and it will resolve on its own.
+- **no detectable trend** — the business is steady. Good news, not a gap.
+- **heading away** — improving. Better news, and briefly returned the same
+  reason as "we cannot tell", which is the opposite message.
+- **not within horizon** — genuinely drifting toward the threshold, just not
+  soon enough to date. A business on a slow drift needs to hear the drift.
+- **horizon too far** — asked for more than the history supports.
+
+The failure this guards against is a forecast that reports the tilt of a line
+through noise as a direction. A line always tilts; saying so is inventing a
+signal, and a business may act on it.

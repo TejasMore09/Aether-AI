@@ -7,6 +7,48 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-04 — Phase 4.1, 4.2, 4.5: where a metric is heading
+
+`domains/forecast.py`. Ordinary least squares against elapsed time, which is
+what fifty readings a year supports and nothing heavier. Most of the module is
+about refusing.
+
+**A prediction interval, not a confidence interval** (D48). They answer
+different questions: one says where the *average* future reading sits, the
+other where *next Tuesday's* does. Measured on a representative series the
+second is 1.76 times wider, so answering the wrong question would present
+every forecast as nearly twice as precise as the data supports.
+
+**Time-to-critical is a range, not a date.** A steep rise reports "about 4.5
+weeks, as early as 2.3" — and the early edge is the one worth acting on,
+because quoting only the middle systematically understates how soon a business
+needs to move.
+
+**Refusing is five answers, not one silence** (D50). Too few readings is a
+matter of time; no detectable trend means steady; heading away means
+improving; not within horizon means genuinely drifting but not datable yet.
+Each has a sentence. Two of these were briefly returning the same reason as
+each other, which meant a business whose collections were *improving* read the
+same message as one we could not measure at all.
+
+**The horizon cap covers what the interval cannot** (D49), and my first
+reasoning for it was wrong. I had written it as belt-and-braces over the
+interval; running it showed otherwise. The interval measures uncertainty
+*given that a line is the right shape* and has no way to say the shape is
+wrong by then. Twelve noisy weekly readings project to 117–153 days DSO at a
+year out with 80% confidence: arithmetically correct, and a claim no metric
+earns from three months of history. So the rule is now one-to-one — never
+project further ahead than the history reaches back — which also loosened the
+cap from a third of the span, making the feature considerably more useful.
+
+Two test failures were mine rather than the code's: I asserted a factor of
+three where the measured value is 1.76, and wrote an uneven-spacing test whose
+arithmetic I had not worked out. Both now assert measured numbers.
+
+522 tests, none skipped.
+
+---
+
 ## 2026-09-03 — Phase 3.6: the threshold shown is the threshold used
 
 Bands now travel out with each stored reading, and every surface that displays

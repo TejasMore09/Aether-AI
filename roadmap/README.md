@@ -23,9 +23,9 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 ## Current position
 
-> **Phase 4 — Forecasting.** Phases 0 to 3 are complete.
+> **Phase 4 — Forecasting.** Phases 0 to 3 are complete; 4.1, 4.2 and 4.5 done.
 >
-> 501 tests, none skipped. An agent now remembers its own business: pgvector
+> 522 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
