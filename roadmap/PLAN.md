@@ -9,11 +9,11 @@ easiest — several later phases are impossible until Phase 1 exists.
 
 ## ▶ CURRENT POSITION: Phase 4
 
-Phases 0–3 complete, plus 6.4 pulled forward. **4.1, 4.2, 4.4 and 4.5 done**
-— a metric's trend, when it is due to cross, five ways of saying nothing, and
-a trajectory that brings attention forward without inflating the exposure.
-Remaining: 4.3 seasonality, and 4.6's backtest which needs real history that
-nothing has. 529 tests, none skipped.
+Phases 0–3 complete, plus 6.4 pulled forward. **4.1–4.5 done** — a metric's
+trend, when it is due to cross, seven ways of saying nothing, seasonality that
+mostly refuses, and a trajectory that brings attention forward without
+inflating the exposure. Only 4.6 remains, and its backtest needs real history
+that nothing has. 538 tests, none skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -154,7 +154,8 @@ seasonality and nothing heavier.
   a confidence interval and a horizon that never exceeds the history (D48, D49)
 - [x] **4.2** Time-to-critical, as a range rather than a date — the early edge is
   the one worth acting on
-- [ ] **4.3** Seasonality, where enough history exists to justify claiming it
+- [x] **4.3** Seasonality, detected on residuals and refusing where the history
+  cannot support it. Removing one buys precision rather than accuracy (D52)
 - [x] **4.4** Trajectories reach the decision engine: they bring a look forward,
   never raise what is said to be at stake, and never reach `intervene` (D51)
 - [x] **4.5** Refusing is a family of answers with a sentence each, not one silence

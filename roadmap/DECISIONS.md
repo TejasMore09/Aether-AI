@@ -1032,3 +1032,32 @@ for one thing.
 The window is the tenant's payback horizon rather than a new constant. That
 number already answers "how far ahead is worth acting on" for this business,
 and inventing a second one would make the two drift apart.
+
+---
+
+## D52 — Seasonality is detected on residuals, and mostly refuses
+
+Three things, and the first is the one that surprised me.
+
+**Removing a season buys precision, not accuracy.** The intuition is that a
+seasonal pattern biases the trend. Measured on a monthly sawtooth over a real
+underlying climb, the naive slope was already within 0.02 of the truth — the
+sawtooth was being counted as *noise*, so what it wrecked was the interval.
+The 28-day projection went from 14.5 wide to 0.1. A projection that vague
+cannot say when anything crosses, which is the whole product of Phase 4.
+
+**Detection runs on the residuals of the trend line, never the raw values.**
+On raw values a steady climb reads as a season whose phases happen to be in
+ascending order, and the system would confidently report a rhythm that is
+simply growth.
+
+**Refusing is the expected answer.** Three monthly cycles take a quarter to
+accumulate; three annual ones take three years, and the forecast window holds
+52 readings. `annual` is listed as a candidate anyway, because it is the cycle
+people ask about and it should visibly refuse rather than appear unconsidered.
+Two cycles is a coincidence, not a season.
+
+A phase counts when its mean residual is further from zero than ordinary
+scatter would put it — the same t-based test the prediction interval uses, so
+there is one notion of "distinguishable from noise" in this module rather than
+two that could drift apart.

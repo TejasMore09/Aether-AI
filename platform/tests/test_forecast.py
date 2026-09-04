@@ -352,3 +352,119 @@ def test_the_trajectory_is_recorded_on_the_decision():
     recorded = decision.as_dict()["inputs"]["trajectory"]["dso_days"]
     assert recorded["threshold"] == 90
     assert recorded["earliest_days"] < recorded["expected_days"]
+
+
+# ── Seasonality ───────────────────────────────────────────────────────────────
+
+
+def monthly_bump(readings: int, *, bump: float = 12.0, per_week: float = 0.0) -> list:
+    """A series with a raised final quarter of each month."""
+    out = []
+    for i in range(readings):
+        day = 7 * i
+        phase = int((day % 30.44) // (30.44 / 4))
+        value = 40.0 + per_week * i + (bump if phase == 3 else 0.0)
+        out.append((START + datetime.timedelta(days=day), value))
+    return out
+
+
+def test_a_repeating_monthly_pattern_is_found():
+    season = forecast.seasonality(monthly_bump(52))
+    assert isinstance(season, forecast.Season)
+    assert season.label == "monthly"
+    assert season.amplitude == pytest.approx(12.0, abs=0.5)
+    assert season.cycles >= 3
+
+
+def test_a_business_with_no_pattern_is_not_given_one():
+    """The failure this guards. Fitting a seasonal term to noise is inventing
+    structure with more parameters, which is the same sin as reporting the
+    tilt of a line through noise as a trend."""
+    noisy = [(START + datetime.timedelta(days=7 * i), 50 + (1 if i % 2 else -1)) for i in range(52)]
+    assert forecast.seasonality(noisy) is NoForecast.no_seasonal_effect
+
+
+def test_two_cycles_is_a_coincidence_not_a_season():
+    """Three is the least that distinguishes a pattern from two things
+    happening to line up."""
+    assert forecast.seasonality(monthly_bump(9)) is NoForecast.too_few_cycles
+
+
+def test_a_steady_climb_is_not_mistaken_for_a_season():
+    """Detection runs on the residuals of the trend line rather than the raw
+    values. On raw values a climb would read as a season whose phases happen
+    to be in ascending order."""
+    climbing = [(START + datetime.timedelta(days=7 * i), 40.0 + i) for i in range(52)]
+    assert forecast.seasonality(climbing) is NoForecast.no_seasonal_effect
+
+
+def test_annual_seasonality_refuses_because_nobody_has_three_years():
+    """Listed as a candidate because it is what people ask about, and it will
+    keep refusing until a business has been watched for three years. Saying so
+    beats omitting it and leaving somebody to wonder."""
+    labels = [label for label, _, _ in forecast.CANDIDATE_SEASONS]
+    assert "annual" in labels
+
+    # A full year of weekly readings is one cycle, not three.
+    yearly = monthly_bump(52)
+    season = forecast.seasonality(yearly)
+    assert isinstance(season, forecast.Season)
+    assert season.label != "annual"
+
+
+# ── What removing a season is actually for ────────────────────────────────────
+
+
+def test_removing_a_season_mainly_buys_precision_not_accuracy():
+    """Measured, because the intuition is wrong. A monthly sawtooth barely
+    shifts the slope — it is being counted as *noise*, so what it wrecks is
+    the interval. Here the 28-day interval goes from 14.5 wide to 0.1, and a
+    projection that vague cannot say when anything crosses.
+    """
+    points = monthly_bump(40, per_week=0.5)
+    season = forecast.seasonality(points)
+
+    naive = forecast.fit(points)
+    corrected = forecast.fit(points, season=season)
+    assert isinstance(naive, forecast.Trend) and isinstance(corrected, forecast.Trend)
+
+    assert abs(naive.per_week - 0.5) < 0.05, "the slope was never badly wrong"
+    assert abs(corrected.per_week - 0.5) < 0.01, "and is now nearly exact"
+    assert corrected.residual_sd < naive.residual_sd / 50, "the scatter is what collapses"
+
+    assert forecast.project(corrected, 28).width < forecast.project(naive, 28).width / 50
+
+
+def test_deseasonalising_leaves_the_readings_where_they_were_in_time():
+    points = monthly_bump(52)
+    season = forecast.seasonality(points)
+    adjusted = forecast.deseasonalise(points, season)
+
+    assert [when for when, _ in adjusted] == [when for when, _ in points]
+    assert len(adjusted) == len(points)
+
+
+def test_a_fit_with_no_season_is_unchanged():
+    """Nobody's trend should move because seasonality was added to the module."""
+    plain = forecast.fit(weekly(RISING))
+    explicit = forecast.fit(weekly(RISING), season=None)
+    assert plain.slope_per_day == explicit.slope_per_day
+
+
+def test_the_engine_path_removes_a_season_before_deciding():
+    """`approaching` is what the decision engine consumes, so the correction
+    has to happen there rather than only being available."""
+    from aether.domains.pack import get_pack
+
+    pack = get_pack("receivables")
+    # Climbing toward critical but not yet past it, under a monthly sawtooth.
+    # Still short of 90 at the last reading, so this is a trajectory question
+    # rather than a level one — `approaching` ignores anything already past.
+    points = [
+        (when, value - 40.0 + 20.0) for when, value in monthly_bump(40, bump=10.0, per_week=1.4)
+    ]
+    assert max(v for _, v in points) < 90, "the metric must not have breached already"
+
+    found = forecast.approaching(pack, {"dso_days": points}, within_days=120)
+    assert "dso_days" in found, "the trend under the season should still be found"
+    assert found["dso_days"].earliest_days > 0

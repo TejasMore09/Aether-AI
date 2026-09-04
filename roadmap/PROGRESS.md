@@ -7,6 +7,44 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-04 — Phase 4.3: seasonality, which mostly refuses
+
+Detected on the residuals of the trend line rather than the raw values — on
+raw values a steady climb reads as a season whose phases happen to be in
+ascending order, and the system would confidently report a rhythm that is
+simply growth.
+
+**The measurement that corrected my intuition** (D52). I expected a seasonal
+pattern to bias the trend. It barely does: on a monthly sawtooth over a real
+underlying climb, the naive slope was already within 0.02 of the truth,
+because the sawtooth was being counted as *noise*. What it wrecked was the
+interval — the 28-day projection went from **14.5 wide to 0.1** once the season
+was removed. A projection that vague cannot say when anything crosses, which
+is the entire product of this phase. So removing a season buys precision, not
+accuracy, and the module says so where somebody would otherwise assume the
+opposite.
+
+**Refusing is the expected answer.** Three monthly cycles take a quarter to
+accumulate; three annual ones take three years against a 52-reading window.
+`annual` is listed as a candidate anyway, because it is the cycle people ask
+about and should visibly refuse rather than look unconsidered. Two cycles is a
+coincidence.
+
+The phase test reuses the same t-based margin the prediction interval uses, so
+there is one notion of "distinguishable from noise" in the module rather than
+two that could drift apart.
+
+Wired into `approaching()`, so the decision engine gets the tighter interval
+rather than it being merely available.
+
+A failing test was my fixture rather than the code: the series I wrote climbed
+straight through critical, and `approaching` correctly ignores a metric
+already past it — that is the level's business, not the trajectory's.
+
+538 tests, none skipped.
+
+---
+
 ## 2026-09-04 — Phase 4.4: acting on where a metric is heading
 
 A trajectory now reaches the decision engine, so a business can be told to

@@ -160,6 +160,8 @@ class NoForecast(StrEnum):
     horizon_too_far = "horizon_too_far"
     not_within_horizon = "not_within_horizon"
     heading_away = "heading_away"
+    too_few_cycles = "too_few_cycles"
+    no_seasonal_effect = "no_seasonal_effect"
 
 
 REASONS: dict[NoForecast, str] = {
@@ -185,6 +187,14 @@ REASONS: dict[NoForecast, str] = {
     ),
     NoForecast.heading_away: (
         "Moving away from this threshold rather than toward it. Nothing to cross."
+    ),
+    NoForecast.too_few_cycles: (
+        "Not enough complete cycles to tell a season from a coincidence. Two of "
+        "anything can line up by chance."
+    ),
+    NoForecast.no_seasonal_effect: (
+        "No repeating pattern that stands out from ordinary variation. This metric "
+        "does not appear to have a season."
     ),
 }
 
@@ -253,19 +263,170 @@ def _t_value(df: int, confidence: float) -> float:
     return table.get(df, _T_LARGE_SAMPLE[confidence])
 
 
-def fit(
+# Candidate cycles, and what each realistically needs at weekly cadence.
+#
+#   monthly    3 cycles =  13 readings — reachable in a quarter
+#   quarterly  3 cycles =  39 readings — reachable within a year
+#   annual     3 cycles = 156 readings — beyond the 52-reading window entirely
+#
+# Annual is listed because it is the one people ask about, and it will refuse
+# for years. Saying so is better than omitting it and leaving somebody to
+# wonder whether it was considered.
+CANDIDATE_SEASONS: tuple[tuple[str, float, int], ...] = (
+    ("monthly", 30.44, 4),
+    ("quarterly", 91.31, 3),
+    ("annual", 365.25, 4),
+)
+
+# Two of anything can line up by chance. Three is the least that distinguishes
+# a season from a coincidence, and is still not many.
+MIN_CYCLES = 3
+
+# A phase mean built from one or two readings is a reading, not a mean.
+MIN_PER_PHASE = 3
+
+
+@dataclass(frozen=True)
+class Season:
+    """A repeating pattern that clears the noise, with its size per phase."""
+
+    label: str
+    period_days: float
+    # Mean residual for each phase of the cycle, in order. Subtracting these
+    # removes the season.
+    offsets: tuple[float, ...]
+    cycles: int
+    readings: int
+
+    @property
+    def amplitude(self) -> float:
+        return max(self.offsets) - min(self.offsets)
+
+    def phase_of(self, elapsed_days: float) -> int:
+        width = self.period_days / len(self.offsets)
+        return int((elapsed_days % self.period_days) // width) % len(self.offsets)
+
+    def as_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "period_days": round(self.period_days, 2),
+            "amplitude": round(self.amplitude, 4),
+            "cycles": self.cycles,
+            "readings": self.readings,
+        }
+
+
+def seasonality(
     points: list[tuple[datetime.datetime, float]],
     *,
     confidence: float = DEFAULT_CONFIDENCE,
-) -> Trend | NoForecast:
-    """Fit a line through a metric's history, or say why not.
+) -> Season | NoForecast:
+    """The repeating pattern in a metric, if there honestly is one.
 
-    Regressed against elapsed days rather than reading number, because
-    readings are not evenly spaced. Treating them as an index would let a
-    fortnight's gap count the same as a day's and quietly tilt the line.
+    Refusing is the expected answer, and that is the point. Business metrics
+    are widely believed to be seasonal and the belief is usually untestable on
+    the history available: three monthly cycles take a quarter to accumulate,
+    three annual ones take three years. Fitting a seasonal term to a year of
+    weekly readings and calling it a pattern would be inventing structure with
+    more parameters, which is the failure this whole module is arranged
+    against.
+
+    Detection works on the residuals of the trend line, not the raw values, or
+    a steady climb would read as a season whose phases happen to be ordered.
+    A phase counts when its mean residual is further from zero than ordinary
+    scatter would put it — the same t-based test the interval uses, so there
+    is one notion of "distinguishable from noise" here rather than two.
     """
-    if confidence not in _T_TWO_SIDED:
-        raise ValueError(f"confidence must be one of {sorted(_T_TWO_SIDED)}")
+    line = _ols(points)
+    if isinstance(line, NoForecast):
+        return line
+    if line.residual_sd == 0:
+        return NoForecast.no_seasonal_effect
+
+    best: Season | None = None
+    for label, period, phases in CANDIDATE_SEASONS:
+        if line.span < period * MIN_CYCLES:
+            continue
+
+        buckets: list[list[float]] = [[] for _ in range(phases)]
+        width = period / phases
+        for x, residual in zip(line.xs, line.residuals, strict=True):
+            buckets[int((x % period) // width) % phases].append(residual)
+
+        if any(len(b) < MIN_PER_PHASE for b in buckets):
+            continue
+
+        offsets = [sum(b) / len(b) for b in buckets]
+        # A phase mean stands out when it is further from zero than the
+        # scatter of that phase's own readings would ordinarily put it.
+        stands_out = any(
+            abs(mean) > _t_value(len(b) - 1, confidence) * (line.residual_sd / math.sqrt(len(b)))
+            for mean, b in zip(offsets, buckets, strict=True)
+        )
+        if not stands_out:
+            continue
+
+        found = Season(
+            label=label,
+            period_days=period,
+            offsets=tuple(offsets),
+            cycles=int(line.span // period),
+            readings=len(points),
+        )
+        # The largest real pattern wins. A metric with both a monthly and a
+        # quarterly rhythm is dominated by whichever moves it further.
+        if best is None or found.amplitude > best.amplitude:
+            best = found
+
+    if best is not None:
+        return best
+
+    # "No history long enough for any cycle" and "enough history, no pattern"
+    # are different answers: the first resolves itself with time, the second
+    # is a finding about the business.
+    shortest = min(period for _, period, _ in CANDIDATE_SEASONS)
+    if line.span < shortest * MIN_CYCLES:
+        return NoForecast.too_few_cycles
+    return NoForecast.no_seasonal_effect
+
+
+def deseasonalise(
+    points: list[tuple[datetime.datetime, float]], season: Season
+) -> list[tuple[datetime.datetime, float]]:
+    """The same readings with the repeating component taken out."""
+    if not points:
+        return []
+    origin = min(when for when, _ in points)
+    return [
+        (when, value - season.offsets[season.phase_of((when - origin).total_seconds() / 86_400)])
+        for when, value in points
+    ]
+
+
+@dataclass(frozen=True)
+class _Line:
+    """A raw least-squares fit, before any judgement about whether it means
+    anything. Separated from `fit` because seasonality detection needs the
+    residuals of a line that has *not* been rejected for being flat."""
+
+    slope: float
+    intercept: float
+    residual_sd: float
+    residuals: tuple[float, ...]
+    xs: tuple[float, ...]
+    mean_x: float
+    sum_squared_dx: float
+    span: float
+    origin: datetime.datetime
+
+
+def _ols(points: list[tuple[datetime.datetime, float]]) -> _Line | NoForecast:
+    """Least squares against elapsed days, with no opinion about the result.
+
+    Elapsed days rather than reading number, because readings are not evenly
+    spaced. Treating them as an index would let a fortnight's gap count the
+    same as a day's and quietly tilt the line.
+    """
     if len(points) < MIN_POINTS:
         return NoForecast.too_few_readings
 
@@ -287,10 +448,49 @@ def fit(
 
     slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True)) / sum_squared_dx
     intercept = mean_y - slope * mean_x
-
     residuals = [y - (intercept + slope * x) for x, y in zip(xs, ys, strict=True)]
+
+    return _Line(
+        slope=slope,
+        intercept=intercept,
+        residual_sd=math.sqrt(sum(r * r for r in residuals) / (n - 2)),
+        residuals=tuple(residuals),
+        xs=tuple(xs),
+        mean_x=mean_x,
+        sum_squared_dx=sum_squared_dx,
+        span=span,
+        origin=origin,
+    )
+
+
+def fit(
+    points: list[tuple[datetime.datetime, float]],
+    *,
+    confidence: float = DEFAULT_CONFIDENCE,
+    season: Season | None = None,
+) -> Trend | NoForecast:
+    """Fit a line through a metric's history, or say why not.
+
+    With a `season`, the repeating component is removed before the line is
+    fitted. That matters more than it sounds: a business invoicing monthly
+    sawtooths, and a window ending on a peak reports drift that is really
+    phase. See `seasonality` for when a season may honestly be claimed.
+    """
+    if confidence not in _T_TWO_SIDED:
+        raise ValueError(f"confidence must be one of {sorted(_T_TWO_SIDED)}")
+
+    if season is not None:
+        points = deseasonalise(points, season)
+
+    line = _ols(points)
+    if isinstance(line, NoForecast):
+        return line
+
+    n = len(points)
+    slope, intercept = line.slope, line.intercept
+    residual_sd, mean_x = line.residual_sd, line.mean_x
+    sum_squared_dx, span, origin = line.sum_squared_dx, line.span, line.origin
     df = n - 2
-    residual_sd = math.sqrt(sum(r * r for r in residuals) / df)
 
     # Is the slope distinguishable from flat? A line through noise always has
     # some tilt, and reporting that tilt as a direction is how a forecast
@@ -492,7 +692,15 @@ def approaching(
         if not points:
             continue
 
-        trend = fit(points, confidence=confidence)
+        # A repeating pattern is removed first where there is honestly one.
+        # Its main effect is not on the slope but on the interval: a monthly
+        # sawtooth counted as noise made a projection several times vaguer
+        # than the data deserved, and a vague projection cannot say when
+        # anything crosses.
+        found = seasonality(points, confidence=confidence)
+        season = found if isinstance(found, Season) else None
+
+        trend = fit(points, confidence=confidence, season=season)
         if isinstance(trend, NoForecast):
             continue
 
