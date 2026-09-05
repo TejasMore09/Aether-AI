@@ -50,6 +50,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
 
           <nav className="flex flex-1 items-center gap-1" aria-label="Console">
             <NavLink href="/">Fleet</NavLink>
+            <NavLink href="/faults">Faults</NavLink>
             <NavLink href="/trail">Staff trail</NavLink>
           </nav>
 

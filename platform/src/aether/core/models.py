@@ -97,6 +97,51 @@ class PasswordReset(Base):
     requested_from: Mapped[str] = mapped_column(String(64), default="")
 
 
+class ErrorEvent(Base):
+    """One distinct fault, however many times it has happened.
+
+    Keyed by fingerprint rather than by occurrence: an outage produces
+    thousands of identical errors, and a row each would make the incident's
+    first casualty the table meant to explain it. See migration 0016.
+
+    Not tenant-scoped, and deliberately so — a fault spans tenants by nature.
+    What protects a customer is that bodies are never captured, text is
+    scrubbed, and reading it needs the engineer role (D57).
+    """
+
+    __tablename__ = "error_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    service: Mapped[str] = mapped_column(String(40))
+    exception_type: Mapped[str] = mapped_column(String(200))
+    # Scrubbed. core/scrub.py says what that does and does not promise.
+    message: Mapped[str] = mapped_column(Text, default="")
+    traceback: Mapped[str] = mapped_column(Text, default="")
+    location: Mapped[str] = mapped_column(String(300), default="")
+    occurrences: Mapped[int] = mapped_column(Integer, default=1)
+    first_seen_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    last_seen_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    last_tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), default=None, nullable=True
+    )
+    tenants_seen: Mapped[int] = mapped_column(Integer, default=0)
+    last_reference: Mapped[str] = mapped_column(String(32), default="")
+    alerted_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
+    )
+    # Resolving arms the alarm again: without it a fault that was fixed keeps
+    # its old alert timestamp and a recurrence is folded in silently.
+    resolved_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
+    )
+    resolved_by: Mapped[str] = mapped_column(String(320), default="")
+
+
 class Role(enum.StrEnum):
     owner = "owner"
     operator = "operator"

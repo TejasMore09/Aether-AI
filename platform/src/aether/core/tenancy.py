@@ -13,6 +13,7 @@ from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, Request
 
+from aether.core import errors
 from aether.core.apikeys import resolve_key, touch_key
 from aether.core.models import Role
 from aether.core.security import Principal, PrincipalKind, TokenError, verify_token
@@ -25,9 +26,14 @@ def authenticated(request: Request) -> Principal:
     if not header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     try:
-        return verify_token(header.removeprefix("Bearer ").strip())
+        principal = verify_token(header.removeprefix("Bearer ").strip())
     except TokenError as exc:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
+    # So a fault raised later in this request can say which tenant hit it.
+    # One tenant broken and every tenant broken are different emergencies, and
+    # this is the only place the answer is known for certain.
+    errors.attribute(principal.tenant_id)
+    return principal
 
 
 def require_role(minimum: Role) -> Callable[..., Principal]:
@@ -56,6 +62,7 @@ def ingest_principal(request: Request) -> Principal:
         if identity is None:
             raise HTTPException(status_code=401, detail="Invalid or revoked API key")
         touch_key(identity.tenant_id, identity.key_id)
+        errors.attribute(identity.tenant_id)
         return Principal(
             # A key is not a person; the id identifies the credential itself.
             user_id=identity.key_id,

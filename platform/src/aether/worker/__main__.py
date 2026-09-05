@@ -12,11 +12,12 @@ from concurrent.futures import ThreadPoolExecutor
 from temporalio.client import Client
 from temporalio.worker import Worker
 
+from aether.core import logs
 from aether.core.config import get_settings
 from aether.worker.activities import diagnose_approval, notify_approval, run_evaluation
 from aether.worker.workflows import NanoMonitorWorkflow
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logs.configure("worker")
 logger = logging.getLogger("aether.worker")
 
 

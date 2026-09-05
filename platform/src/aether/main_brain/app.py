@@ -13,11 +13,12 @@ Run: uvicorn aether.main_brain.app:app --port 8300
 import uuid
 from collections.abc import Callable
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
 from aether import __version__
+from aether.core import errors, health, logs
 from aether.core.db import session as plain_session
 from aether.core.db import tenant_session
 from aether.core.models import (
@@ -48,6 +49,11 @@ from aether.core.throttle import client_ip, guard, refused, succeeded
 
 app = FastAPI(title="Aether Main Brain", version=__version__)
 
+# Nothing below this line may fail silently: logging so the lines exist,
+# the middleware so nothing raised goes unrecorded.
+logs.configure("main_brain")
+errors.install(app, service="main_brain")
+
 
 @app.get("/")
 def root() -> dict:
@@ -56,7 +62,20 @@ def root() -> dict:
 
 @app.get("/healthz")
 def healthz() -> dict:
+    """Liveness: is this process alive? Deliberately does not touch the
+    database — a liveness probe that does is how a brief database blip becomes
+    an orchestrator killing every healthy container it has."""
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz(response: Response) -> dict:
+    """Readiness: can this process actually serve? This is the one to route
+    and to monitor on. `/healthz` said "ok" through a total outage."""
+    ok, detail = health.database_ok()
+    if not ok:
+        response.status_code = 503
+    return {"status": "ok" if ok else "unavailable", "database": detail or "ok"}
 
 
 # ── Staff identity ────────────────────────────────────────────────────────────
@@ -345,3 +364,95 @@ def staff_trail(
     """Readable by every staff member, not just admins. Oversight that only
     the powerful can see is not oversight."""
     return read_staff_trail(limit=min(limit, 500), tenant_id=tenant_id)
+
+
+# ── Faults ────────────────────────────────────────────────────────────────────
+#
+# The one place in this console where staff see something *derived from* a
+# customer's data rather than counted over it. A stack trace crosses the
+# tenant boundary by its nature, and the fleet view's whole discipline is that
+# it does not.
+#
+# So the boundary is drawn inside the payload rather than at the door (D57).
+# `observer` — the role whose documented limit is "counts, timestamps, error
+# rates. Never the contents of a tenant's data" — sees that something is
+# broken, where in our code, how often, and how many tenants it touched.
+# Reading the scrubbed message and traceback needs `engineer`, and is written
+# to the staff trail like any other look at something a customer owns.
+
+
+def _fault_summary(row: dict) -> dict:
+    """What any member of staff may see. No text from the failure itself."""
+    return {
+        "fingerprint": row["fingerprint"],
+        "service": row["service"],
+        "exception_type": row["exception_type"],
+        "location": row["location"],
+        "occurrences": row["occurrences"],
+        "tenants_seen": row["tenants_seen"],
+        "first_seen_at": row["first_seen_at"].isoformat(),
+        "last_seen_at": row["last_seen_at"].isoformat(),
+        "alerted": row["alerted_at"] is not None,
+        "resolved_at": row["resolved_at"].isoformat() if row["resolved_at"] else None,
+        "resolved_by": row["resolved_by"],
+        "reference": row["last_reference"],
+    }
+
+
+@app.get("/v1/ops/errors")
+def list_faults(
+    limit: int = 50,
+    include_resolved: bool = False,
+    principal: StaffPrincipal = Depends(staff_authenticated),
+) -> list[dict]:
+    """Open faults, newest first. Text only for engineers.
+
+    An observer gets the shape of every fault and the words of none. That is
+    enough to say "the platform is broken and here is where", which is what
+    the role is for.
+    """
+    rows = errors.recent(limit=min(limit, 200), include_resolved=include_resolved)
+    out = [_fault_summary(r) for r in rows]
+
+    if has_role(principal, StaffRole.engineer):
+        for summary, row in zip(out, rows, strict=True):
+            summary["message"] = row["message"]
+            summary["traceback"] = row["traceback"]
+        if out:
+            # Recorded because it is a read of something derived from customer
+            # data, and the trail exists so that such reads are answerable.
+            # Fingerprints, not content: the trail must not become the copy of
+            # the thing it is auditing access to.
+            record(
+                principal.email,
+                "faults.read",
+                details={"count": len(out), "fingerprints": [r["fingerprint"][:12] for r in out]},
+            )
+    return out
+
+
+@app.post("/v1/ops/errors/{fingerprint}/resolve")
+def resolve_fault(
+    fingerprint: str,
+    principal: StaffPrincipal = Depends(require_staff_role(StaffRole.engineer)),
+) -> dict:
+    """Mark a fault handled, which re-arms its alarm.
+
+    Not cosmetic: an unresolved fault keeps its old alert timestamp, so one
+    that was fixed and comes back weeks later would be folded silently into a
+    row that has already alerted and nobody would hear about it.
+    """
+    if not errors.resolve(fingerprint, by=principal.email):
+        raise HTTPException(status_code=404, detail="No open fault with that fingerprint")
+    record(principal.email, "faults.resolve", details={"fingerprint": fingerprint[:12]})
+    return {"status": "resolved", "fingerprint": fingerprint}
+
+
+@app.get("/v1/ops/health")
+def ops_health(principal: StaffPrincipal = Depends(staff_authenticated)) -> dict:
+    """Is the platform well? Counts only, so every staff role may read it.
+
+    Includes whether alerting is configured at all, because an alerting system
+    nobody set up looks exactly like an alerting system with nothing to say.
+    """
+    return health.snapshot("main_brain")

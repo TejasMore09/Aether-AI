@@ -8,12 +8,12 @@ Run: uvicorn aether.control_plane.app:app --port 8100
 
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from aether import __version__
-from aether.core import money, recovery
+from aether.core import errors, health, logs, money, recovery
 from aether.core.config import get_settings
 from aether.core.db import session, tenant_session
 from aether.core.models import (
@@ -47,6 +47,11 @@ from aether.knowledge import sector_corpus
 
 app = FastAPI(title="Aether Control Plane", version=__version__)
 
+# Nothing below this line may fail silently: logging so the lines exist,
+# the middleware so nothing raised goes unrecorded.
+logs.configure("control_plane")
+errors.install(app, service="control_plane")
+
 # A real bcrypt hash of a value nothing can supply, so an unknown email costs
 # the same verification as a known one. Computed once: generating it per
 # request would be its own timing signal.
@@ -60,7 +65,20 @@ def root() -> dict:
 
 @app.get("/healthz")
 def healthz() -> dict:
+    """Liveness: is this process alive? Deliberately does not touch the
+    database — a liveness probe that does is how a brief database blip becomes
+    an orchestrator killing every healthy container it has."""
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz(response: Response) -> dict:
+    """Readiness: can this process actually serve? This is the one to route
+    and to monitor on. `/healthz` said "ok" through a total outage."""
+    ok, detail = health.database_ok()
+    if not ok:
+        response.status_code = 503
+    return {"status": "ok" if ok else "unavailable", "database": detail or "ok"}
 
 
 # ── Signup / login ────────────────────────────────────────────────────────────

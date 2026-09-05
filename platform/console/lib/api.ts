@@ -119,6 +119,37 @@ export type Grant = {
   live: boolean
 }
 
+export type Fault = {
+  fingerprint: string
+  service: string
+  exception_type: string
+  location: string
+  occurrences: number
+  tenants_seen: number
+  first_seen_at: string
+  last_seen_at: string
+  alerted: boolean
+  resolved_at: string | null
+  resolved_by: string
+  reference: string
+  // Present only for engineers and admins. An observer's payload omits both
+  // fields entirely rather than blanking them, so the type says optional and
+  // the page has to handle their absence (D57).
+  message?: string
+  traceback?: string
+}
+
+export type OpsHealth = {
+  service: string
+  environment: string
+  uptime_seconds: number
+  database: { ok: boolean; detail: string }
+  mail_configured: boolean
+  alerts_configured: boolean
+  healthy: boolean
+  errors: { open?: number; active_last_hour?: number; occurrences_last_day?: number; unavailable?: string }
+}
+
 export type TrailEntry = {
   id: string
   created_at: string

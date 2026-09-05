@@ -7,6 +7,50 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — Phase 6.3: finding out that the platform is broken
+
+Before this an unhandled exception returned a 500 and went to stdout, which
+nobody reads. The platform could have been failing every request for a day and
+the first anyone would have known is a customer saying so — which for a product
+whose whole promise is noticing things would have been a pointed way to fail.
+
+Faults are recorded in our own Postgres rather than shipped to Sentry, because
+a stack trace here carries other companies' operating data (D57). One row per
+distinct fault rather than one per occurrence, so an outage does not make the
+first casualty the table meant to explain it. Alerts are rationed twice — once
+per fault, once globally — because the fastest way to make alerts worthless is
+to send too many. A console page, `/v1/ops/*` endpoints, and one logging setup
+so the platform's existing log lines actually reach somewhere: until today the
+three API services configured no logging at all, and every `logger.info` in
+throttle, mail and notifications went nowhere.
+
+Three things this turned up that were not on the list:
+
+**A context variable set inside an endpoint never reaches the middleware**
+(D58). Sync endpoints run in a threadpool, and a thread gets a *copy* of the
+context — so every fault would have been recorded as belonging to no tenant,
+losing exactly the field that separates one broken customer from all of them.
+Nothing about the code looked wrong. A test found it.
+
+**`/healthz` was a liveness lie** (D59). All three services answered a flat
+`ok` without touching anything, so an uptime monitor would have reported a
+green month through a total outage. Liveness stays dumb on purpose; `/readyz`
+is new and is the one to route and monitor on.
+
+**The scrubber published a credential while redacting the word "Bearer".** One
+rule matched `Authorization: Bearer sk-live-...` with the "value" being the
+scheme, so it blanked the word and left the secret standing. The test that
+caught it had been written to check the opposite failure — that the scrubber
+does not destroy everything useful.
+
+613 tests, none skipped.
+
+Still true and worth repeating: no real business data has touched any of this,
+and `AETHER_ALERT_EMAIL` is unset, so faults are recorded and nothing is pushed
+at anyone yet.
+
+---
+
 ## 2026-09-04 — Phase 6.5: a way back into your own account
 
 A customer who forgot their password had no route back, and no route to

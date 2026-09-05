@@ -101,3 +101,21 @@ export async function endGrant(_prev: EndGrantState, form: FormData): Promise<En
   revalidatePath('/trail')
   return { ok: true }
 }
+
+
+/**
+ * Mark a fault handled, which re-arms its alarm.
+ *
+ * Not cosmetic. An unresolved fault keeps its alert timestamp, so one that was
+ * fixed and returns weeks later would be folded into a row that has already
+ * alerted and nobody would hear about it.
+ */
+export async function resolveFault(fingerprint: string): Promise<FormState> {
+  const result = await brain<{ status: string }>(
+    `/v1/ops/errors/${encodeURIComponent(fingerprint)}/resolve`,
+    { method: 'POST' },
+  )
+  if (!result.ok) return { error: result.message }
+  revalidatePath('/faults')
+  return null
+}

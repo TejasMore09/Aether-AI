@@ -14,12 +14,14 @@ the backtest showed the 80% intervals covering only 52% on a random walk and
 12% on a curve, so `fit` now refuses both shapes rather than quoting a
 confidence it has not earned (D53).
 
-**Phase 6 is where "production-level" actually lives.** 8 of 10 items open.
-6.5 also closed a hole nobody was looking for: pointing notifications at the
-one mail module made the *test suite* start sending real email through the
-live Resend key, and it was only stopped by an unverified sending domain
-(D55). Phase 5 needs no new data (two bands already sit in `reference/`) and
-can follow. 562 tests, none skipped.
+**Phase 6 is where "production-level" actually lives.** 7 of 10 items open.
+Both finished items closed holes nobody was looking for: 6.5 found the *test
+suite* sending real email through the live Resend key, stopped only by an
+unverified sending domain (D55); 6.3 found that a fault could never learn
+which tenant it belonged to, because sync endpoints run in a threadpool and a
+context variable set there never comes back (D58). Phase 5 needs no new data
+(two bands already sit in `reference/`) and can follow. 613 tests, none
+skipped.
 
 Keep this line in step with `roadmap/README.md`.
 
@@ -211,7 +213,13 @@ cheap now and painful later.
 
 - [ ] **6.1** Deployment: containerised, infrastructure as code, free tier
 - [ ] **6.2** Automated backups with a *tested* restore, not merely configured
-- [ ] **6.3** Error tracking and metrics; alerts that reach a person
+- [x] **6.3** Error tracking and metrics; alerts that reach a person. Faults in
+  our own Postgres rather than a third party, because a stack trace here carries
+  customers' data (D57); one row per distinct fault; scrubbed text readable only
+  by engineers and recorded in the staff trail; alerts rationed per-fault and
+  globally; a console page; `/readyz` that actually checks, since `/healthz` was
+  answering "ok" through any outage (D59). **Alerts go nowhere until
+  `AETHER_ALERT_EMAIL` is set**, which the page says out loud
 - [x] **6.4** Login throttling per account, with backoff. Per-address is built but
   inert until a deployment can name the client (see PROGRESS 2026-09-02).
   General per-endpoint rate limiting belongs at the proxy in 6.1 and is not done

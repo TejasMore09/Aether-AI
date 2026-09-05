@@ -1176,3 +1176,108 @@ already has. For up to an hour, changing the password does not evict them.
 That is a real weakness and it cannot be fixed here — it needs server-side
 session state, which is 6.7. Until then the product must not imply that
 resetting a password secures a compromised account.
+
+
+---
+
+## D57 — Faults are stored in our own Postgres, and staff see the shape before the words
+
+The usual answer for error tracking is Sentry, and for most products it is the
+right one. Not for this one.
+
+A stack trace from a multi-tenant platform carries other companies' operating
+data. `IntegrityError` puts a customer's email in its message; SQLAlchemy
+appends `[parameters: ...]`, which for this product means real revenue
+figures, real invoice totals, real names. Shipping that to a third party means
+every customer's data can arrive in an external account on any exception. The
+no-paid-subscription constraint points the same way, but it is not the reason.
+
+So faults go in `error_events`, and three things protect a customer:
+
+1. **Request and response bodies are never captured.** Not scrubbed: never
+   read. The safest data is the data that was not collected.
+2. **What is captured is scrubbed** (`core/scrub.py`) -- emails, bound
+   parameters, tokens, long digit runs. Stated plainly in that module: it is a
+   filter, not a guarantee. It matches shapes it was taught and cannot
+   recognise a customer's data in a form nobody anticipated.
+3. **The role split is inside the payload, not at the door.** `StaffRole`
+   already documents `observer` as "counts, timestamps, error rates. Never the
+   contents of a tenant's data" -- so an observer gets the exception type, our
+   code location, the occurrence count and how many tenants were hit, and the
+   `message` and `traceback` keys are absent from their response entirely.
+   Reading them requires `engineer` and is written to the staff trail, like
+   every other look at something a customer owns.
+
+The trail records fingerprints and never the message, because a trail that
+copied the text would just be a second, less guarded copy of the thing it is
+auditing access to.
+
+**One row per fingerprint, not per occurrence.** An outage produces thousands
+of identical errors; a row each would make the incident's first casualty the
+table meant to explain it. The fingerprint is the exception type plus the
+deepest frame *in our code* -- never the message, because messages carry the
+varying part and fingerprinting on one gives every occurrence its own row.
+
+The cost is real: individual occurrences are lost, so "was it only this one
+tenant?" cannot be answered exactly. `tenants_seen` answers the version of it
+that matters -- one customer broken and every customer broken are different
+emergencies.
+
+---
+
+## D58 — A context variable set inside an endpoint does not reach the middleware
+
+Written down because it cost a real bug and the reasoning is not obvious.
+
+Faults are attributed to a tenant so that "one customer is broken" and
+"everyone is" can be told apart. The tenancy dependency knows the tenant, the
+middleware handles the exception, and a `ContextVar` is the obvious way to get
+one to the other.
+
+It does not work. Every endpoint in this platform is a sync `def`, which
+Starlette runs in a threadpool -- and a thread receives a **copy** of the
+context, so `ContextVar.set()` inside an endpoint or a dependency rebinds the
+copy and the middleware never sees it. Every fault would have been recorded as
+belonging to nobody, losing precisely the field that makes the count useful. A
+test caught it; nothing about the code looked wrong.
+
+Two things follow.
+
+**The middleware is pure ASGI, not `BaseHTTPMiddleware`.** That one runs the
+downstream app in a separate task, which loses the context for the same reason
+and would additionally have made this unfixable.
+
+**The variable holds a mutable dict, not the id.** The copied context still
+points at the same dict object, so mutating one crosses the boundary that
+rebinding cannot. `attribute()` writes into the holder; `attributed_tenant()`
+reads it.
+
+The general shape is worth remembering: **context propagates into a thread and
+never back out.** Anything a worker thread needs to tell its caller has to live
+behind a reference, not in the variable itself.
+
+---
+
+## D59 — `/healthz` was a liveness lie, and readiness is a separate question
+
+All three services answered `/healthz` with `{"status": "ok"}` unconditionally.
+That is not a health check; it checks that Python is running. An uptime monitor
+watching it would have reported a green month through a total outage, because
+it says `ok` just as loudly while every request in the building is failing on
+an unreachable database.
+
+The fix is not to make `/healthz` check the database. A liveness probe that
+touches a dependency is how a brief database blip becomes an orchestrator
+killing every healthy container it has.
+
+So the two questions are separated. **`/healthz` is liveness** and stays
+deliberately dumb. **`/readyz` is readiness**, touches the database, and
+returns 503 when it cannot serve. That is the one to route on and the one to
+monitor.
+
+`snapshot()` adds what a console needs, including the part easy to leave out:
+whether alerting is configured at all. An alerting system nobody set up looks
+exactly like an alerting system with nothing to report. And when the database
+is unreachable it says `errors: {unavailable}` rather than omitting the count
+-- "no errors" is the most dangerous thing that endpoint could say during an
+outage.

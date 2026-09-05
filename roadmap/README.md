@@ -25,16 +25,18 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 6 — Production hardening.** Phases 0 to 4 are complete.
 >
-> 562 tests, none skipped. An agent now remembers its own business: pgvector
+> 613 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
 >
-> **6.4 and 6.5 are done.** Password endpoints accepted unlimited guesses,
-> which was a live hole rather than a missing feature; and a customer who
-> forgot their password had no route back and no route to support either.
-> Reset also unblocked the login lockout cap, which had been held at fifteen
-> minutes only because there was no escape hatch.
+> **6.3, 6.4 and 6.5 are done.** Password endpoints accepted unlimited
+> guesses, which was a live hole rather than a missing feature; a customer who
+> forgot their password had no route back and no route to support either; and
+> nothing anywhere told a person the platform was failing. Faults are now
+> recorded, scrubbed, rationed into alerts, and visible in the staff console —
+> and `/healthz`, which had been answering "ok" through any outage, is joined
+> by a `/readyz` that actually checks.
 >
 > **Phase 3 is complete.** Money is the tenant's own currency, **a bakery and a
 > builders' merchant reporting the same 50-day DSO get different verdicts**, a
@@ -42,11 +44,12 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > knows what is normal in its industry, metrics that mean nothing for its kind
 > of business are not scored, and every threshold shown is the one used.
 >
-> Next in Phase 6: 6.3 (error tracking — nothing currently tells anyone the
-> platform is failing), then 6.1 deployment and 6.2 backups with a *tested*
-> restore. 6.7 refresh tokens carries a gap password reset could not close:
-> tokens are stateless, so resetting a password does not sign out a session
-> already running.
+> Next in Phase 6: 6.1 deployment and 6.2 backups with a *tested* restore.
+> 6.7 refresh tokens carries a gap password reset could not close: tokens are
+> stateless, so resetting a password does not sign out a session already
+> running. Two things from 6.3 wait on deployment rather than on code —
+> `AETHER_ALERT_EMAIL` has nowhere to send from until the domain is verified,
+> and `/readyz` needs something watching it.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work, and

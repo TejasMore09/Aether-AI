@@ -13,11 +13,12 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from aether import __version__
+from aether.core import errors, health, logs
 from aether.core.db import tenant_session
 from aether.core.models import (
     ApprovalStatus,
@@ -36,6 +37,11 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Aether Agent Runtime", version=__version__)
 
+# Nothing below this line may fail silently: logging so the lines exist,
+# the middleware so nothing raised goes unrecorded.
+logs.configure("agent_runtime")
+errors.install(app, service="agent_runtime")
+
 # Domain keys are identifiers, not free text — reject anything else at the edge.
 DomainName = Annotated[str, Path(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9_-]*$")]
 
@@ -47,7 +53,20 @@ def root() -> dict:
 
 @app.get("/healthz")
 def healthz() -> dict:
+    """Liveness: is this process alive? Deliberately does not touch the
+    database — a liveness probe that does is how a brief database blip becomes
+    an orchestrator killing every healthy container it has."""
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz(response: Response) -> dict:
+    """Readiness: can this process actually serve? This is the one to route
+    and to monitor on. `/healthz` said "ok" through a total outage."""
+    ok, detail = health.database_ok()
+    if not ok:
+        response.status_code = 503
+    return {"status": "ok" if ok else "unavailable", "database": detail or "ok"}
 
 
 # ── Policy management ─────────────────────────────────────────────────────────

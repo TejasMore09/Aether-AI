@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # reset link points, and the customer would follow it.
     web_base_url: str = "http://localhost:3000"
 
+    # Where fault alerts go (6.3). Empty means faults are still recorded and
+    # still visible on the ops endpoint, but nothing pushes them at anyone —
+    # which the health snapshot reports rather than leaving to be discovered.
+    alert_email: str = ""
+
     # Temporal (durable workflow engine) — the autonomous monitor loop.
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
