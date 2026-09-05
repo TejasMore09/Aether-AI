@@ -1,0 +1,46 @@
+# The build context is the repository root, so this file decides how much of
+# the repository is sent to the daemon on every build. Left unwritten, that is
+# node_modules, two .next directories, a virtualenv and the git history —
+# hundreds of megabytes, copied before a single instruction runs.
+#
+# It is also a security boundary and not only a speed one: anything reachable
+# here can be COPYed into an image by a careless later edit, and `.env` is
+# reachable here.
+
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+
+# Virtualenvs and caches
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Node
+**/node_modules
+**/.next
+**/out
+**/npm-debug.log*
+
+# Editor and OS noise
+**/.DS_Store
+**/.vscode
+**/.idea
+**/.claude
+
+# Documentation and planning: real work, but not something a running
+# container has any use for.
+roadmap/
+*.md
+!platform/README.md
+!reference/README.md
+
+# The spreadsheet the reference CSV was extracted from. The CSV is what the
+# code reads; the .xls is provenance and is 40x the size.
+reference/*.xls
+reference/*.xlsx

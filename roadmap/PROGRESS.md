@@ -7,6 +7,68 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — Phase 6.1: the platform runs as a deployment, not as instructions
+
+Ten containers from one compose file: Postgres with pgvector, Redis, Temporal,
+the three APIs, the monitor worker, both front ends, and Caddy holding the
+certificates. Brought up, served HTTPS, torn down — the point of writing it was
+to run it, because infrastructure-as-code that has never been executed is a
+wish with syntax highlighting.
+
+Verified rather than asserted: HTTPS on both hostnames with plain HTTP
+redirecting, all three APIs reporting `(healthy)` against `/readyz`, the APIs
+unreachable from the host, and the proxy rate limit measured at 59 requests
+served then 429 for the rest against a limit of 60 a minute. That last one is
+the "general per-endpoint rate limiting" the plan recorded as belonging here
+and not done.
+
+**6.4's per-address throttle is live for the first time** (D61). It needed a
+change at each of three hops and the middle one would have been missed: Caddy
+replaces a forged `X-Forwarded-For` — measured, not assumed — but nothing
+carried the result from the Next.js front ends to the API, so the setting would
+have read a header nobody set. Three failed logins now produce one throttle row
+against the client's own address rather than against the front end's.
+
+**Production processes refuse to start on a development configuration** (D60).
+The repository ships a signing secret so a checkout needs no configuration; a
+platform running on it would let anyone mint a token for any tenant and would
+look entirely healthy. Every problem is reported at once — the first container
+to run this printed all four.
+
+Four things this turned up that were not on the list:
+
+**The reference tables were unreachable from an installed package.**
+`domains/reference.py` walked up from its own file to the repository root, a
+path that does not exist in a container. Every sector would have silently lost
+its bands — the product back to quoting the same numbers at a bakery and a
+stock brokerage, with nothing broken enough to notice.
+
+**Nothing had ever set the application role's password.** Migration 0001
+creates it with a value printed in this repository. The configuration check and
+the schema would have deadlocked: the check demands a password the schema had
+no way to set. Migration 0017 does it, quoted by Postgres rather than
+interpolated by Python.
+
+**The npm lockfiles did not describe what the apps build from.** `npm ci`
+refused both. They had been generated on Windows, which prunes Linux-only
+optional dependencies, so every previous install had silently resolved
+something the lockfile did not name. Regenerated inside Linux.
+
+**`docker compose up -d` reuses an image that already exists under the tag.**
+The first run came up with migration 0017 missing and the app role locked out
+of its own database — every container looking fine, and `/readyz` correctly
+reporting `password authentication failed`. The health check earned its keep on
+its first day.
+
+And one test found a version of the D55 problem in its own file: a case
+asserting "an untouched production config has four faults" was reading the
+developer's `.env` and finding a real secret there, so it saw two.
+
+627 tests, none skipped. Still no backups — that is 6.2 — and this has never
+run on a real host.
+
+---
+
 ## 2026-09-05 — Phase 6.3: finding out that the platform is broken
 
 Before this an unhandled exception returned a 500 and went to stdout, which

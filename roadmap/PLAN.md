@@ -14,13 +14,13 @@ the backtest showed the 80% intervals covering only 52% on a random walk and
 12% on a curve, so `fit` now refuses both shapes rather than quoting a
 confidence it has not earned (D53).
 
-**Phase 6 is where "production-level" actually lives.** 7 of 10 items open.
+**Phase 6 is where "production-level" actually lives.** 6 of 10 items open.
 Both finished items closed holes nobody was looking for: 6.5 found the *test
 suite* sending real email through the live Resend key, stopped only by an
 unverified sending domain (D55); 6.3 found that a fault could never learn
 which tenant it belonged to, because sync endpoints run in a threadpool and a
 context variable set there never comes back (D58). Phase 5 needs no new data
-(two bands already sit in `reference/`) and can follow. 613 tests, none
+(two bands already sit in `reference/`) and can follow. 627 tests, none
 skipped.
 
 Keep this line in step with `roadmap/README.md`.
@@ -211,7 +211,13 @@ which is the working-capital measure an SME's own accountant already uses.
 Not client-facing readiness — product completeness. Several of these are
 cheap now and painful later.
 
-- [ ] **6.1** Deployment: containerised, infrastructure as code, free tier
+- [x] **6.1** Deployment. Ten containers from one compose file, a Caddy edge with
+  automatic certificates and rate limiting (measured: 59 served then 429), and
+  production processes that refuse to start on a development configuration
+  (D60). Unlocked 6.4's per-address throttle, which needed a change at all three
+  hops (D61). **"Free tier" has an honest answer and it is not a PaaS**: the
+  stack is ~690 MiB and ~2.6 GB of images, so Oracle Always Free or a $10–20 VPS
+  (D62). Not yet run on a real host, and no CI
 - [ ] **6.2** Automated backups with a *tested* restore, not merely configured
 - [x] **6.3** Error tracking and metrics; alerts that reach a person. Faults in
   our own Postgres rather than a third party, because a stack trace here carries

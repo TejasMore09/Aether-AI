@@ -11,6 +11,10 @@ import type { NextConfig } from 'next'
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // A self-contained server bundle with only the modules actually
+  // imported, so the image carries neither node_modules nor the source.
+  // Without it the runtime stage has to ship the whole dependency tree.
+  output: 'standalone',
   poweredByHeader: false,
   async headers() {
     return [

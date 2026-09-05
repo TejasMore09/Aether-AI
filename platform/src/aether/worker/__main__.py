@@ -13,11 +13,12 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from aether.core import logs
-from aether.core.config import get_settings
+from aether.core.config import get_settings, verify_deployable
 from aether.worker.activities import diagnose_approval, notify_approval, run_evaluation
 from aether.worker.workflows import NanoMonitorWorkflow
 
 logs.configure("worker")
+verify_deployable()
 logger = logging.getLogger("aether.worker")
 
 

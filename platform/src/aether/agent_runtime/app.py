@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 
 from aether import __version__
 from aether.core import errors, health, logs
+from aether.core.config import verify_deployable
 from aether.core.db import tenant_session
 from aether.core.models import (
     ApprovalStatus,
@@ -39,7 +40,14 @@ app = FastAPI(title="Aether Agent Runtime", version=__version__)
 
 # Nothing below this line may fail silently: logging so the lines exist,
 # the middleware so nothing raised goes unrecorded.
+# Logging first, so the configuration check's warnings are formatted and
+# attributed like everything else rather than falling out through Python's
+# last-resort handler — which is what they did, visibly, in the first
+# container that ran.
 logs.configure("agent_runtime")
+# Then refuse to start a production process on a development configuration.
+# Better a container that will not boot than one accepting forged tokens.
+verify_deployable()
 errors.install(app, service="agent_runtime")
 
 # Domain keys are identifiers, not free text — reject anything else at the edge.

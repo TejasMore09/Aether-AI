@@ -1281,3 +1281,108 @@ exactly like an alerting system with nothing to report. And when the database
 is unreachable it says `errors: {unavailable}` rather than omitting the count
 -- "no errors" is the most dangerous thing that endpoint could say during an
 outage.
+
+
+---
+
+## D60 — A production process refuses to start on a development configuration
+
+The repository ships working defaults so that a checkout runs with no
+configuration at all: a signing secret, a staff signing secret, a database
+password. Every one of them is printed in a public repository, and each is one
+forgotten environment variable away from being what production runs on.
+
+That failure is silent by construction. A platform running on a published
+signing secret looks entirely healthy; anyone who has read the repository can
+mint a token for any tenant, and nothing anywhere would say so.
+
+So `verify_deployable()` runs at import in all four processes, and when
+`AETHER_ENV` is not a development value it refuses to start.
+
+**Fatal and warning are split on a real distinction, not on severity.** Fatal
+means the deployment is unsafe — a forged token would be accepted, or a
+credential would cross the network in the clear. Warning means it works and
+something will not be noticed: nobody is alerted, no mail can be sent.
+
+Warnings are deliberately not fatal, and that is the judgement worth writing
+down. A check strict enough to block a launch over an operational gap teaches
+people to set `AETHER_ENV=dev` in production, which disables every check
+including the ones that stop forged tokens. Strictness is spent where it buys
+safety, and nowhere else.
+
+Every problem is reported at once. Fixing a deployment should be one pass, not
+one restart per mistake — the person doing it at two in the morning stops
+reading after the first line.
+
+**This needed a migration to be satisfiable at all.** Migration 0001 creates
+the `aether_app` role with the password `aether_app_dev_only` and nothing had
+ever changed it, so the check would have demanded a password the schema had no
+way to set. 0017 sets it from the environment, quoted by Postgres rather than
+interpolated by Python, and stays silent when unset because that is the
+development case.
+
+---
+
+## D61 — The client's address travels three hops, and every one of them had to
+change
+
+6.4 built per-address throttling and then switched it off, because the
+deployment could not name a client. Both front ends are
+backends-for-frontends: the browser never talks to the API, so from the API's
+point of view every login on the platform arrives from one Next.js server, and
+counting against that address would collapse the entire customer base into a
+single bucket where twenty bad guesses by anyone locks out everyone.
+
+Turning it on took a change at each hop, and the middle one is the part that
+would have been missed.
+
+**Caddy → Next.** Measured rather than assumed, because everything else rests
+on it: sending `X-Forwarded-For: 9.9.9.9` through the proxy arrives upstream
+as the real remote address. Caddy replaces an incoming value unless it came
+from a configured trusted proxy. An explicit `header_up` was written first and
+then removed — it was redundant, and Caddy said so. This mattered because the
+application reads the **leftmost** value, so an appending proxy would have
+handed every attacker a fresh identity per request.
+
+**Next → API.** Nothing carried it. Each front end builds its outgoing request
+from scratch, so the API saw no forwarded header at all and
+`AETHER_CLIENT_IP_SOURCE=forwarded` would have read a header nobody set —
+throttling on the empty string, which disables it. `forwardedFor()` in each
+app's `lib/api.ts` is the fix, and it is the least visible part of the chain.
+
+**API.** Already correct, and now proven: three failed logins carrying
+`X-Forwarded-For: 203.0.113.77, 10.1.1.1` produce one throttle row against
+`203.0.113.77`.
+
+**The setting is a claim about the deployment, not a preference.** It is true
+only because no API is reachable from outside the compose network. Publish a
+route to the control plane and anything on the internet can name itself
+whatever it likes — per-address throttling becomes theatre without a line of
+code changing. That is written in the compose file, in the Caddyfile, in
+`forwardedFor()` and in the deployment guide, because it is the kind of thing
+that gets undone by someone solving an unrelated problem.
+
+---
+
+## D62 — Compose is the infrastructure, and that is a decision with an expiry
+
+Not Terraform, not Kubernetes, not a PaaS. One compose file that stands the
+platform up from nothing on any machine with Docker.
+
+There is one machine, no autoscaling and no second environment. The cost of
+the larger tools is paid at every change and their benefit arrives at a scale
+this platform has not reached. Compose also happens to be the only one of them
+that runs identically on the developer's laptop, which is why the whole stack
+could be brought up and verified rather than reasoned about.
+
+**When there is a second machine this is wrong**, and it is written here so
+that it is revisited rather than inherited.
+
+The free-tier question has an honest answer and it is not the convenient one.
+The stack measures ~690 MiB resident and ~2.6 GB of images. **No PaaS free
+tier will run it** — Render, Railway and Fly are built around one or two small
+processes with a managed database, not ten containers with Temporal and a
+persistent volume. What fits is Oracle Cloud Always Free (4 ARM cores, 24 GB,
+genuinely free, though the images have only been built for x86 so far) or a
+$10–20 VPS. Saying "free tier" and meaning "a trial that expires" would be the
+kind of plan that removes the prompt that would have corrected it.

@@ -22,8 +22,13 @@ platform/
 ├── console/             Next.js staff console — talks only to 8300    (port 3100)
 ├── migrations/          Alembic — schema + RLS policies + app role
 ├── tests/               unit tests + the RLS isolation proof
-└── docker-compose.yml   Postgres(pgvector) on 5433 + Redis on 6379
+├── Dockerfile           the three APIs and the worker, one image
+└── docker-compose.yml   local development: Postgres(pgvector), Redis, Temporal
 ```
+
+Production deployment lives in `deploy/` at the repository root: one compose
+file, a Caddy edge that holds the certificates, and `deploy/README.md` for what
+"free tier" actually means for a stack this size.
 
 ## Setup (Windows)
 

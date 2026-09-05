@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from aether import __version__
 from aether.core import errors, health, logs, money, recovery
-from aether.core.config import get_settings
+from aether.core.config import get_settings, verify_deployable
 from aether.core.db import session, tenant_session
 from aether.core.models import (
     AgentInstance,
@@ -49,7 +49,14 @@ app = FastAPI(title="Aether Control Plane", version=__version__)
 
 # Nothing below this line may fail silently: logging so the lines exist,
 # the middleware so nothing raised goes unrecorded.
+# Logging first, so the configuration check's warnings are formatted and
+# attributed like everything else rather than falling out through Python's
+# last-resort handler — which is what they did, visibly, in the first
+# container that ran.
 logs.configure("control_plane")
+# Then refuse to start a production process on a development configuration.
+# Better a container that will not boot than one accepting forged tokens.
+verify_deployable()
 errors.install(app, service="control_plane")
 
 # A real bcrypt hash of a value nothing can supply, so an unknown email costs

@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     # which the health snapshot reports rather than leaving to be discovered.
     alert_email: str = ""
 
+    # Where the committed reference tables live. Empty means "work it out"
+    # (see domains/reference.py); the container image sets it explicitly,
+    # because an installed package has no repository around it.
+    reference_dir: str = ""
+
     # Temporal (durable workflow engine) — the autonomous monitor loop.
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
@@ -135,3 +140,97 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# Values that ship in this file so a checkout runs without configuration.
+# Every one of them is catastrophic in production, and each is a single
+# forgotten environment variable away from being used there.
+_DEV_DEFAULTS = {
+    "jwt_secret": "dev-only-secret-do-not-deploy",
+    "staff_jwt_secret": "dev-only-staff-secret-do-not-deploy",
+}
+
+# Long enough that guessing is not the attack. Below this a secret is a
+# password, and this one signs every session on the platform.
+_MIN_SECRET_LENGTH = 32
+
+DEVELOPMENT_ENVIRONMENTS = ("dev", "test", "local")
+
+
+def problems(settings: Settings | None = None) -> tuple[list[str], list[str]]:
+    """What is wrong with this configuration. Returns (fatal, warnings).
+
+    Split on a real distinction rather than severity theatre. **Fatal** means
+    the deployment is unsafe: a forged token would be accepted, or a
+    credential would cross the network in the clear. **Warning** means the
+    deployment works and something will not be noticed — nobody is alerted, no
+    mail can be sent.
+
+    Warnings are deliberately not fatal, and that is a judgement rather than
+    laziness. A deployment check strict enough to block a launch over an
+    operational gap teaches people to set `AETHER_ENV=dev` in production,
+    which disables every check including the ones that matter. The strictness
+    is spent where it buys safety.
+    """
+    settings = settings or get_settings()
+    if settings.env in DEVELOPMENT_ENVIRONMENTS:
+        return [], []
+
+    fatal: list[str] = []
+    warnings: list[str] = []
+
+    for field, shipped in _DEV_DEFAULTS.items():
+        value = getattr(settings, field)
+        if value == shipped:
+            fatal.append(f"AETHER_{field.upper()} is still the value shipped in the repository")
+        elif len(value) < _MIN_SECRET_LENGTH:
+            fatal.append(
+                f"AETHER_{field.upper()} is {len(value)} characters; "
+                f"at least {_MIN_SECRET_LENGTH} are needed"
+            )
+
+    # Sharing one secret between the customer world and the staff world would
+    # make a leaked customer token a fleet-wide credential.
+    if settings.jwt_secret == settings.staff_jwt_secret:
+        fatal.append("AETHER_JWT_SECRET and AETHER_STAFF_JWT_SECRET must differ")
+
+    if "aether_app_dev_only" in settings.database_url or "aether_dev_only" in settings.database_url:
+        fatal.append("AETHER_DATABASE_URL still carries the development password")
+
+    # A reset link is a credential with a short life. Sending one over http
+    # puts it in every hop between the customer and us.
+    if not settings.web_base_url.startswith("https://"):
+        fatal.append(f"AETHER_WEB_BASE_URL must be https in {settings.env}")
+
+    if settings.client_ip_source not in ("none", "socket", "forwarded"):
+        fatal.append(f"AETHER_CLIENT_IP_SOURCE is {settings.client_ip_source!r}")
+
+    if not settings.alert_email:
+        warnings.append("AETHER_ALERT_EMAIL is unset: faults are recorded but nobody is told")
+    if not (settings.resend_api_key or settings.smtp_host):
+        warnings.append("no mail transport: password reset and fault alerts both go nowhere")
+
+    return fatal, warnings
+
+
+class Misconfigured(RuntimeError):
+    """The process refused to start rather than run unsafely."""
+
+
+def verify_deployable() -> None:
+    """Refuse to start a production process on a development configuration.
+
+    Called at import time by every service, so the failure is a container that
+    will not start rather than a platform that runs and accepts forged tokens.
+    Loud is the entire point: this is the class of mistake nobody notices
+    until it is being exploited.
+    """
+    import logging
+
+    fatal, warnings = problems()
+    for warning in warnings:
+        logging.getLogger(__name__).warning("configuration: %s", warning)
+    if fatal:
+        raise Misconfigured(
+            "refusing to start with this configuration:\n  - " + "\n  - ".join(fatal)
+        )

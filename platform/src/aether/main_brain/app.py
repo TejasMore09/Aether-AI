@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from aether import __version__
 from aether.core import errors, health, logs
+from aether.core.config import verify_deployable
 from aether.core.db import session as plain_session
 from aether.core.db import tenant_session
 from aether.core.models import (
@@ -51,7 +52,14 @@ app = FastAPI(title="Aether Main Brain", version=__version__)
 
 # Nothing below this line may fail silently: logging so the lines exist,
 # the middleware so nothing raised goes unrecorded.
+# Logging first, so the configuration check's warnings are formatted and
+# attributed like everything else rather than falling out through Python's
+# last-resort handler — which is what they did, visibly, in the first
+# container that ran.
 logs.configure("main_brain")
+# Then refuse to start a production process on a development configuration.
+# Better a container that will not boot than one accepting forged tokens.
+verify_deployable()
 errors.install(app, service="main_brain")
 
 

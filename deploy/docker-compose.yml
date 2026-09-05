@@ -1,0 +1,236 @@
+# The whole platform, as it runs in production.
+#
+#     cd deploy && cp .env.example .env   # then fill it in, see the README
+#     docker compose up -d
+#
+# This is the infrastructure-as-code half of 6.1: one file that stands the
+# platform up from nothing on any machine with Docker, with no step that lives
+# only in somebody's memory. It is deliberately a compose file rather than
+# Terraform or Kubernetes. There is one machine, no autoscaling, and no second
+# environment; the cost of the bigger tools is paid at every change and their
+# benefit arrives at a scale this platform has not reached. When there are two
+# machines, that decision is worth revisiting — and it is written here so it is
+# revisited rather than assumed.
+#
+# **What is published and what is not.** Only the proxy binds a public port.
+# The three APIs and both front ends are reachable on the internal network and
+# nowhere else, which is what makes the front ends' backend-for-frontend design
+# real: there is no route by which a browser could hold a platform token, and
+# no route by which anything outside could forge the forwarded address the
+# throttle now trusts. The staff console reaches the outside only if
+# CONSOLE_DOMAIN points at this machine — see the Caddyfile for why it usually
+# should not.
+
+name: aether
+
+x-platform-image: &platform-image
+  image: aether/platform:${AETHER_VERSION:-latest}
+  build:
+    context: ..
+    dockerfile: platform/Dockerfile
+
+# Everything the Python services need. Anchored rather than repeated, because
+# four copies of this list is four chances for one of them to drift.
+x-platform-env: &platform-env
+  AETHER_ENV: ${AETHER_ENV:-production}
+  AETHER_DATABASE_URL: postgresql+psycopg://aether_app:${APP_DB_PASSWORD:?set APP_DB_PASSWORD}@db:5432/aether
+  AETHER_REDIS_URL: redis://redis:6379/0
+  AETHER_JWT_SECRET: ${AETHER_JWT_SECRET:?set AETHER_JWT_SECRET}
+  AETHER_STAFF_JWT_SECRET: ${AETHER_STAFF_JWT_SECRET:?set AETHER_STAFF_JWT_SECRET}
+  AETHER_TEMPORAL_ADDRESS: temporal:7233
+  AETHER_WEB_BASE_URL: https://${APP_DOMAIN:?set APP_DOMAIN}
+  # True only because the proxy in front replaces X-Forwarded-For and both
+  # front ends pass it on. See deploy/Caddyfile — this is the one setting in
+  # the file that is a claim about the deployment rather than a preference,
+  # and it is wrong the moment an API becomes reachable from outside.
+  AETHER_CLIENT_IP_SOURCE: forwarded
+  AETHER_ALERT_EMAIL: ${AETHER_ALERT_EMAIL:-}
+  AETHER_EMAIL_FROM: ${AETHER_EMAIL_FROM:-}
+  AETHER_RESEND_API_KEY: ${AETHER_RESEND_API_KEY:-}
+  AETHER_LLM_API_KEY: ${AETHER_LLM_API_KEY:-}
+  AETHER_LLM_MODEL: ${AETHER_LLM_MODEL:-gemini/gemini-3.6-flash}
+
+x-api-health: &api-health
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  # Generous, because the first start also opens the database pool and loads
+  # the embedding model. A start period too short restarts a container that
+  # was merely waking up, forever.
+  start_period: 60s
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aether
+      POSTGRES_PASSWORD: ${OWNER_DB_PASSWORD:?set OWNER_DB_PASSWORD}
+      POSTGRES_DB: aether
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aether -d aether"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # No published port. The database is reachable from the compose network
+    # and from an SSH tunnel, and from nothing else. Postgres on a public
+    # interface with password authentication is a brute-force target that
+    # never sleeps.
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: aether
+      POSTGRES_PWD: ${OWNER_DB_PASSWORD:?set OWNER_DB_PASSWORD}
+      POSTGRES_SEEDS: db
+
+  # One-shot. Runs as the schema owner, which the application role deliberately
+  # is not — the app cannot alter its own tables, so a SQL injection cannot
+  # drop them either.
+  #
+  # A separate container rather than an entrypoint step in each service,
+  # because four services starting together would each run migrations at once
+  # and race. `service_completed_successfully` below is what makes the
+  # ordering real instead of hopeful.
+  migrate:
+    <<: *platform-image
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AETHER_MIGRATION_DATABASE_URL: postgresql+psycopg://aether:${OWNER_DB_PASSWORD:?set OWNER_DB_PASSWORD}@db:5432/aether
+      # The app role's password, so the migration that creates the role can
+      # set it. Rotating it means re-running this container.
+      AETHER_APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD}
+    command: ["alembic", "upgrade", "head"]
+
+  control-plane:
+    <<: *platform-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: *platform-env
+    command:
+      ["uvicorn", "aether.control_plane.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    healthcheck:
+      # /readyz, not /healthz. The second says a process is alive and would
+      # have reported a green month through a total outage (D59).
+      test: ["CMD", "curl", "-fsS", "http://localhost:8100/readyz"]
+      <<: *api-health
+
+  agent-runtime:
+    <<: *platform-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: *platform-env
+    command:
+      ["uvicorn", "aether.agent_runtime.app:app", "--host", "0.0.0.0", "--port", "8200"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8200/readyz"]
+      <<: *api-health
+
+  main-brain:
+    <<: *platform-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: *platform-env
+    command:
+      ["uvicorn", "aether.main_brain.app:app", "--host", "0.0.0.0", "--port", "8300"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8300/readyz"]
+      <<: *api-health
+
+  # The autonomous monitor loop. No HTTP surface, so no healthcheck that would
+  # mean anything — Temporal's own task-queue view is where a stalled worker
+  # shows up, and a fault it raises reaches the console like any other.
+  worker:
+    <<: *platform-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    environment: *platform-env
+    command: ["python", "-m", "aether.worker"]
+
+  web:
+    image: aether/web:${AETHER_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: platform/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      AETHER_CONTROL_PLANE_URL: http://control-plane:8100
+      AETHER_AGENT_RUNTIME_URL: http://agent-runtime:8200
+    # No AETHER_MAIN_BRAIN_URL, and its absence is the point: the customer
+    # application holds no configuration that points at the staff surface, so
+    # a routing mistake here cannot become a cross-boundary mistake.
+
+  console:
+    image: aether/console:${AETHER_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: platform/console/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      main-brain:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      AETHER_MAIN_BRAIN_URL: http://main-brain:8300
+
+  proxy:
+    image: aether/proxy:${AETHER_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - web
+      - console
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN}
+      CONSOLE_DOMAIN: ${CONSOLE_DOMAIN:-console.localhost}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account key. Losing this volume means
+      # re-issuing every certificate on the next start, which Let's Encrypt
+      # rate-limits — five duplicate certificates per week, and then the site
+      # is down until the window rolls.
+      - caddydata:/data
+      - caddyconfig:/config
+
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
+  caddyconfig:

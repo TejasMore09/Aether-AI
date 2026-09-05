@@ -31,9 +31,34 @@ import csv
 import functools
 import pathlib
 
-# reference/ sits beside platform/, at the repository root.
-_REFERENCE_DIR = pathlib.Path(__file__).resolve().parents[4] / "reference"
-_TABLE = _REFERENCE_DIR / "damodaran-working-capital-2026-01.csv"
+from aether.core.config import get_settings
+
+_FILENAME = "damodaran-working-capital-2026-01.csv"
+
+
+def _reference_dir() -> pathlib.Path:
+    """Where the committed reference tables live.
+
+    Three candidates, in order, because the answer differs between a checkout
+    and a container and getting it wrong is silent: every sector loses its
+    bands and the product goes back to quoting the same numbers at a bakery
+    and a stock brokerage.
+
+    1. `AETHER_REFERENCE_DIR`, which is what the container image sets.
+    2. Beside the package, for a wheel that carries its own copy.
+    3. The repository layout — `reference/` next to `platform/` — which is the
+       only one that works in a checkout and the only one that used to exist.
+    """
+    configured = get_settings().reference_dir
+    if configured:
+        return pathlib.Path(configured)
+
+    packaged = pathlib.Path(__file__).resolve().parents[1] / "reference"
+    if (packaged / _FILENAME).exists():
+        return packaged
+
+    return pathlib.Path(__file__).resolve().parents[4] / "reference"
+
 
 # Columns a pack metric may name. Anything else is a typo, and saying so is
 # better than seeding nothing and looking correct.
@@ -62,13 +87,14 @@ def table() -> dict[str, dict[str, float]]:
     evidence and is left absent rather than filled with a zero, which would
     read as "they collect instantly".
     """
-    if not _TABLE.exists():
-        raise ReferenceUnavailable(f"reference table missing at {_TABLE}")
+    path = _reference_dir() / _FILENAME
+    if not path.exists():
+        raise ReferenceUnavailable(f"reference table missing at {path}")
 
-    with _TABLE.open(encoding="utf-8") as fh:
+    with path.open(encoding="utf-8") as fh:
         rows = [r for r in csv.reader(fh) if r and not r[0].startswith("#")]
     if not rows:
-        raise ReferenceUnavailable(f"reference table at {_TABLE} has no rows")
+        raise ReferenceUnavailable(f"reference table at {path} has no rows")
 
     header, *body = rows
     out: dict[str, dict[str, float]] = {}

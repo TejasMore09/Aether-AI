@@ -1,0 +1,101 @@
+# The edge.
+#
+# Three jobs, and each of them closes something a previous phase left open.
+#
+# **HTTPS.** Caddy obtains and renews certificates from Let's Encrypt on its
+# own, with no cron job and nothing to forget. That is not a convenience: 6.5's
+# reset links and every session cookie are credentials, and the production
+# configuration check refuses to start a service whose base URL is http (D60).
+#
+# **Naming the client.** 6.4 built per-address throttling and then switched it
+# off, because both front ends are backends-for-frontends: every customer's
+# login arrives from one Next.js server, so throttling on that address would
+# collapse the whole customer base into a single bucket. This proxy is what
+# fixes it.
+#
+# Measured rather than assumed, because the whole chain rests on it: sending
+# `X-Forwarded-For: 9.9.9.9` through this proxy arrives upstream as the real
+# remote address, not as the forgery and not as `9.9.9.9, <real>`. Caddy
+# replaces an incoming X-Forwarded-For unless it came from a configured
+# trusted proxy — no `header_up` needed, and an explicit one here was
+# redundant. That matters because the application reads the *leftmost* value,
+# so an appending proxy would have handed every attacker a fresh identity per
+# request.
+#
+# The chain does not end here. Caddy names the client to Next.js, and Next.js
+# has to pass that name on to the API, because the API's caller is the Next
+# server. See `forwardedFor()` in each app's lib/api.ts — without it,
+# AETHER_CLIENT_IP_SOURCE=forwarded would read a header nobody set.
+#
+# **Rate limiting that is not about credentials.** The application throttle
+# counts failed logins. It says nothing about someone requesting the dashboard
+# ten thousand times a second, and it cannot: by the time that request is
+# counted, it has already cost a database round trip. That belongs here.
+{
+	email {$ACME_EMAIL}
+
+	# Rate limiting is a plugin, not core Caddy. See Caddy.Dockerfile — the
+	# image is built with it, and this block is a syntax error without it,
+	# which is the failure mode to prefer: loud at start, not silent at load.
+	order rate_limit before basic_auth
+}
+
+(security_headers) {
+	header {
+		# The customer app sets these too. Repeated here because the header a
+		# browser obeys is the last one written, and an origin that depends on
+		# every upstream remembering is an origin that will eventually forget.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# ── The customer dashboard ────────────────────────────────────────────────────
+{$APP_DOMAIN} {
+	import security_headers
+
+	rate_limit {
+		zone per_address {
+			key {remote_host}
+			events 240
+			window 1m
+		}
+	}
+
+	reverse_proxy web:3000
+}
+
+# ── The staff console ─────────────────────────────────────────────────────────
+#
+# Served only if CONSOLE_DOMAIN is set, and it should usually not be. The
+# console is the fleet-wide surface: an internal address, a VPN or an
+# allowlist is the right answer, and publishing it on the internet because
+# that was the easier default is how a staff login page becomes the softest
+# target on the platform. Left public, it is at least held to a far tighter
+# rate than the customer app.
+{$CONSOLE_DOMAIN:console.localhost} {
+	import security_headers
+
+	rate_limit {
+		zone console_per_address {
+			key {remote_host}
+			events 60
+			window 1m
+		}
+	}
+
+	reverse_proxy console:3100
+}
+
+# The APIs are deliberately absent.
+#
+# Nothing outside the compose network talks to the control plane, the agent
+# runtime or the main brain. The browser never holds a platform token — both
+# front ends are backends-for-frontends — so there is nothing an external
+# route would enable except a second, unguarded way in. The one exception
+# that will eventually need a route is the ingest API for connectors (7.x),
+# and it should arrive with its own hostname and its own limits rather than by
+# widening this file.

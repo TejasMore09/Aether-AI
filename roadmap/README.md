@@ -25,7 +25,7 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 6 — Production hardening.** Phases 0 to 4 are complete.
 >
-> 613 tests, none skipped. An agent now remembers its own business: pgvector
+> 627 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
@@ -44,12 +44,14 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > knows what is normal in its industry, metrics that mean nothing for its kind
 > of business are not scored, and every threshold shown is the one used.
 >
-> Next in Phase 6: 6.1 deployment and 6.2 backups with a *tested* restore.
-> 6.7 refresh tokens carries a gap password reset could not close: tokens are
-> stateless, so resetting a password does not sign out a session already
-> running. Two things from 6.3 wait on deployment rather than on code —
-> `AETHER_ALERT_EMAIL` has nowhere to send from until the domain is verified,
-> and `/readyz` needs something watching it.
+> **6.1 is done**: the platform comes up as ten containers from one compose
+> file, behind a Caddy edge that holds its own certificates, and refuses to
+> start on a development configuration. `deploy/README.md` says what "free
+> tier" really means for a stack this size, which is not a PaaS.
+>
+> Next: 6.2 backups with a *tested* restore. Then 6.7 refresh tokens, which
+> carries a gap password reset could not close — tokens are stateless, so
+> resetting a password does not sign out a session already running.
 >
 > **Worth a human read:** `platform/src/aether/business/relations.yaml` holds
 > claims about how businesses work, and
