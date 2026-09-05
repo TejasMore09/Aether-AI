@@ -16,7 +16,7 @@ around model retraining and no longer match the code.
 
 ## 1. The shape of it
 
-Four services and a database. Everything runs locally today; nothing here
+Four services and a database, deployable as one compose file; nothing here
 assumes a cloud.
 
 | Service | Port | Talks to | Holds |
@@ -39,6 +39,11 @@ customer deployment holds no credential that reaches the brain.
 Both web apps are back-end-for-front-end. The JWT lives in an httpOnly cookie,
 every call is a Server Component or Server Action, and the browser never
 learns the service hostnames or holds a token.
+
+That shape is also why the platform can trust a forwarded address. Every
+customer request reaches the API from one Next.js server, so per-address
+throttling was inert until the edge named the caller and each front end passed
+that name along — three hops, all of which had to change (D61).
 
 ---
 
@@ -241,6 +246,18 @@ issuer, so a customer JWT at the brain and a staff JWT at a tenant endpoint
 each fail two independent checks. A leak of the customer signing key costs one
 organization's sessions, not the ability to mint fleet-wide identity.
 
+**A valid signature is not a signed-in caller.** Every customer request
+resolves its session against a table, so signing out, resetting a password,
+deactivating an account or removing someone from an organization all take
+effect on the next request rather than whenever a token happens to expire
+(D65). The role comes from the membership row too, so a token cannot claim
+one — escalation needs a database write, not a signature.
+
+Staff sessions are the exception and it is a real one: staff tokens still
+expire rather than end, so a compromised one has fleet-wide reach for its
+thirty-minute life. The mechanism that would close it is built and not yet
+applied there.
+
 ---
 
 ## 8. What an agent remembers
@@ -324,14 +341,65 @@ next improvement.
 - **Connectors.** Credentials exist; integrations do not.
 - **Cross-tenant analytics.** Would require exactly the data sharing the
   isolation model exists to prevent.
-- **Deployment.** Everything runs locally. There is no infrastructure code.
+- **Off-site backups.** Backups are taken nightly and each one is restored
+  into a scratch database and queried before it counts (D63) — but the files
+  sit on the same machine as the database. This survives a dropped table and
+  not a lost host.
+- **Multi-factor authentication**, **GDPR export and delete**, **billing**.
+- **A second machine.** The deployment is one compose file, which is the right
+  size for one host and the wrong tool for two.
 
 ---
 
-## 11. Verification
+## 11. Operating it
 
-141 tests. RLS isolation is proven by test rather than asserted by design, and
-the break-glass gate is mutation-checked — stubbing the grant check to always
-pass fails five tests, so they are load-bearing rather than decorative.
+Everything in this section arrived in Phase 6 and none of it existed while the
+product was being built, which is the usual order and the reason it is worth
+writing down separately.
+
+**One compose file stands the platform up** — Postgres, Temporal, the three
+APIs, the monitor worker, the backup loop, both front ends, and Caddy holding
+its own certificates. Only the proxy binds a public port; everything else is
+reachable on the internal network and nowhere else, which is what makes the
+backend-for-frontend design real rather than conventional. Not Terraform or
+Kubernetes: there is one machine, and that decision is written down so it is
+revisited rather than inherited (D62).
+
+**A production process refuses to start on a development configuration.** The
+repository ships working secrets so a checkout needs no setup at all; every
+one of them is catastrophic in production and one forgotten variable away from
+being used there. Every problem is reported at once rather than one per
+restart (D60).
+
+**Faults are recorded in our own Postgres, not shipped to a third party** — a
+stack trace here carries other companies' operating data. Bodies are never
+captured, what is captured is scrubbed, and reading the scrubbed text needs
+the engineer role and lands in the staff trail. One row per distinct fault
+rather than one per occurrence, alerts rationed per-fault and globally (D57).
+
+**`/healthz` and `/readyz` answer different questions.** The first was
+answering "ok" through any outage; liveness stays deliberately dumb and
+readiness is the one to route and monitor on (D59).
+
+**A backup counts only once it has been restored and questioned.** `pg_dump`
+run as the application role hits row-level security, prints one error, exits
+0, and writes a plausible file with nobody's rows in it — so an exit code is
+not evidence. Five questions are asked of every restore, and the one that
+matters most is whether the row-level-security policies came back (D63).
+
+---
+
+## 12. Verification
+
+669 tests, none skipped. RLS isolation is proven by test rather than asserted
+by design, and the break-glass gate is mutation-checked — stubbing the grant
+check to always pass fails five tests, so they are load-bearing rather than
+decorative.
+
+Several of the most useful tests exist to catch a checker that would report
+success wrongly: the backup verifier is handed a dump taken as the application
+role, a truncated file and a file that is not an archive, and has to say so.
+The forecast backtest is asserted to be able to detect a lying interval, since
+a harness that only ever confirms good news is decoration.
 
 `ruff`, `mypy` and both Next.js builds run clean.

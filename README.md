@@ -8,8 +8,10 @@ One isolated agent per customer. A central brain that can operate the fleet
 without being able to read inside it — except deliberately, temporarily, and
 visibly to the customer.
 
-**Status:** pre-release. Two business domains, no connectors, nothing
-deployed. Everything below runs locally.
+**Status:** pre-release. Two business domains, no connectors, and no real
+business data has touched any of it. It is deployable — one compose file, a
+proxy that holds its own certificates, nightly backups that are restored and
+checked before they count — but it has never run on a real host.
 
 ---
 
@@ -30,33 +32,27 @@ trail the customer can read.
 
 ## Running it
 
-Needs Docker and Python 3.12+.
+Needs Docker and Node. Two commands.
 
 ```bash
-cd platform
-docker compose up -d db
-python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
-.venv/Scripts/alembic upgrade head
+cd platform && docker compose up -d
 ```
 
-Then the services, each in its own shell:
-
-```bash
-.venv/Scripts/uvicorn aether.control_plane.app:app --port 8100 --reload
-```
-
-```bash
-.venv/Scripts/uvicorn aether.agent_runtime.app:app --port 8200 --reload
-```
-
-The customer dashboard, at http://localhost:3000:
+Postgres, Temporal, the migrations and all three APIs. Then the dashboard at
+http://localhost:3000:
 
 ```bash
 cd platform/web && npm install && npm run dev
 ```
 
+Nothing needs configuring first: the development secrets ship in the
+repository so a checkout works with no `.env` at all, and a production process
+refuses to start on them rather than quietly using them.
+
 `platform/README.md` covers the rest — the staff console, the monitor worker,
-domain packs, and what needs configuring before any of it is real.
+running the tests, and what needs configuring before any of it is real.
+`deploy/README.md` covers putting it on a machine, including what "free tier"
+honestly means for a stack this size.
 
 ---
 
@@ -85,6 +81,11 @@ on it.
 cd platform && .venv/Scripts/python -m pytest
 ```
 
-141 tests. Tenant isolation is proven by test rather than asserted by design,
-and the break-glass gate is mutation-checked — stubbing it to always pass
-fails five tests, so they are load-bearing rather than decorative.
+669 tests, none skipped. Tenant isolation is proven by test rather than
+asserted by design, and the break-glass gate is mutation-checked — stubbing it
+to always pass fails five tests, so they are load-bearing rather than
+decorative.
+
+The tests worth reading are the ones aimed at the checkers: the backup
+verifier is handed a dump containing none of anyone's rows and has to notice,
+and the forecast backtest has to be able to detect an interval that is lying.

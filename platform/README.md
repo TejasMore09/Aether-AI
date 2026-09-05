@@ -23,59 +23,74 @@ platform/
 ├── migrations/          Alembic — schema + RLS policies + app role
 ├── tests/               unit tests + the RLS isolation proof
 ├── Dockerfile           the three APIs and the worker, one image
-└── docker-compose.yml   local development: Postgres(pgvector), Redis, Temporal
+└── docker-compose.yml   the whole backend for development, one command
 ```
 
 Production deployment lives in `deploy/` at the repository root: one compose
 file, a Caddy edge that holds the certificates, and `deploy/README.md` for what
 "free tier" actually means for a stack this size.
 
-## Setup (Windows)
+## Running it
 
-Prereqs already on this machine: Docker Desktop, Python 3.12, Node 24, git.
+Prereqs: Docker Desktop, Node 24, git. Python 3.12 only if you want to run the
+tests on the host.
 
 ```powershell
 cd platform
 
-# 1. Python env
-py -3.12 -m venv .venv
-.venv\Scripts\pip install -e ".[dev]"
-
-# 2. Infrastructure (start Docker Desktop first)
+# Everything on the back end: Postgres, Temporal, migrations, and the three
+# APIs. First run builds the image, which takes a few minutes; after that it
+# is seconds.
 docker compose up -d
 
-# 3. Configuration
-copy .env.example .env
-# then edit .env: set AETHER_JWT_SECRET to the output of
-#   .venv\Scripts\python -c "import secrets; print(secrets.token_urlsafe(48))"
-
-# 4. Database schema + RLS (runs as DB owner)
-$env:AETHER_MIGRATION_DATABASE_URL="postgresql+psycopg://aether:aether_dev_only@localhost:5433/aether"
-.venv\Scripts\alembic upgrade head
-
-# 5. Tests — including proof that tenant A cannot read tenant B
-.venv\Scripts\pytest -v
+cd web && npm install && npm run dev        # http://localhost:3000
 ```
 
-## Run the services
+That is the whole thing. The staff console is a second app:
 
 ```powershell
-.venv\Scripts\uvicorn aether.control_plane.app:app --port 8100 --reload
-.venv\Scripts\uvicorn aether.agent_runtime.app:app --port 8200 --reload
-.venv\Scripts\uvicorn aether.main_brain.app:app --port 8300 --reload   # staff only
-.venv\Scripts\python -m aether.worker   # Nano monitor worker (needs Temporal from compose)
+cd console && npm install && npm run dev    # http://localhost:3100
 ```
 
-Then the dashboard:
+| | |
+|---|---|
+| Dashboard | http://localhost:3000 |
+| Staff console | http://localhost:3100 |
+| Control plane | http://localhost:8100 · `/readyz` |
+| Agent runtime | http://localhost:8200 |
+| Main brain | http://localhost:8300 (staff only) |
+| Temporal UI | http://localhost:8233 |
+| Postgres | `localhost:5433`, user `aether` |
+
+`src/` is bound into the API containers with `--reload`, so editing Python
+takes effect immediately. The two Next apps run on the host because their hot
+reload through a Windows bind mount is slower than the extra terminal is
+annoying.
+
+The autonomous monitor worker is off unless asked for — it is only useful once
+a domain has monitoring enabled, and until then it is noise in the logs:
 
 ```powershell
-cd web
-npm install
-copy .env.example .env.local
-npm run dev                             # http://localhost:3000
+docker compose --profile worker up -d
 ```
 
-Temporal UI (inspect schedules/workflow runs): http://localhost:8233
+**Nothing needs configuring to run.** The development secrets ship in the
+repository so a checkout works with no `.env` at all; production refuses to
+start on them (D60). Copy `.env.example` to `.env` only when you want to add
+an LLM or email key.
+
+### Tests
+
+They run on the host against the same database the containers use, so they
+need the Python environment:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\pip install -e ".[dev]"
+.venv\Scripts\pytest -q          # includes the proof tenant A cannot read tenant B
+```
+
+The backup tests additionally need `pg_dump` on PATH and skip without it.
 
 ## The autonomous Nano loop
 

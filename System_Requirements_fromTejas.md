@@ -146,12 +146,33 @@ transcript, so treat them as disclosed.
 
 ### Needed for deployment — Phase 6 🟠
 
-| # | Service | For | Cost |
+**This section was rewritten after 6.1, because the earlier version was
+wrong in a way that would have cost you an afternoon.** It said "app hosting —
+Fly.io, Railway or Render, free/hobby tier to start". Having built the
+deployment and measured it, that is not true.
+
+The stack is ten containers: Postgres with pgvector, Temporal, three APIs, the
+monitor worker, the backup loop, both front ends, and the proxy. Measured idle
+it is **~730 MiB of memory and ~2.7 GB of images**. Render, Railway and Fly's
+free plans are built around one or two small processes with a managed
+database. They will not run this.
+
+| # | What | For | Cost |
 |---|---|---|---|
-| 5 | **Managed Postgres with pgvector** — [Neon](https://neon.tech) or [Supabase](https://supabase.com) | The database (see §3) | Free tier is genuinely enough for years |
-| 6 | **App hosting** — Fly.io, Railway or Render | The four services + two front ends | Free/hobby tier to start |
-| 7 | **Object storage** — Cloudflare R2 or S3 | Documents, once 7.1 exists | Free tier; R2 has no egress fee |
-| 8 | **Backup destination** | 6.2 — backups with a *tested* restore | Included with #5, but the restore test is ours |
+| 5 | **One machine.** Either [Oracle Cloud Always Free](https://www.oracle.com/cloud/free/) (4 ARM cores, 24 GB, free with no expiry) or a small VPS — Hetzner, DigitalOcean, Vultr | The whole platform. `docker compose up -d` and it runs | **Free**, or ~$10–20/month |
+| 6 | **A domain**, which is the same one as #3 | The certificates, which the proxy obtains and renews by itself | Included in #3 |
+| 7 | **Object storage** — Cloudflare R2 or S3 | Documents, once 7.1 exists. Also where backups should be copied | Free tier; R2 has no egress fee |
+| 8 | ~~Backup destination~~ | Backups are built and each one is restored and checked before it counts (6.2). They live **on the same machine as the database**, so they survive a dropped table and not a lost host. Off-site copying wants #7 | — |
+
+Two caveats on Oracle, neither documented anywhere you would find before
+signing up: it is ARM, and the images here have only been built and run on
+x86 (they should rebuild for ARM, but "should" is not "have"); and free
+capacity in a given region is frequently exhausted.
+
+Managed Postgres (Neon, Supabase) is still a reasonable choice and would
+remove the database from the machine above — but it is a change to the compose
+file rather than the plan, and the free tiers there sleep, which an autonomous
+monitor loop notices.
 
 ### Needed for connectors — Phase 7 🟢
 
@@ -243,7 +264,7 @@ system.
 | 16 | **Business entity + bank account** | Only when charging money (6.10). Not before |
 
 🔴 **#15 is worth deciding early** because it constrains hosting region and
-therefore #5 and #6. Changing it after deployment means migrating a database
+therefore #5. Changing it after deployment means migrating a database
 containing customer data across borders.
 
 ---
@@ -258,17 +279,17 @@ Not tasks — judgement calls I should not make alone.
 | 18 | ~~Which domains next?~~ | ✅ **Answered: by how replaceable the job is.** Recorded as D32 — payables (easy), inventory (medium), customer concentration & credit risk (hard). Two of the three bands are already in `reference/` | done |
 | 19 | Which *sectors* to seed bands for first | Phase 3 seeds the ones you name. The file covers 94, but they are not equally worth the effort | 🟠 Before Phase 3 |
 | 20 | How much may Mega ever spend or move unsupervised? | The blast-radius limits in 8.6. A product decision wearing an engineering costume | 🟢 Phase 8 |
-| 21 | Monthly budget ceiling, if any | Everything above is free-tier today; I will keep it that way unless told otherwise | Anytime |
+| 21 | Monthly budget ceiling, if any | Everything is still free today. The one place that may change is hosting: Oracle's free tier fits and a $10–20 VPS is the fallback if it does not (see #5) | Anytime |
 
 ---
 
 ## The short list — if you only do a few things
 
 1. ✅ ~~Run one real LLM diagnosis.~~ Done. Found two bugs, both fixed.
-2. 🔴 **Buy a domain and verify it at resend.com/domains** (#3). The Resend key
-   works but can only email you until this is done, so password reset cannot
-   reach a customer — and password reset is what lets the login lockout cap
-   rise above fifteen minutes.
+2. 🔴 **Buy a domain and verify it at resend.com/domains** (#3). It is now the
+   single item blocking three finished features: password reset cannot reach a
+   customer, fault alerts cannot reach you, and the deployment needs the same
+   domain for its certificates. The Resend key works and can only email you.
 3. 🔴 **Rotate the Gemini and Resend keys** once testing is finished. Both were
    pasted into a chat transcript.
 4. 🟠 **One conversation with an accountant or SME owner** (§1C). Costs

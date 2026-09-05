@@ -57,6 +57,10 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 >
 > Next: 6.6 MFA, 6.8 GDPR, 6.9 load test, 6.10 billing.
 >
+> **To run it:** `cd platform && docker compose up -d`, then
+> `cd platform/web && npm run dev`. That is the whole thing — it used to be
+> six commands in six terminals, which is why nobody could open it.
+>
 > The largest open operational gap is that backups live on the same machine as
 > the database. Off-site copying is not implemented.
 >

@@ -251,40 +251,6 @@ export async function setMonitoring(
   return null
 }
 
-export async function pushObservation(
-  _prev: FormState,
-  form: FormData,
-): Promise<FormState> {
-  const domain = str(form, 'domain')
-  const drift = Number(str(form, 'drift_fraction'))
-  const performance = Number(str(form, 'performance'))
-
-  if (!/^[a-z0-9][a-z0-9_-]*$/.test(domain)) {
-    return { error: 'Domain keys use lowercase letters, numbers, dashes or underscores.' }
-  }
-  for (const [label, value] of [
-    ['Drift', drift],
-    ['Performance', performance],
-  ] as const) {
-    if (!Number.isFinite(value) || value < 0 || value > 1) {
-      return { error: `${label} must be a number between 0 and 1.` }
-    }
-  }
-
-  const result = await api.runtime(`/v1/domains/${domain}/observations`, {
-    method: 'POST',
-    body: JSON.stringify({
-      drift_fraction: drift,
-      performance,
-      source: 'dashboard',
-    }),
-  })
-  if (!result.ok) return { error: result.message }
-
-  revalidatePath(`/domains/${domain}`)
-  return null
-}
-
 export type ReadingState =
   | { ok: true; accepted: boolean; performance?: number; issues: QualityIssue[] }
   | { ok: false; error: string }

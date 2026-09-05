@@ -7,6 +7,60 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — A sweep: making it runnable, and correcting what had drifted
+
+Prompted by the simplest possible bug report — a screenshot of
+`ERR_CONNECTION_REFUSED` on localhost:3000. Nothing was running, which was
+true and not the point: **running this took six commands in six terminals**,
+three uvicorns and a worker and two Next servers, each with its own
+environment to remember. "Open localhost:3000" not working, and the answer
+being a five-step checklist, is a real defect in a product nobody else has
+ever installed.
+
+`docker compose up -d` in `platform/` now brings up Postgres, Temporal, the
+migrations and all three APIs. `src/` and `migrations/` are bound in with
+`--reload`, so the image supplies dependencies and the working tree stays the
+source of truth for code and schema — no rebuild after an edit. The two Next
+apps stay on the host because their hot reload through a Windows bind mount is
+slower than the extra terminal is annoying. Two commands, verified end to end:
+the dashboard renders and its signup form is fetching sectors through the
+containerised control plane.
+
+Two mistakes made while doing it, both worth the note they now carry in the
+file. Setting `name:` on the compose project renamed it, which orphaned the
+existing `aether_pgdata` volume and silently started against an empty
+database. And the first `up` failed with "Can't locate revision 0019" because
+the image predated the migration — the same staleness that bit the deployment
+in 6.1, which is why `migrations/` is bound in now rather than baked.
+
+**The documentation had drifted, and in the direction that matters.**
+`ARCHITECTURE.md` still said "141 tests" and listed **"Deployment. Everything
+runs locally. There is no infrastructure code."** under *Deliberately not
+built* — three phases after that stopped being true. `README.md` said the same.
+It now has a section on operating the platform, because none of that existed
+while the product was being built and that is the usual order.
+
+Worse, `System_Requirements_fromTejas.md` told Tejas to host this on "Fly.io,
+Railway or Render, free/hobby tier". Having built the deployment and measured
+it — ~730 MiB and ten containers — that is false, and would have cost him an
+afternoon before he found out. Rewritten around what fits: Oracle Always Free
+or a $10–20 VPS.
+
+**One intermittent, honestly unresolved.** A backup test asserting
+`source_total == restored_total` failed once in a full-suite run and would not
+reproduce in eleven minutes of trying. The assertion was wrong on its own terms
+whatever the trigger was — `backup.py` says in as many words that the source is
+live and moves on after the snapshot — so it now asserts what the design
+actually promises: a restore cannot hold more than the source and cannot hold
+nothing. The trigger is recorded as unexplained rather than written off (D46).
+
+Also removed `pushObservation`, a server action superseded by `submitReading`
+and rendered by nothing.
+
+669 tests, none skipped.
+
+---
+
 ## 2026-09-05 — Phase 6.7: sessions that can be ended
 
 D56 shipped with 6.5 as a stated limitation: a password reset changed the

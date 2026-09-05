@@ -1,6 +1,52 @@
 # Aether local development stack — free, self-hosted.
-# Postgres runs on host port 5433 because this machine already has a native
+#
+#     docker compose up -d          # everything below, ready to use
+#     cd web && npm run dev         # the dashboard on :3000
+#     cd console && npm run dev     # the staff console on :3100
+#
+# Running the platform used to mean six commands in six terminals: three
+# uvicorns, a worker, and two Next servers, each with its own environment to
+# remember. That is not a small annoyance — it is the difference between
+# "open localhost:3000" working and not, and the answer to "why is nothing
+# there" being a five-step checklist.
+#
+# The APIs run here from the same image the deployment uses, with `src/` bound
+# in and `--reload` on, so editing Python still takes effect immediately. The
+# two Next apps stay on the host, because their hot reload through a Windows
+# bind mount is slow enough to be worse than the extra terminal.
+#
+# Postgres is on host port 5433 because this machine already has a native
 # PostgreSQL 18 server on 5432; the platform deliberately does not touch it.
+#
+# No `name:` here on purpose. Compose derives the project name from this
+# directory, and setting one renames the project — which orphans the existing
+# `aether_pgdata` volume and silently starts against an empty database. Adding
+# one cost exactly that, once.
+
+x-api: &api
+  image: aether/platform:dev
+  build:
+    context: ..
+    dockerfile: platform/Dockerfile
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+  environment: &api-env
+    AETHER_ENV: dev
+    AETHER_DATABASE_URL: postgresql+psycopg://aether_app:aether_app_dev_only@db:5432/aether
+    AETHER_MIGRATION_DATABASE_URL: postgresql+psycopg://aether:aether_dev_only@db:5432/aether
+    AETHER_TEMPORAL_ADDRESS: temporal:7233
+    AETHER_WEB_BASE_URL: http://localhost:3000
+    # The development secrets, on purpose. `verify_deployable` only checks
+    # them when AETHER_ENV is not a development value, so a checkout runs with
+    # no configuration at all — see D60.
+    PYTHONPATH: /app/src
+  volumes:
+    # The source, so editing Python here takes effect in the container.
+    # PYTHONPATH puts it ahead of the copy pip installed into the image.
+    - ./src:/app/src:ro
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -46,6 +92,94 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
       - "8233:8080"
+
+  # Schema first, once, as the owner. The APIs wait on it finishing rather
+  # than racing each other to run migrations, which is what four services
+  # starting together would otherwise do.
+  migrate:
+    image: aether/platform:dev
+    build:
+      context: ..
+      dockerfile: platform/Dockerfile
+    container_name: aether-migrate
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AETHER_MIGRATION_DATABASE_URL: postgresql+psycopg://aether:aether_dev_only@db:5432/aether
+    volumes:
+      # The checkout's migrations, not the image's copy. Without this the
+      # image goes stale the moment a migration is written and `up -d` fails
+      # with "Can't locate revision", which is a confusing way to be told to
+      # rebuild. The image supplies dependencies here; the source of truth for
+      # code and schema is the working tree.
+      - ./migrations:/app/migrations:ro
+    command: ["alembic", "upgrade", "head"]
+
+  control-plane:
+    <<: *api
+    container_name: aether-control-plane
+    ports:
+      - "8100:8100"
+    command:
+      - uvicorn
+      - aether.control_plane.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8100"
+      - --reload
+      - --reload-dir
+      - /app/src
+
+  agent-runtime:
+    <<: *api
+    container_name: aether-agent-runtime
+    ports:
+      - "8200:8200"
+    command:
+      - uvicorn
+      - aether.agent_runtime.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8200"
+      - --reload
+      - --reload-dir
+      - /app/src
+
+  main-brain:
+    <<: *api
+    container_name: aether-main-brain
+    ports:
+      - "8300:8300"
+    command:
+      - uvicorn
+      - aether.main_brain.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8300"
+      - --reload
+      - --reload-dir
+      - /app/src
+
+  # The autonomous monitor loop. Off by default: it is only useful once a
+  # domain has monitoring enabled, and a worker looping against an empty task
+  # queue is noise in the logs of somebody trying to read something else.
+  #
+  #     docker compose --profile worker up -d
+  worker:
+    <<: *api
+    container_name: aether-worker
+    profiles: ["worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+    command: ["python", "-m", "aether.worker"]
 
 volumes:
   aether_pgdata:
