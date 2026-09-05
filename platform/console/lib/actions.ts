@@ -8,21 +8,39 @@ import { createSession, destroySession, readSession, type StaffRole } from './se
 
 export type FormState = { error: string } | null
 
+/**
+ * A staff password accepted, and a session deliberately withheld.
+ *
+ * A staff credential reaches every tenant on the platform, which is why this
+ * surface got a second factor before the customer one needed it.
+ */
+export type MfaPending = { mfaChallenge: string; email: string }
+
+export type SignInState = FormState | MfaPending
+
+type StaffToken = { access_token: string; email: string; role: StaffRole }
+type StaffChallenge = { mfa_required: true; challenge: string }
+
 function str(form: FormData, key: string): string {
   const value = form.get(key)
   return typeof value === 'string' ? value.trim() : ''
 }
 
-export async function signIn(_prev: FormState, form: FormData): Promise<FormState> {
+export async function signIn(_prev: SignInState, form: FormData): Promise<SignInState> {
   const email = str(form, 'email')
   const password = str(form, 'password')
   if (!email || !password) return { error: 'Email and password are required.' }
 
-  const result = await brain<{ access_token: string; email: string; role: StaffRole }>(
-    '/v1/staff/login',
-    { method: 'POST', body: JSON.stringify({ email, password }), auth: false },
-  )
+  const result = await brain<StaffToken | StaffChallenge>('/v1/staff/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+    auth: false,
+  })
   if (!result.ok) return { error: result.message }
+
+  if ('mfa_required' in result.data) {
+    return { mfaChallenge: result.data.challenge, email }
+  }
 
   await createSession({
     token: result.data.access_token,
@@ -30,6 +48,71 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
     role: result.data.role,
   })
   redirect('/')
+}
+
+/** Finish a staff sign-in that stopped for a code. */
+export async function completeSignIn(_prev: SignInState, form: FormData): Promise<SignInState> {
+  const challenge = str(form, 'challenge')
+  const code = str(form, 'code')
+  if (!code) return { error: 'Enter the code from your authenticator app.' }
+
+  const result = await brain<StaffToken>('/v1/staff/mfa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ challenge, code }),
+    auth: false,
+  })
+  if (!result.ok) {
+    return result.status === 401 && !result.message.includes('again')
+      ? { mfaChallenge: challenge, email: str(form, 'email') }
+      : { error: result.message }
+  }
+
+  await createSession({
+    token: result.data.access_token,
+    email: result.data.email,
+    role: result.data.role,
+  })
+  redirect('/')
+}
+
+// ── Enrolling, from the console ───────────────────────────────────────────────
+
+export type StaffMfaStatus = {
+  enrolled: boolean
+  confirmed: boolean
+  recovery_codes_left: number
+  available: boolean
+}
+
+export async function startStaffMfa(): Promise<
+  { secret: string; otpauth_uri: string } | { error: string }
+> {
+  const result = await brain<{ secret: string; otpauth_uri: string }>('/v1/staff/mfa/enrol', {
+    method: 'POST',
+  })
+  return result.ok ? result.data : { error: result.message }
+}
+
+export async function confirmStaffMfa(
+  code: string,
+): Promise<{ recoveryCodes: string[] } | { error: string }> {
+  const result = await brain<{ recovery_codes: string[] }>('/v1/staff/mfa/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+  if (!result.ok) return { error: result.message }
+  revalidatePath('/')
+  return { recoveryCodes: result.data.recovery_codes }
+}
+
+export async function disableStaffMfa(code: string): Promise<FormState> {
+  const result = await brain<void>('/v1/staff/mfa/disable', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+  if (!result.ok) return { error: result.message }
+  revalidatePath('/')
+  return null
 }
 
 /**

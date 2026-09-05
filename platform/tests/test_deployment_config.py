@@ -37,6 +37,7 @@ def good(**overrides) -> Settings:
         env="production",
         jwt_secret="x" * 48,
         staff_jwt_secret="y" * 48,
+        mfa_key="m" * 48,
         database_url="postgresql+psycopg://aether_app:a-real-password@db:5432/aether",
         web_base_url="https://app.example.com",
         client_ip_source="forwarded",
@@ -93,12 +94,25 @@ def test_a_short_secret_is_refused_even_though_it_is_not_the_default():
     assert any("characters" in p for p in problem), problem
 
 
-def test_the_two_secrets_must_differ():
-    """Sharing one would make a leaked customer token a fleet-wide staff
-    credential — the two failures the split exists to keep separate."""
+def test_the_three_secrets_must_all_differ():
+    """Sharing the two signing keys would make a leaked customer token a
+    fleet-wide staff credential. Reusing either to seal TOTP secrets would mean
+    one leak costs both factors, which is the whole thing MFA is for."""
     shared = "z" * 48
-    problem = fatal(good(jwt_secret=shared, staff_jwt_secret=shared))
-    assert any("must differ" in p for p in problem), problem
+    for pair in (
+        {"jwt_secret": shared, "staff_jwt_secret": shared},
+        {"jwt_secret": shared, "mfa_key": shared},
+        {"staff_jwt_secret": shared, "mfa_key": shared},
+    ):
+        problem = fatal(good(**pair))
+        assert any("must all differ" in p for p in problem), (pair, problem)
+
+
+def test_the_mfa_key_shipped_in_this_repository_is_refused():
+    """A published key that seals TOTP secrets means a database leak hands over
+    the second factor as well as the first."""
+    problem = fatal(good(mfa_key="dev-only-mfa-key-do-not-deploy"))
+    assert any("AETHER_MFA_KEY" in p and "shipped" in p for p in problem), problem
 
 
 def test_the_development_database_password_is_refused():
@@ -162,12 +176,12 @@ def test_every_problem_is_reported_at_once():
     """Otherwise fixing a deployment is one restart per mistake, and the person
     doing it at two in the morning stops reading after the first.
 
-    Four is what an untouched configuration actually produces, and it is what
-    the first container to run this printed: both signing secrets, the
-    database password, and the http base URL.
+    Five is what an untouched configuration produces: the two signing secrets,
+    the MFA key, the database password, and the http base URL. The first
+    container to run this printed four, before 6.6 added the third secret.
     """
     untouched = settings(env="production")
-    assert len(fatal(untouched)) == 4, fatal(untouched)
+    assert len(fatal(untouched)) == 5, fatal(untouched)
 
 
 def test_the_running_process_is_deployable_as_configured_for_tests():

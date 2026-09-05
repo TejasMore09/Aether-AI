@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from aether import __version__
-from aether.core import errors, health, logs, money, recovery, sessions
+from aether.core import errors, health, logs, mfa, money, recovery, sessions
 from aether.core.config import get_settings, verify_deployable
 from aether.core.db import session, tenant_session
 from aether.core.models import (
@@ -27,8 +27,11 @@ from aether.core.models import (
 )
 from aether.core.security import (
     Principal,
+    TokenError,
     hash_password,
+    issue_mfa_challenge,
     issue_token,
+    verify_mfa_challenge,
     verify_password,
 )
 from aether.core.tenancy import authenticated, require_role
@@ -176,6 +179,120 @@ def signup(body: SignupRequest) -> TokenResponse:
     return TokenResponse(access_token=token, tenant_id=tenant_id, role=Role.owner)
 
 
+class MfaVerify(BaseModel):
+    challenge: str
+    code: str = Field(min_length=6, max_length=40)
+
+
+@app.post("/v1/auth/mfa/verify", response_model=TokenResponse)
+def verify_second_factor(body: MfaVerify, request: Request) -> TokenResponse:
+    """Finish a sign-in that stopped for a second factor.
+
+    Throttled on the account, using the same counters as the password. Six
+    digits is a million combinations, which is nothing at all without a limit —
+    and an attacker reaching here already has the password, so this is the last
+    thing standing.
+    """
+    try:
+        pending = verify_mfa_challenge(body.challenge)
+    except TokenError as exc:
+        raise HTTPException(status_code=401, detail="Start again from the sign-in page.") from exc
+
+    who = {"email": pending.email, "ip": client_ip(request)}
+    guard(who)
+
+    if not mfa.verify(mfa.USER, pending.user_id, body.code):
+        refused(who)
+        raise HTTPException(status_code=401, detail="That code is not right.")
+
+    succeeded(pending.email)
+    session_id, expires_at = sessions.begin(
+        pending.user_id, pending.tenant_id, created_from=client_ip(request)
+    )
+    token = issue_token(
+        pending.user_id,
+        pending.email,
+        pending.tenant_id,
+        pending.role,
+        session_id=session_id,
+        expires_at=expires_at,
+    )
+    return TokenResponse(access_token=token, tenant_id=pending.tenant_id, role=pending.role)
+
+
+@app.get("/v1/auth/mfa")
+def mfa_status(principal: Principal = Depends(authenticated)) -> dict:
+    state = mfa.status(mfa.USER, principal.user_id)
+    return {
+        "enrolled": state.enrolled,
+        "confirmed": state.confirmed,
+        "recovery_codes_left": state.recovery_codes_left,
+        # So a settings page can explain "unavailable" rather than showing a
+        # button that fails.
+        "available": mfa.available(),
+    }
+
+
+@app.post("/v1/auth/mfa/enrol")
+def start_enrolment(principal: Principal = Depends(authenticated)) -> dict:
+    """Create an enrolment that does nothing until a code confirms it."""
+    try:
+        secret, uri = mfa.begin_enrolment(mfa.USER, principal.user_id, principal.email)
+    except mfa.MfaUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except mfa.MfaError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"secret": secret, "otpauth_uri": uri}
+
+
+class MfaCode(BaseModel):
+    code: str = Field(min_length=6, max_length=40)
+
+
+@app.post("/v1/auth/mfa/confirm")
+def confirm_enrolment(
+    body: MfaCode, request: Request, principal: Principal = Depends(authenticated)
+) -> dict:
+    """Prove the authenticator works, and receive the recovery codes.
+
+    They are shown exactly once. Without them a lost phone is a lost account,
+    which is the same lockout password reset exists to prevent.
+    """
+    who = {"email": principal.email, "ip": client_ip(request)}
+    guard(who)
+    try:
+        codes = mfa.confirm_enrolment(mfa.USER, principal.user_id, body.code)
+    except mfa.MfaError as exc:
+        refused(who)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"recovery_codes": codes}
+
+
+@app.post("/v1/auth/mfa/disable", status_code=204)
+def disable_second_factor(
+    body: MfaCode, request: Request, principal: Principal = Depends(authenticated)
+) -> Response:
+    """Turn the second factor off, which needs a current code.
+
+    Being signed in is not enough. A stolen session that can switch this off
+    has made the whole feature decoration — and the person most likely to be
+    holding one is exactly who this protects against.
+    """
+    who = {"email": principal.email, "ip": client_ip(request)}
+    guard(who)
+    if not mfa.verify(mfa.USER, principal.user_id, body.code):
+        refused(who)
+        raise HTTPException(status_code=401, detail="That code is not right.")
+
+    mfa.disable(mfa.USER, principal.user_id)
+    # Every other session too. Turning off a second factor is a security event,
+    # and if it was not the owner doing it they should be evicted by it.
+    sessions.revoke_all_for_user(
+        principal.user_id, reason=sessions.SIGNED_OUT_EVERYWHERE, keep=principal.session_id
+    )
+    return Response(status_code=204)
+
+
 @app.post("/v1/auth/logout", status_code=204)
 def logout(principal: Principal = Depends(authenticated)) -> Response:
     """End this session now.
@@ -288,8 +405,20 @@ class LoginRequest(BaseModel):
     org_slug: str | None = None  # required only when the user belongs to several orgs
 
 
-@app.post("/v1/auth/login", response_model=TokenResponse)
-def login(body: LoginRequest, request: Request) -> TokenResponse:
+class MfaChallenge(BaseModel):
+    """A password accepted, and a session deliberately withheld.
+
+    `mfa_required` is a literal rather than an optional flag so a client cannot
+    mistake one response for the other by reading a missing key as false.
+    """
+
+    mfa_required: bool = True
+    challenge: str
+    tenant_id: uuid.UUID
+
+
+@app.post("/v1/auth/login", response_model=TokenResponse | MfaChallenge)
+def login(body: LoginRequest, request: Request) -> TokenResponse | MfaChallenge:
     email = body.email.lower()
     who = {"email": email, "ip": client_ip(request)}
     guard(who)
@@ -326,6 +455,15 @@ def login(body: LoginRequest, request: Request) -> TokenResponse:
         succeeded(email)
         user_id, tenant_id, role = user.id, tenant.id, membership.role
         address = user.email
+
+    # A correct password is not a session when there is a second factor. The
+    # challenge proves only that the password was right and carries no session,
+    # so nothing else on the platform accepts it (6.6).
+    if mfa.required_for(mfa.USER, user_id):
+        return MfaChallenge(
+            challenge=issue_mfa_challenge(user_id, tenant_id, address, role),
+            tenant_id=tenant_id,
+        )
 
     session_id, expires_at = sessions.begin(user_id, tenant_id, created_from=client_ip(request))
     token = issue_token(

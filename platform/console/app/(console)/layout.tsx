@@ -52,6 +52,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             <NavLink href="/">Fleet</NavLink>
             <NavLink href="/faults">Faults</NavLink>
             <NavLink href="/trail">Staff trail</NavLink>
+            <NavLink href="/security">Your security</NavLink>
           </nav>
 
           <div className="flex items-center gap-3">

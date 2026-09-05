@@ -36,6 +36,7 @@ x-platform-env: &platform-env
   AETHER_DATABASE_URL: postgresql+psycopg://aether_app:${APP_DB_PASSWORD:?set APP_DB_PASSWORD}@db:5432/aether
   AETHER_JWT_SECRET: ${AETHER_JWT_SECRET:?set AETHER_JWT_SECRET}
   AETHER_STAFF_JWT_SECRET: ${AETHER_STAFF_JWT_SECRET:?set AETHER_STAFF_JWT_SECRET}
+  AETHER_MFA_KEY: ${AETHER_MFA_KEY:?set AETHER_MFA_KEY}
   AETHER_TEMPORAL_ADDRESS: temporal:7233
   AETHER_WEB_BASE_URL: https://${APP_DOMAIN:?set APP_DOMAIN}
   # True only because the proxy in front replaces X-Forwarded-For and both

@@ -25,6 +25,18 @@ export type FormState = { error: string } | null
  */
 export type AuthFormState = FormState | { notice: string }
 
+/**
+ * A password accepted, and a session deliberately withheld.
+ *
+ * Carried back to the login page so it can ask for a code. The email rides
+ * along only so the second step can say whose account it is asking about.
+ */
+export type MfaPending = { mfaChallenge: string; email: string }
+
+export type LoginState = FormState | MfaPending
+
+type MfaChallenge = { mfa_required: true; challenge: string; tenant_id: string }
+
 type TokenResponse = { access_token: string; tenant_id: string; role: Session['role'] }
 
 function str(form: FormData, key: string): string {
@@ -63,6 +75,89 @@ export async function signup(_prev: FormState, form: FormData): Promise<FormStat
     email: payload.email,
   })
   redirect('/')
+}
+
+/**
+ * Finish a sign-in that stopped for a second factor.
+ *
+ * The challenge is passed back through a hidden field rather than kept in a
+ * cookie: it is a half-identity with a five-minute life, and putting it
+ * anywhere durable would be storing exactly the thing that must not outlive
+ * the form it belongs to.
+ */
+export async function completeSignIn(_prev: LoginState, form: FormData): Promise<LoginState> {
+  const challenge = str(form, 'challenge')
+  const code = str(form, 'code')
+  if (!code) return { error: 'Enter the code from your authenticator app.' }
+
+  const result = await api.control<TokenResponse>('/v1/auth/mfa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ challenge, code }),
+    auth: false,
+  })
+  if (!result.ok) {
+    // The challenge is still good for a few minutes, so the page keeps asking
+    // rather than sending somebody back to type their password again.
+    return result.status === 401 && !result.message.includes('again')
+      ? { mfaChallenge: challenge, email: str(form, 'email'), error: result.message }
+      : { error: result.message }
+  }
+
+  await createSession({
+    token: result.data.access_token,
+    tenantId: result.data.tenant_id,
+    role: result.data.role,
+    email: str(form, 'email'),
+  })
+  redirect('/')
+}
+
+// ── The second factor, from the settings page ─────────────────────────────────
+
+export type MfaStatus = {
+  enrolled: boolean
+  confirmed: boolean
+  recovery_codes_left: number
+  available: boolean
+}
+
+export type EnrolState =
+  | { secret: string; otpauth_uri: string }
+  | { recoveryCodes: string[] }
+  | { error: string }
+  | null
+
+export async function startMfaEnrolment(): Promise<EnrolState> {
+  const result = await api.control<{ secret: string; otpauth_uri: string }>('/v1/auth/mfa/enrol', {
+    method: 'POST',
+  })
+  return result.ok ? result.data : { error: result.message }
+}
+
+/**
+ * Prove the authenticator works and receive the recovery codes.
+ *
+ * They are returned once and never again. Without them a lost phone is a lost
+ * account, so the page that shows them has to make that clear.
+ */
+export async function confirmMfaEnrolment(code: string): Promise<EnrolState> {
+  const result = await api.control<{ recovery_codes: string[] }>('/v1/auth/mfa/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+  if (!result.ok) return { error: result.message }
+  revalidatePath('/settings')
+  return { recoveryCodes: result.data.recovery_codes }
+}
+
+export async function disableMfa(code: string): Promise<FormState> {
+  const result = await api.control<void>('/v1/auth/mfa/disable', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+  if (!result.ok) return { error: result.message }
+  revalidatePath('/settings')
+  return null
 }
 
 export async function updateBusiness(sector: string, currency: string): Promise<FormState> {
@@ -132,13 +227,13 @@ export async function resetPassword(_prev: FormState, form: FormData): Promise<F
   redirect('/login?reset=1')
 }
 
-export async function login(_prev: FormState, form: FormData): Promise<FormState> {
+export async function login(_prev: LoginState, form: FormData): Promise<LoginState> {
   const email = str(form, 'email')
   const password = str(form, 'password')
   const orgSlug = str(form, 'org_slug')
   if (!email || !password) return { error: 'Email and password are required.' }
 
-  const result = await api.control<TokenResponse>('/v1/auth/login', {
+  const result = await api.control<TokenResponse | MfaChallenge>('/v1/auth/login', {
     method: 'POST',
     body: JSON.stringify({
       email,
@@ -148,6 +243,13 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
     auth: false,
   })
   if (!result.ok) return { error: result.message }
+
+  // A correct password is not a session when there is a second factor. The
+  // challenge is handed to the page, which asks for a code — it carries no
+  // session and nothing else on the platform accepts it.
+  if ('mfa_required' in result.data) {
+    return { mfaChallenge: result.data.challenge, email }
+  }
 
   await createSession({
     token: result.data.access_token,

@@ -1547,3 +1547,55 @@ trail, because ending a colleague's access is exactly what that trail is for.
 Twenty-four existing tests failed on this change, all for the same reason and
 all correctly: they minted staff tokens with no session behind them. Under the
 old design that was a valid credential. It is not one now.
+
+
+---
+
+## D67 — TOTP, with the four things that usually go missing
+
+6.4 built login throttling and said plainly what it does not do: it bounds the
+*rate* of guessing, and stops neither a patient attacker with a good wordlist
+nor a password reused from a site that has already been breached. This is the
+answer to both, and it is TOTP because it is free, works with any
+authenticator app, and — unlike SMS — cannot be taken by persuading a phone
+network to move a number.
+
+The algorithm is thirty lines. The parts that matter are the ones an
+implementation is usually missing.
+
+**The secret is encrypted at rest.** The entire premise of a second factor is
+that it survives a password compromise, so a database leak handing over both
+the bcrypt hashes and the TOTP secrets defeats it completely. Sealed with a
+key from the environment, which makes a stolen backup insufficient on its own.
+`cryptography` was added for this; it is the only new dependency.
+
+**Enrolment is not finished until a code proves it.** The secret is stored
+unconfirmed and gates nothing. Activating on generation is how people lock
+themselves out with an app that never scanned the code properly.
+
+**Recovery codes, shown once.** Without them a lost phone is a lost account —
+the same lockout password reset was built to close (6.5). Ten, single-use,
+stored as hashes.
+
+**A used code cannot be used again.** A TOTP code is valid for a whole
+thirty-second step, so anyone who observes one — over a shoulder, through a
+phishing proxy — can replay it inside that window. The last accepted step is
+recorded and never accepted twice. Tolerance is one step either side, because
+each extra step widens exactly that window.
+
+And two at the edges. **A challenge is not a session**: a correct password
+returns a token that proves only the password, carries no session, and is
+refused everywhere by both a missing `sid` and an explicit purpose claim — two
+checks, because this is the one credential in the system that is deliberately
+half of an identity. **Turning it off needs a code**, not merely a session,
+and doing so ends every other session; a stolen session that can switch off
+the second factor has made it decoration.
+
+**Staff got it at the same time**, and that is the point rather than
+thoroughness. A stolen customer password costs one organisation; a stolen
+staff password costs the fleet. Enabling and disabling are both written to the
+staff trail.
+
+**Not mandatory.** Requiring it would lock out every account that exists
+today, and the product has no owner to grant an exception. That is a decision
+to revisit with real customers rather than one to make on their behalf now.

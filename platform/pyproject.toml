@@ -20,6 +20,11 @@ dependencies = [
     # Local embeddings for the agent knowledge base. ONNX rather than torch:
     # ~50MB of runtime instead of ~2GB, and no GPU assumptions.
     "fastembed>=0.4",
+    # Encrypting TOTP secrets at rest (6.6). The whole point of a second
+    # factor is that it survives a password compromise, and a database leak
+    # that hands over both defeats it — so the secret is encrypted with a key
+    # that lives in the environment, not in the database.
+    "cryptography>=43",
 ]
 
 [project.optional-dependencies]

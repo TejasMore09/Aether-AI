@@ -66,6 +66,13 @@ class TokenError(Exception):
     pass
 
 
+_MFA_PURPOSE = "mfa-challenge"
+
+# Long enough to open an authenticator app and read a code, short enough that
+# a challenge left on a shared machine is not a way in.
+MFA_CHALLENGE_MINUTES = 5
+
+
 def issue_token(
     user_id: uuid.UUID,
     email: str,
@@ -111,6 +118,10 @@ def verify_token(token: str) -> Principal:
         )
     except jwt.PyJWTError as exc:
         raise TokenError(str(exc)) from exc
+    if payload.get("purpose") == _MFA_PURPOSE:
+        # A half-finished sign-in is not a sign-in. Without this an MFA
+        # challenge would authenticate anything that does not check `sid`.
+        raise TokenError("this token only proves a password, not a session")
     try:
         raw_session = payload.get("sid")
         return Principal(
@@ -119,6 +130,58 @@ def verify_token(token: str) -> Principal:
             tenant_id=uuid.UUID(payload["tenant"]),
             role=Role(payload["role"]),
             session_id=uuid.UUID(raw_session) if raw_session else None,
+        )
+    except (KeyError, ValueError) as exc:
+        raise TokenError(f"malformed claims: {exc}") from exc
+
+
+# ── The gap between "password accepted" and "signed in" ───────────────────────
+
+
+def issue_mfa_challenge(user_id: uuid.UUID, tenant_id: uuid.UUID, email: str, role: Role) -> str:
+    """A token proving the password was right, and nothing more.
+
+    Issued when a password succeeds for an account with a second factor. It
+    carries no session, so `tenancy.authenticated` refuses it — and it carries
+    a purpose, so it is refused explicitly rather than by the accident of a
+    missing claim. Both checks, because this is the one credential in the
+    system that is deliberately half of an identity.
+    """
+    s = get_settings()
+    now = datetime.datetime.now(datetime.UTC)
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "tenant": str(tenant_id),
+        "role": role.value,
+        "purpose": _MFA_PURPOSE,
+        "iat": now,
+        "exp": now + datetime.timedelta(minutes=MFA_CHALLENGE_MINUTES),
+        "iss": "aether-control-plane",
+    }
+    return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_algorithm)
+
+
+def verify_mfa_challenge(token: str) -> Principal:
+    """Read a challenge back, refusing anything that is not one."""
+    s = get_settings()
+    try:
+        payload = jwt.decode(
+            token, s.jwt_secret, algorithms=[s.jwt_algorithm], issuer="aether-control-plane"
+        )
+    except jwt.PyJWTError as exc:
+        raise TokenError(str(exc)) from exc
+
+    if payload.get("purpose") != _MFA_PURPOSE:
+        # An access token presented here would otherwise skip the second
+        # factor entirely, which is the one thing this endpoint must not allow.
+        raise TokenError("not an MFA challenge")
+    try:
+        return Principal(
+            user_id=uuid.UUID(payload["sub"]),
+            email=payload["email"],
+            tenant_id=uuid.UUID(payload["tenant"]),
+            role=Role(payload["role"]),
         )
     except (KeyError, ValueError) as exc:
         raise TokenError(f"malformed claims: {exc}") from exc

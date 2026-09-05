@@ -48,6 +48,12 @@ from aether.core.models import (
 
 STAFF_ISSUER = "aether-main-brain"
 
+_MFA_PURPOSE = "staff-mfa-challenge"
+
+# Long enough to open an authenticator app, short enough that a challenge left
+# on a shared machine is not a way into the fleet.
+STAFF_MFA_CHALLENGE_MINUTES = 5
+
 _ROLE_ORDER = {StaffRole.observer: 0, StaffRole.engineer: 1, StaffRole.admin: 2}
 
 # How stale a staff session's `last_seen_at` may get before it earns a write.
@@ -123,6 +129,10 @@ def verify_staff_token(token: str) -> StaffPrincipal:
         )
     except jwt.PyJWTError as exc:
         raise StaffTokenError(str(exc)) from exc
+    if payload.get("purpose") == _MFA_PURPOSE:
+        # A half-finished sign-in is not a sign-in, and this one reaches every
+        # tenant on the platform if it is mistaken for one.
+        raise StaffTokenError("this token only proves a password, not a session")
     try:
         raw_session = payload.get("sid")
         return StaffPrincipal(
@@ -576,3 +586,57 @@ def revoke_staff_sessions_for(
         if rows:
             logger.info("revoked %s staff session(s): %s", len(rows), reason)
         return len(rows)
+
+
+# ── The gap between "password accepted" and "signed in", for staff ────────────
+
+
+def issue_staff_mfa_challenge(admin: PlatformAdmin) -> str:
+    """A token proving a staff password was right, and nothing more.
+
+    Signed with the staff key and issuer like every other staff token, so it
+    cannot be replayed at a tenant endpoint, and marked with a purpose so it
+    cannot be mistaken for a session by anything that forgets to check.
+    """
+    s = get_settings()
+    now = utcnow()
+    payload = {
+        "sub": str(admin.id),
+        "email": admin.email,
+        "role": admin.role.value,
+        "purpose": _MFA_PURPOSE,
+        "iat": now,
+        "exp": now + datetime.timedelta(minutes=STAFF_MFA_CHALLENGE_MINUTES),
+        "iss": STAFF_ISSUER,
+    }
+    return jwt.encode(payload, s.staff_jwt_secret, algorithm=s.jwt_algorithm)
+
+
+def verify_staff_mfa_challenge(token: str) -> StaffPrincipal:
+    """Read a staff challenge back, refusing anything that is not one."""
+    s = get_settings()
+    try:
+        payload = jwt.decode(
+            token, s.staff_jwt_secret, algorithms=[s.jwt_algorithm], issuer=STAFF_ISSUER
+        )
+    except jwt.PyJWTError as exc:
+        raise StaffTokenError(str(exc)) from exc
+
+    if payload.get("purpose") != _MFA_PURPOSE:
+        raise StaffTokenError("not an MFA challenge")
+    try:
+        return StaffPrincipal(
+            admin_id=uuid.UUID(payload["sub"]),
+            email=payload["email"],
+            role=StaffRole(payload["role"]),
+        )
+    except (KeyError, ValueError) as exc:
+        raise StaffTokenError(f"malformed claims: {exc}") from exc
+
+
+def admin_by_id(admin_id: uuid.UUID) -> PlatformAdmin | None:
+    """One staff account, for finishing a sign-in that stopped for a code."""
+    with plain_session() as db:
+        return db.scalar(
+            select(PlatformAdmin).where(PlatformAdmin.id == admin_id, PlatformAdmin.is_active)
+        )

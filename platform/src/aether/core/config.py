@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     staff_session_idle_minutes: int = 30
     staff_session_absolute_hours: int = 12
 
+    # Seals TOTP secrets at rest (6.6). The whole premise of a second factor
+    # is that it survives a password compromise, so a database leak handing
+    # over both the hashes and the secrets defeats it. This key lives in the
+    # environment and never in the database — which is why the shipped value
+    # below is in _DEV_DEFAULTS and production refuses to start on it.
+    mfa_key: str = "dev-only-mfa-key-do-not-deploy"
+
     # Ceiling on how long one break-glass grant can last. Not a default --
     # the requester picks a duration and this caps it. An incident that
     # outlives this needs a fresh decision, with its own written reason.
@@ -186,6 +193,7 @@ def get_settings() -> Settings:
 _DEV_DEFAULTS = {
     "jwt_secret": "dev-only-secret-do-not-deploy",
     "staff_jwt_secret": "dev-only-staff-secret-do-not-deploy",
+    "mfa_key": "dev-only-mfa-key-do-not-deploy",
 }
 
 # Long enough that guessing is not the attack. Below this a secret is a
@@ -228,9 +236,14 @@ def problems(settings: Settings | None = None) -> tuple[list[str], list[str]]:
             )
 
     # Sharing one secret between the customer world and the staff world would
-    # make a leaked customer token a fleet-wide credential.
-    if settings.jwt_secret == settings.staff_jwt_secret:
-        fatal.append("AETHER_JWT_SECRET and AETHER_STAFF_JWT_SECRET must differ")
+    # make a leaked customer token a fleet-wide credential. The MFA key is in
+    # the same list because reusing a signing secret to seal TOTP secrets means
+    # one leak costs both factors, which is the whole thing MFA is for.
+    distinct = {settings.jwt_secret, settings.staff_jwt_secret, settings.mfa_key}
+    if len(distinct) < 3:
+        fatal.append(
+            "AETHER_JWT_SECRET, AETHER_STAFF_JWT_SECRET and AETHER_MFA_KEY must all differ"
+        )
 
     if "aether_app_dev_only" in settings.database_url or "aether_dev_only" in settings.database_url:
         fatal.append("AETHER_DATABASE_URL still carries the development password")

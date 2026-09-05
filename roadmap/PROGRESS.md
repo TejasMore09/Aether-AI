@@ -7,6 +7,61 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — Phase 6.6: a second factor, and staff sessions that end
+
+Two things, and the first was a gap I had named myself.
+
+**Staff sessions can now be ended** (D66). 6.7 made customer sessions
+revocable and recorded, as a stated limitation, that staff sessions were not —
+thirty-minute tokens with nothing behind them. Stated gaps are still gaps, and
+this one was the wrong way round: a customer token reaches one organisation
+and a staff token reaches every tenant on the platform, so the surface with
+the most reach was the one nobody could stop. An admin can now end a
+colleague's sessions, which until today had no answer better than "wait twelve
+hours" or "deactivate their account". Twenty-four existing tests failed on the
+change, all correctly — they minted staff tokens with no session behind them.
+
+**Then MFA** (D67). TOTP, free, any authenticator app, no SMS to be stolen by
+persuading a phone network to move a number. The algorithm is thirty lines;
+the parts that matter are the four an implementation usually misses:
+
+- The secret is **encrypted at rest**, because the premise of a second factor
+  is that it survives a password compromise and a leak handing over both
+  defeats it. One new dependency, `cryptography`, for exactly this.
+- Enrolment **does nothing until a code proves it**, so nobody locks
+  themselves out with an app that never scanned properly.
+- **Recovery codes**, ten, single-use, shown once — without them a lost phone
+  is a lost account, the same lockout 6.5 was built to close.
+- A used code **cannot be used again**. A TOTP code is valid for a whole
+  thirty seconds, so anyone who observes one can replay it inside that window.
+
+And at the edges: a challenge proves a password and is refused as a session by
+two independent checks, and turning the factor off needs a code rather than
+merely a session — a stolen session that could switch it off would have made
+the whole thing decoration.
+
+Staff got it at the same time and that is the point, not thoroughness. A
+stolen customer password costs one organisation; a stolen staff password costs
+the fleet.
+
+Verified against the running platform rather than only in tests: password
+alone returns a challenge and no token, the challenge is refused as a session,
+a wrong code is refused, a recovery code completes the sign-in, the same
+recovery code fails the second time, and a wrong code cannot disable the
+factor.
+
+Five tests failed on the new configuration check and were right to: adding a
+third secret means the "these must all differ" rule now covers three, and an
+untouched production config reports five faults rather than four.
+
+**Not mandatory**, deliberately. Requiring it would lock out every account
+that exists today, and that is a decision to revisit with real customers
+rather than make on their behalf now.
+
+721 tests, none skipped.
+
+---
+
 ## 2026-09-05 — A sweep: making it runnable, and correcting what had drifted
 
 Prompted by the simplest possible bug report — a screenshot of

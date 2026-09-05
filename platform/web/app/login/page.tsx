@@ -5,7 +5,57 @@ import { useSearchParams } from 'next/navigation'
 import { Suspense, useActionState } from 'react'
 
 import { AuthField, AuthShell, AuthSubmit } from '@/components/AuthShell'
-import { login } from '@/lib/actions'
+import { completeSignIn, login, type LoginState } from '@/lib/actions'
+
+function pending(state: LoginState): { mfaChallenge: string; email: string } | null {
+  return state && 'mfaChallenge' in state ? state : null
+}
+
+function errorOf(state: LoginState): string | undefined {
+  return state && 'error' in state ? state.error : undefined
+}
+
+/**
+ * The second step of a sign-in that stopped for a code.
+ *
+ * A separate form with its own action rather than a branch inside the first
+ * one, because the two send different things to different endpoints. The
+ * challenge rides in a hidden field: it is a half-identity with a five-minute
+ * life, and putting it in a cookie would be storing exactly the thing that
+ * must not outlive the form.
+ */
+function SecondFactor({ challenge, email, error }: { challenge: string; email: string; error?: string }) {
+  const [state, action] = useActionState(completeSignIn, null)
+  const stillPending = pending(state)
+
+  return (
+    <AuthShell
+      title="One more step"
+      lede={`Enter the six-digit code from your authenticator app for ${email}.`}
+      footer={
+        <>
+          Lost your phone? Use one of the recovery codes you saved when you turned this on —
+          they work in the same box.
+        </>
+      }
+      error={errorOf(state) ?? error}
+      action={action}
+    >
+      <input type="hidden" name="challenge" value={stillPending?.mfaChallenge ?? challenge} />
+      <input type="hidden" name="email" value={email} />
+      <AuthField
+        label="Authentication code"
+        name="code"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        placeholder="123456"
+        autoFocus
+        required
+      />
+      <AuthSubmit pending="Checking…">Sign in</AuthSubmit>
+    </AuthShell>
+  )
+}
 
 function LoginForm() {
   const [state, action] = useActionState(login, null)
@@ -14,6 +64,11 @@ function LoginForm() {
   // that gap, and it is the wrong one: a reset proves control of a mailbox,
   // and the password they just chose is what proves control of the account.
   const justReset = useSearchParams().get('reset') === '1'
+
+  const awaiting = pending(state)
+  if (awaiting) {
+    return <SecondFactor challenge={awaiting.mfaChallenge} email={awaiting.email} />
+  }
 
   return (
     <AuthShell
@@ -35,7 +90,7 @@ function LoginForm() {
           </Link>
         </>
       }
-      error={state?.error}
+      error={errorOf(state)}
       notice={justReset ? 'Password changed. Sign in with your new one.' : undefined}
       action={action}
     >

@@ -18,7 +18,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
 from aether import __version__
-from aether.core import errors, health, logs
+from aether.core import errors, health, logs, mfa
 from aether.core.config import verify_deployable
 from aether.core.db import session as plain_session
 from aether.core.db import tenant_session
@@ -35,12 +35,14 @@ from aether.core.staff import (
     StaffPrincipal,
     StaffTokenError,
     active_grant,
+    admin_by_id,
     authenticate_staff,
     begin_staff_session,
     create_admin,
     end_grant,
     fleet_health,
     has_role,
+    issue_staff_mfa_challenge,
     issue_staff_token,
     list_grants,
     load_staff_session,
@@ -48,6 +50,7 @@ from aether.core.staff import (
     record,
     revoke_staff_session,
     revoke_staff_sessions_for,
+    verify_staff_mfa_challenge,
     verify_staff_token,
 )
 from aether.core.throttle import client_ip, guard, refused, succeeded
@@ -146,8 +149,18 @@ def staff_login(body: StaffLogin, request: Request) -> dict:
         refused(who)
         raise HTTPException(status_code=401, detail="Invalid credentials")
     succeeded(f"staff:{email}")
-    record(admin.email, "staff.login")
 
+    # A correct password is not a session when there is a second factor — and
+    # a staff credential reaches every tenant on the platform, so this is the
+    # surface where it matters most (6.6).
+    if mfa.required_for(mfa.STAFF, admin.id):
+        record(admin.email, "staff.login.mfa_required")
+        return {
+            "mfa_required": True,
+            "challenge": issue_staff_mfa_challenge(admin),
+        }
+
+    record(admin.email, "staff.login")
     session_id, expires_at = begin_staff_session(admin, created_from=client_ip(request))
     return {
         "access_token": issue_staff_token(admin, session_id=session_id, expires_at=expires_at),
@@ -155,6 +168,104 @@ def staff_login(body: StaffLogin, request: Request) -> dict:
         "email": admin.email,
         "role": admin.role.value,
     }
+
+
+class StaffMfaVerify(BaseModel):
+    challenge: str
+    code: str = Field(min_length=6, max_length=40)
+
+
+@app.post("/v1/staff/mfa/verify")
+def staff_verify_second_factor(body: StaffMfaVerify, request: Request) -> dict:
+    """Finish a staff sign-in that stopped for a second factor."""
+    try:
+        pending = verify_staff_mfa_challenge(body.challenge)
+    except StaffTokenError as exc:
+        raise HTTPException(status_code=401, detail="Start again from the sign-in page.") from exc
+
+    who = {"email": f"staff:{pending.email}", "ip": client_ip(request)}
+    guard(who)
+
+    admin = admin_by_id(pending.admin_id)
+    if admin is None or not mfa.verify(mfa.STAFF, pending.admin_id, body.code):
+        refused(who)
+        raise HTTPException(status_code=401, detail="That code is not right.")
+
+    succeeded(f"staff:{pending.email}")
+    record(admin.email, "staff.login")
+    session_id, expires_at = begin_staff_session(admin, created_from=client_ip(request))
+    return {
+        "access_token": issue_staff_token(admin, session_id=session_id, expires_at=expires_at),
+        "token_type": "bearer",
+        "email": admin.email,
+        "role": admin.role.value,
+    }
+
+
+@app.get("/v1/staff/mfa")
+def staff_mfa_status(principal: StaffPrincipal = Depends(staff_authenticated)) -> dict:
+    state = mfa.status(mfa.STAFF, principal.admin_id)
+    return {
+        "enrolled": state.enrolled,
+        "confirmed": state.confirmed,
+        "recovery_codes_left": state.recovery_codes_left,
+        "available": mfa.available(),
+    }
+
+
+@app.post("/v1/staff/mfa/enrol")
+def staff_start_enrolment(principal: StaffPrincipal = Depends(staff_authenticated)) -> dict:
+    try:
+        secret, uri = mfa.begin_enrolment(mfa.STAFF, principal.admin_id, principal.email)
+    except mfa.MfaUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except mfa.MfaError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"secret": secret, "otpauth_uri": uri}
+
+
+class StaffMfaCode(BaseModel):
+    code: str = Field(min_length=6, max_length=40)
+
+
+@app.post("/v1/staff/mfa/confirm")
+def staff_confirm_enrolment(
+    body: StaffMfaCode,
+    request: Request,
+    principal: StaffPrincipal = Depends(staff_authenticated),
+) -> dict:
+    who = {"email": f"staff:{principal.email}", "ip": client_ip(request)}
+    guard(who)
+    try:
+        codes = mfa.confirm_enrolment(mfa.STAFF, principal.admin_id, body.code)
+    except mfa.MfaError as exc:
+        refused(who)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record(principal.email, "staff.mfa.enabled")
+    return {"recovery_codes": codes}
+
+
+@app.post("/v1/staff/mfa/disable", status_code=204)
+def staff_disable_second_factor(
+    body: StaffMfaCode,
+    request: Request,
+    principal: StaffPrincipal = Depends(staff_authenticated),
+) -> Response:
+    """Turn a staff second factor off, which needs a current code.
+
+    Recorded, because weakening the authentication on a fleet-wide credential
+    is exactly the sort of act the staff trail exists to make answerable.
+    """
+    who = {"email": f"staff:{principal.email}", "ip": client_ip(request)}
+    guard(who)
+    if not mfa.verify(mfa.STAFF, principal.admin_id, body.code):
+        refused(who)
+        raise HTTPException(status_code=401, detail="That code is not right.")
+
+    mfa.disable(mfa.STAFF, principal.admin_id)
+    record(principal.email, "staff.mfa.disabled")
+    revoke_staff_sessions_for(principal.admin_id, reason="mfa_disabled", keep=principal.session_id)
+    return Response(status_code=204)
 
 
 @app.post("/v1/staff/logout", status_code=204)

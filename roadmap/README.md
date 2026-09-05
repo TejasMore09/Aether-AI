@@ -25,7 +25,7 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 6 — Production hardening.** Phases 0 to 4 are complete.
 >
-> 669 tests, none skipped. An agent now remembers its own business: pgvector
+> 721 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
@@ -55,7 +55,12 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > reset ends every session an intruder is holding, signing out works at once,
 > and a demotion applies to the next request rather than to the next hour.
 >
-> Next: 6.6 MFA, 6.8 GDPR, 6.9 load test, 6.10 billing.
+> **6.6 is done**: TOTP with encrypted secrets, recovery codes and replay
+> protection, for staff as well as customers — and staff sessions became
+> revocable on the way, closing the gap 6.7 had named.
+>
+> Next: 6.8 GDPR, 6.9 load test, 6.10 billing. Phase 5 (three more domains)
+> needs no new data and can follow.
 >
 > **To run it:** `cd platform && docker compose up -d`, then
 > `cd platform/web && npm run dev`. That is the whole thing — it used to be
