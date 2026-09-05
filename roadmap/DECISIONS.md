@@ -1599,3 +1599,71 @@ staff trail.
 **Not mandatory.** Requiring it would lock out every account that exists
 today, and the product has no owner to grant an exception. That is a decision
 to revisit with real customers rather than one to make on their behalf now.
+
+
+---
+
+## D68 — The registry is the feature; the endpoints are the easy part
+
+D31 chose India, the US and Europe, which makes a right of access, portability
+and erasure obligations rather than niceties. Writing the endpoints took an
+afternoon. Making them *stay* true is the part worth a decision.
+
+**An export is complete on the day it is written and silently incomplete from
+the next migration onwards.** Nothing about that failure is visible: the
+endpoint still answers 200, the file still downloads, and the missing table is
+noticed only by the person who asked for their data and did not receive it.
+
+So `privacy.REGISTRY` names every table in the schema and says what each one
+holds, and a test fails when the database contains a table nobody has
+classified — in both directions, so a dropped table is caught too. Adding a
+migration now means deciding whether the new table holds personal data before
+the build goes green. That is the mechanism; the export functions are its
+consequence.
+
+**Erasing a person is not deleting a row.** Email addresses live in six
+tables, not one: `users`, and then `audit_logs.triggered_by`,
+`pending_approvals.resolved_by`, `api_keys.created_by`,
+`notifications.recipient` and `login_throttle.identifier`. `DELETE FROM users`
+would look exactly like compliance and leave five copies behind. This was
+found by reading the schema rather than by remembering it, which is the only
+way it would have been found.
+
+**Decisions are pseudonymised, not erased.** A customer's audit trail is the
+record of what their agent did and what a person decided. Removing entries
+would destroy the account of the business's own operations, which they rely on
+and may be obliged to keep — Art. 17(3) allows retention where processing is
+necessary for legal claims. So the person goes and the decision stays: the
+email becomes a random pseudonym, stable across their rows and not reversible
+to the address it replaced. A hash of the email would have been reversible by
+anyone who can guess an address, which for an email is everyone.
+
+**Four things this refuses to do, each for a reason.**
+
+*Erase the only owner of an organisation*, which would leave a business nobody
+can administer and everyone else's data stranded inside it.
+
+*Bypass row-level security to find a person's traces.* Those four tables are
+tenant-scoped, so erasure visits them one organisation at a time. That leaves
+a bound: rows in an organisation the person has since **left** are not
+reachable, because there is no membership to find them through. Giving this
+module an RLS-bypassing connection would trade the platform's central security
+property for a rare operation. The right fix is to pseudonymise at the moment
+somebody leaves an organisation, and nothing removes a membership today, so
+the gap is currently theoretical — and it is written into the module so that
+whoever builds "remove a member" knows it is theirs to close.
+
+*Reach backups.* An erasure cannot touch a dump taken before it. The endpoint
+returns the retention window, computed from the settings that produce it
+rather than stated as a guess.
+
+*Record who was erased.* `erasure_log` keeps the pseudonym, the kind and the
+counts, and never the address — otherwise it becomes the one place the erased
+data survived.
+
+**A bug the tenant export nearly shipped with.** `memberships` and `users`
+carry no row-level-security policy, because they are what *establishes* a
+tenant rather than being scoped by one. An unfiltered join over them inside a
+tenant transaction returns every organisation's people. The `WHERE` clause
+there is load-bearing, and the test that would have caught it in production
+asserts that one organisation's export contains nothing of another's.

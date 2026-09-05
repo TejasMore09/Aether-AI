@@ -14,13 +14,13 @@ the backtest showed the 80% intervals covering only 52% on a random walk and
 12% on a curve, so `fit` now refuses both shapes rather than quoting a
 confidence it has not earned (D53).
 
-**Phase 6 is where "production-level" actually lives.** 3 of 10 items open.
+**Phase 6 is where "production-level" actually lives.** 2 of 10 items open.
 Both finished items closed holes nobody was looking for: 6.5 found the *test
 suite* sending real email through the live Resend key, stopped only by an
 unverified sending domain (D55); 6.3 found that a fault could never learn
 which tenant it belonged to, because sync endpoints run in a threadpool and a
 context variable set there never comes back (D58). Phase 5 needs no new data
-(two bands already sit in `reference/`) and can follow. 721 tests, none
+(two bands already sit in `reference/`) and can follow. 742 tests, none
 skipped.
 
 Keep this line in step with `roadmap/README.md`.
@@ -253,7 +253,12 @@ cheap now and painful later.
   D56: a password reset now ends every session. Role and membership are read
   live, so a token can no longer claim a role. Idle window replaces the
   60-minute hard expiry. Staff sessions followed in 6.6 (D66)
-- [ ] **6.8** GDPR: export and delete, as an obligation not a feature
+- [x] **6.8** GDPR: export and erasure. A registry naming every table, with a
+  test that fails when the schema holds one nobody classified — an export goes
+  silently stale otherwise (D68). Erasure rewrites the **six** tables holding an
+  email, not just `users`; decisions are pseudonymised rather than deleted
+  (Art. 17(3)). Refuses to erase an organisation's only owner. **Cannot reach
+  backups**, and says so with a computed retention window
 - [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence
 - [ ] **6.10** Billing and subscription tiers
 

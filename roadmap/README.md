@@ -25,7 +25,7 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 6 — Production hardening.** Phases 0 to 4 are complete.
 >
-> 721 tests, none skipped. An agent now remembers its own business: pgvector
+> 742 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
@@ -59,8 +59,11 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > protection, for staff as well as customers — and staff sessions became
 > revocable on the way, closing the gap 6.7 had named.
 >
-> Next: 6.8 GDPR, 6.9 load test, 6.10 billing. Phase 5 (three more domains)
-> needs no new data and can follow.
+> **6.8 is done**: export and erasure, held honest by a registry that fails
+> the build when the schema grows a table nobody has classified.
+>
+> Next: 6.9 load test, 6.10 billing. Phase 5 (three more domains) needs no new
+> data and can follow.
 >
 > **To run it:** `cd platform && docker compose up -d`, then
 > `cd platform/web && npm run dev`. That is the whole thing — it used to be

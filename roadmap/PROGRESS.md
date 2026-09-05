@@ -7,6 +7,53 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — Phase 6.8: export and erasure, as obligations
+
+D31 put this platform in Europe, so a right of access, portability and erasure
+are obligations. The endpoints took an afternoon. The part worth having is the
+one that keeps them true (D68).
+
+**A registry names every table in the schema**, and a test fails when the
+database holds one nobody has classified — in both directions. An export is
+complete on the day it is written and silently incomplete from the next
+migration onwards, and nothing about that failure is visible: the endpoint
+answers 200, the file downloads, and only the person who asked for their data
+notices. Adding a table now fails the build until somebody has decided what it
+holds.
+
+**Erasing a person is not deleting a row**, and the schema said so. Email
+addresses live in six tables: `users`, plus `audit_logs.triggered_by`,
+`pending_approvals.resolved_by`, `api_keys.created_by`,
+`notifications.recipient` and `login_throttle.identifier`. `DELETE FROM users`
+would look exactly like compliance and leave five copies behind. Found by
+reading the schema, which is the only way it would have been found.
+
+Decisions are pseudonymised rather than erased — Art. 17(3) — so the record of
+what a business did survives the person who did it, with a random stand-in
+that cannot be reversed to the address.
+
+**Two real bugs caught on the way.** The export queried tenant-scoped tables
+from a session with no tenant context, which row-level security correctly
+refused; erasure now visits them one organisation at a time. And the tenant
+export joined `memberships`, which carries *no* RLS policy because it is what
+establishes a tenant — an unfiltered join there returns every organisation's
+people. The `WHERE` clause is load-bearing and there is now a test that would
+have caught it.
+
+**Four honest refusals**, each recorded: it will not erase the only owner of
+an organisation, will not bypass RLS to find traces in an organisation the
+person has left (a bound, written into the module for whoever builds "remove a
+member"), cannot reach backups taken beforehand, and does not record who was
+erased — the log keeps a pseudonym and counts, never an address.
+
+Verified against the running platform: both exports return their sections, the
+export contains no credential, a wrong confirmation word is refused, a wrong
+password is refused, and erasing the sole owner is refused with the reason.
+
+742 tests, none skipped.
+
+---
+
 ## 2026-09-05 — Phase 6.6: a second factor, and staff sessions that end
 
 Two things, and the first was a gap I had named myself.

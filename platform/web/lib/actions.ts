@@ -160,6 +160,40 @@ export async function disableMfa(code: string): Promise<FormState> {
   return null
 }
 
+// ── Your data ─────────────────────────────────────────────────────────────────
+
+/**
+ * Erase yourself.
+ *
+ * On success the session is gone on the platform's side, so the cookie is
+ * dropped here too and the person lands on a page that no longer knows them.
+ * Leaving them on a dashboard whose every request 401s would be the worse
+ * ending.
+ */
+export async function eraseMe(password: string, confirm: string): Promise<FormState> {
+  const result = await api.control<{ erased: boolean }>('/v1/me/erase', {
+    method: 'POST',
+    body: JSON.stringify({ password, confirm }),
+  })
+  if (!result.ok) return { error: result.message }
+  await destroySession()
+  redirect('/login')
+}
+
+export async function eraseOrganisation(
+  password: string,
+  confirmSlug: string,
+): Promise<FormState> {
+  const result = await api.control<{ erased: boolean }>('/v1/tenant/erase', {
+    method: 'POST',
+    body: JSON.stringify({ password, confirm_slug: confirmSlug }),
+  })
+  if (!result.ok) return { error: result.message }
+  // The organisation is gone, so the session pointing at it is meaningless.
+  await destroySession()
+  redirect('/login')
+}
+
 export async function updateBusiness(sector: string, currency: string): Promise<FormState> {
   const result = await api.control<unknown>('/v1/tenant', {
     method: 'PATCH',

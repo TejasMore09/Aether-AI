@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from aether import __version__
-from aether.core import errors, health, logs, mfa, money, recovery, sessions
+from aether.core import errors, health, logs, mfa, money, privacy, recovery, sessions
 from aether.core.config import get_settings, verify_deployable
 from aether.core.db import session, tenant_session
 from aether.core.models import (
@@ -291,6 +291,125 @@ def disable_second_factor(
         principal.user_id, reason=sessions.SIGNED_OUT_EVERYWHERE, keep=principal.session_id
     )
     return Response(status_code=204)
+
+
+# ── Your data, and getting out ────────────────────────────────────────────────
+#
+# D31 put this platform in Europe, which makes a right of access (Art. 15),
+# portability (Art. 20) and erasure (Art. 17) obligations rather than features.
+# They are self-service on purpose: a right that requires emailing support and
+# waiting is a right on paper (D68).
+
+
+@app.get("/v1/me/export")
+def export_my_data(principal: Principal = Depends(authenticated)) -> dict:
+    """Everything the platform holds about you, as JSON.
+
+    Not a summary. A portability export that has been helpfully condensed is
+    not the data, and the point of Art. 20 is that you can take it elsewhere.
+    """
+    try:
+        return privacy.export_user(principal.user_id)
+    except privacy.PrivacyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class EraseMe(BaseModel):
+    """Deleting yourself asks for the password, and a word typed out.
+
+    Both, because they refuse different mistakes. The password refuses somebody
+    else holding your session; typing the word refuses you, at speed, having
+    misread which button this was.
+    """
+
+    password: str
+    confirm: str
+
+
+@app.post("/v1/me/erase")
+def erase_me(
+    body: EraseMe, request: Request, principal: Principal = Depends(authenticated)
+) -> dict:
+    """Erase yourself. Irreversible, and it says so before it happens."""
+    if body.confirm.strip().upper() != "DELETE":
+        raise HTTPException(status_code=400, detail="Type DELETE to confirm.")
+
+    who = {"email": principal.email, "ip": client_ip(request)}
+    guard(who)
+
+    with session() as db:
+        user = db.get(User, principal.user_id)
+        if user is None or not verify_password(body.password, user.password_hash):
+            refused(who)
+            raise HTTPException(status_code=401, detail="That password is not right.")
+
+    try:
+        report = privacy.erase_user(principal.user_id)
+    except privacy.PrivacyError as exc:
+        # A refusal here is a real one — the only owner of an organisation
+        # cannot vanish without stranding it — and the reason is worth saying.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return {
+        "erased": True,
+        "reference": report["pseudonym"],
+        "rows": report["rows"],
+        "note": privacy.backup_retention_note(),
+    }
+
+
+@app.get("/v1/tenant/export")
+def export_organisation(
+    principal: Principal = Depends(require_role(Role.owner)),
+) -> dict:
+    """Everything the platform holds for this organisation.
+
+    Owner only. It contains every member's email and every decision the
+    business has made, which is not a viewer's to take away.
+    """
+    try:
+        return privacy.export_tenant(principal.tenant_id)
+    except privacy.PrivacyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class EraseOrganisation(BaseModel):
+    password: str
+    # The slug, typed out. A generic "DELETE" is too easy to type into the
+    # wrong window; the name of the thing being destroyed is not.
+    confirm_slug: str
+
+
+@app.post("/v1/tenant/erase")
+def erase_organisation(
+    body: EraseOrganisation,
+    request: Request,
+    principal: Principal = Depends(require_role(Role.owner)),
+) -> dict:
+    """Delete this organisation and everything in it. Irreversible."""
+    who = {"email": principal.email, "ip": client_ip(request)}
+    guard(who)
+
+    with session() as db:
+        user = db.get(User, principal.user_id)
+        if user is None or not verify_password(body.password, user.password_hash):
+            refused(who)
+            raise HTTPException(status_code=401, detail="That password is not right.")
+        tenant = db.get(Tenant, principal.tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=404, detail="No such organization")
+        slug = tenant.slug
+
+    if body.confirm_slug.strip() != slug:
+        raise HTTPException(status_code=400, detail=f"Type {slug} to confirm.")
+
+    report = privacy.erase_tenant(principal.tenant_id)
+    return {
+        "erased": True,
+        "reference": report["pseudonym"],
+        "rows": report["rows"],
+        "note": privacy.backup_retention_note(),
+    }
 
 
 @app.post("/v1/auth/logout", status_code=204)

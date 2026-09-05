@@ -6,6 +6,7 @@ import { readSession } from '@/lib/session'
 import { BusinessForm } from './BusinessForm'
 import { SecondFactor } from './SecondFactor'
 import { SessionList, type SessionRow } from './SessionList'
+import { YourData } from './YourData'
 
 export const metadata = { title: 'Settings · Aether' }
 
@@ -75,6 +76,16 @@ export default async function SettingsPage() {
         ) : (
           <ErrorNote message={mySessions.message} />
         )}
+      </Panel>
+
+      <Panel className="mt-5">
+        <div className="flex items-baseline justify-between px-4 pt-4">
+          <SectionTitle>Your data</SectionTitle>
+          <span className="text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+            take it, or take it away
+          </span>
+        </div>
+        <YourData slug={tenant.data.slug} isOwner={session?.role === 'owner'} />
       </Panel>
     </>
   )
