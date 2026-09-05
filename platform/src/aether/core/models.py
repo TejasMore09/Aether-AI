@@ -169,6 +169,33 @@ class BackupRun(Base):
     detail: Mapped[str] = mapped_column(Text, default="")
 
 
+class Session(Base):
+    """One signed-in session, which can be ended.
+
+    Not tenant-scoped: this table is what *establishes* the tenant context
+    that row-level security scopes by, so a policy here would be circular.
+    See migration 0019 and D65.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Slides forward with use.
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    # Does not. A session kept alive by one request a day is still a credential
+    # that has outlived any claim to be the same person at the same desk.
+    absolute_expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
+    )
+    revoked_reason: Mapped[str] = mapped_column(String(40), default="")
+    created_from: Mapped[str] = mapped_column(String(64), default="")
+
+
 class Role(enum.StrEnum):
     owner = "owner"
     operator = "operator"

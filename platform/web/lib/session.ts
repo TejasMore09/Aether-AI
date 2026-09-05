@@ -15,11 +15,26 @@ export type Session = {
   tenantId: string
   role: 'owner' | 'operator' | 'viewer'
   email: string
-  /** Epoch ms when the platform JWT stops being accepted. */
+  /**
+   * Epoch ms after which this cookie is treated as dead here.
+   *
+   * A local guess, not the authority. Since 6.7 the platform can end a session
+   * at any moment — a password reset, a sign-out elsewhere, a deactivated
+   * account — so a cookie that has not reached this stamp may still be
+   * refused. That path is handled: the API returns 401 and the app redirects
+   * to /signed-out, which is the only place a cookie can be deleted.
+   */
   expiresAt: number
 }
 
-const SESSION_MAX_AGE_SECONDS = 60 * 60 // must not outlive the JWT's own TTL
+// Fourteen days, matching the platform's idle session window.
+//
+// This was an hour, because that was the JWT's whole life and a cookie
+// outliving its token traps somebody on a dashboard whose every request 401s.
+// Since 6.7 the session is a row that slides forward with use and can be ended
+// from the server, so the cookie no longer has to be the short one — and being
+// signed out every hour was the "support burden at scale" the plan named.
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14
 
 export async function createSession(
   session: Omit<Session, 'expiresAt'>,

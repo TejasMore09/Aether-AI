@@ -158,9 +158,34 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
   redirect('/')
 }
 
+/**
+ * Sign out, on the platform as well as in this browser.
+ *
+ * Dropping the cookie was the whole of this before 6.7, which meant signing
+ * out ended nothing: the token stayed valid for the rest of its life, so
+ * anyone holding a copy still had the account. Telling the platform is the
+ * part that matters and the cookie is the cosmetic half.
+ *
+ * The API call is allowed to fail. If it does, the session is still live and
+ * that is bad, but leaving the person signed in *here* as well would be worse
+ * — they asked to leave, and the cookie is the only half this side controls.
+ */
 export async function logout(): Promise<void> {
+  await api.control<void>('/v1/auth/logout', { method: 'POST' })
   await destroySession()
   redirect('/login')
+}
+
+/**
+ * End every other session. What "I think someone else is in my account" needs,
+ * and the reason it keeps this one is that the alternative signs you out on
+ * the machine you were worried about and asks for your password there.
+ */
+export async function signOutEverywhereElse(): Promise<FormState> {
+  const result = await api.control<{ ended: number }>('/v1/auth/logout-all', { method: 'POST' })
+  if (!result.ok) return { error: result.message }
+  revalidatePath('/settings')
+  return null
 }
 
 export type ResolveState =

@@ -24,10 +24,12 @@ someone forwarded a week ago cannot be used behind their back.
 password, tried six times, and then correctly reset it would still be locked
 out — the product would have handed them a key and kept the door bolted.
 
-**It cannot revoke existing sessions.** Tokens here are stateless JWTs with a
-sixty-minute life, so a password reset does not sign out a session already
-running. That is a real gap and it belongs to 6.7 (refresh tokens), not here;
-saying so is better than implying a guarantee this cannot make.
+**It ends every session the account had.** This was the one real gap in the
+feature when it shipped: tokens were stateless, so a reset changed the
+password and left an attacker's session running until it expired on its own.
+6.7 made sessions revocable and this is the first caller that needed it — the
+person resetting their password is very often doing it *because* they think
+somebody else is in their account (D65).
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ import uuid
 
 from sqlalchemy import select
 
-from aether.core import mail
+from aether.core import mail, sessions
 from aether.core.db import session as plain_session
 from aether.core.models import PasswordReset, User
 from aether.core.security import hash_password
@@ -164,6 +166,14 @@ def complete_reset(token: str, new_password: str) -> str | None:
         user.password_hash = hash_password(new_password)
         record.used_at = _now()
         email = user.email
+        user_id = user.id
+
+    # The point of the whole exercise for anyone resetting because they think
+    # somebody else is in their account. Before 6.7 this could not be done and
+    # the reset left the intruder's session running.
+    ended = sessions.revoke_all_for_user(user_id, reason=sessions.PASSWORD_RESET)
+    if ended:
+        logger.info("password reset ended %s live session(s)", ended)
 
     # Otherwise somebody who forgot their password, tried six times and then
     # correctly reset it would still be locked out — handed a key and left

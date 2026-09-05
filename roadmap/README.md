@@ -25,7 +25,7 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 
 > **Phase 6 — Production hardening.** Phases 0 to 4 are complete.
 >
-> 648 tests, none skipped. An agent now remembers its own business: pgvector
+> 669 tests, none skipped. An agent now remembers its own business: pgvector
 > under RLS, local embeddings, tenant-scoped retrieval, and past decisions
 > recalled into the explanation an approver reads. Staff can see how much an
 > agent remembers and never what.
@@ -51,9 +51,11 @@ Then read `/ARCHITECTURE.md` for how the system is built, and
 > one. `deploy/README.md` says what "free tier" really means for a stack this
 > size, which is not a PaaS.
 >
-> Next: 6.7 refresh tokens, which carries a gap password reset could not close
-> — tokens are stateless, so resetting a password does not sign out a session
-> already running. Then 6.6 MFA, 6.8 GDPR, 6.9 load test, 6.10 billing.
+> **6.7 is done and closes D56**: sessions live in a table, so a password
+> reset ends every session an intruder is holding, signing out works at once,
+> and a demotion applies to the next request rather than to the next hour.
+>
+> Next: 6.6 MFA, 6.8 GDPR, 6.9 load test, 6.10 billing.
 >
 > The largest open operational gap is that backups live on the same machine as
 > the database. Off-site copying is not implemented.

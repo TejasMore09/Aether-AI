@@ -15,7 +15,19 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://aether_app:aether_app_dev_only@localhost:5433/aether"
 
     jwt_secret: str = "dev-only-secret-do-not-deploy"
-    jwt_ttl_minutes: int = 60
+    # The signature's own lifetime. It is no longer what bounds a session:
+    # 6.7 resolves every request against the sessions table, so a token is
+    # only good while its session is. Kept generous so the signature does not
+    # expire under an active user, and short of the absolute session cap so a
+    # leaked token is not useful for ever if the table is ever bypassed.
+    jwt_ttl_minutes: int = 60 * 24 * 30
+
+    # How long a session survives without use, and how long it can live at
+    # all. Two numbers because one is always wrong: the first stops an
+    # abandoned session lingering, the second stops an active one becoming
+    # permanent.
+    session_idle_days: int = 14
+    session_absolute_days: int = 90
     jwt_algorithm: str = "HS256"
 
     # Staff tokens are signed with their own key, not jwt_secret. If the

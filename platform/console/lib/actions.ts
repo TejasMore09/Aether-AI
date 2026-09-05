@@ -32,6 +32,16 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
   redirect('/')
 }
 
+/**
+ * Sign out of the console.
+ *
+ * Drops the cookie and nothing else, which is deliberate rather than an
+ * oversight: staff tokens are a separate world with a thirty-minute life and
+ * no session table behind them yet. 6.7 gave customer sessions revocation;
+ * staff sessions still expire rather than end, and the mitigation is that
+ * thirty minutes is short and every break-glass grant is separately
+ * revocable. Recorded here so the asymmetry is visible where it matters.
+ */
 export async function signOut(): Promise<void> {
   await destroySession()
   redirect('/login')

@@ -178,14 +178,38 @@ def test_an_unknown_sector_is_refused_on_update_too(client):
 
 def test_only_an_owner_may_change_what_the_business_is(client):
     """It moves the bands every future reading is judged against, which is not
-    a viewer's decision to make."""
-    from aether.core.models import Role
-    from aether.core.security import issue_token
+    a viewer's decision to make.
+
+    The viewer here is a *real* member with a real session. An earlier version
+    of this test minted a token asserting `role: viewer` for a user id that
+    did not exist, which worked because the role used to be whatever the token
+    said. Since 6.7 the role is read from the membership row on every request,
+    so a token cannot claim one — and a test that forged its own role would now
+    be testing a path no caller can reach.
+    """
+    from aether.core import sessions
+    from aether.core.db import session as plain_session
+    from aether.core.models import Membership, Role, User
+    from aether.core.security import hash_password, issue_token
 
     tenant_id, _ = new_org(client)
-    viewer = {
-        "Authorization": f"Bearer {issue_token(uuid.uuid4(), 'v@x.io', tenant_id, Role.viewer)}"
-    }
+
+    with plain_session() as db:
+        user = User(
+            email=f"viewer-{uuid.uuid4().hex[:8]}@aethertest.io",
+            password_hash=hash_password("x" * 12),
+        )
+        db.add(user)
+        db.flush()
+        db.add(Membership(user_id=user.id, tenant_id=tenant_id, role=Role.viewer))
+        user_id, email = user.id, user.email
+
+    session_id, expires_at = sessions.begin(user_id, tenant_id)
+    token = issue_token(
+        user_id, email, tenant_id, Role.viewer, session_id=session_id, expires_at=expires_at
+    )
+    viewer = {"Authorization": f"Bearer {token}"}
+
     assert client.patch("/v1/tenant", json={"sector": "retail"}, headers=viewer).status_code == 403
 
 

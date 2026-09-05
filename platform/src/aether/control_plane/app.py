@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from aether import __version__
-from aether.core import errors, health, logs, money, recovery
+from aether.core import errors, health, logs, money, recovery, sessions
 from aether.core.config import get_settings, verify_deployable
 from aether.core.db import session, tenant_session
 from aether.core.models import (
@@ -157,13 +157,66 @@ def signup(body: SignupRequest) -> TokenResponse:
         db.add_all([tenant, user])
         db.flush()
         db.add(Membership(user_id=user.id, tenant_id=tenant.id, role=Role.owner))
-        token = issue_token(user.id, user.email, tenant.id, Role.owner)
-        tenant_id, chosen = tenant.id, sector_taxonomy.get(tenant.sector)
+        db.flush()
+        user_id, tenant_id = user.id, tenant.id
+        email = user.email
+        chosen = sector_taxonomy.get(tenant.sector)
+
+    # Outside the transaction that created the account: a session is a
+    # separate fact, and one that must not be rolled back by a later failure
+    # in account creation.
+    session_id, expires_at = sessions.begin(user_id, tenant_id)
+    token = issue_token(
+        user_id, email, tenant_id, Role.owner, session_id=session_id, expires_at=expires_at
+    )
 
     # The agent should know what kind of business it is looking after from its
     # first reading, not from whenever someone next edits a setting.
     sector_corpus.index_sector(tenant_id, chosen)
     return TokenResponse(access_token=token, tenant_id=tenant_id, role=Role.owner)
+
+
+@app.post("/v1/auth/logout", status_code=204)
+def logout(principal: Principal = Depends(authenticated)) -> Response:
+    """End this session now.
+
+    Before 6.7 there was no such thing: signing out dropped the cookie and
+    left the token valid for the rest of its hour, so anyone holding a copy
+    still had an account. Now the session is gone on the next request.
+    """
+    if principal.session_id:
+        sessions.revoke(principal.session_id, reason=sessions.SIGNED_OUT)
+    return Response(status_code=204)
+
+
+@app.post("/v1/auth/logout-all", status_code=200)
+def logout_everywhere(principal: Principal = Depends(authenticated)) -> dict[str, int]:
+    """End every other session this person has.
+
+    The one asking is kept, because the alternative is that "I think somebody
+    else is in my account" signs you out too and leaves you typing your
+    password on whatever machine you were worried about.
+    """
+    ended = sessions.revoke_all_for_user(
+        principal.user_id,
+        reason=sessions.SIGNED_OUT_EVERYWHERE,
+        keep=principal.session_id,
+    )
+    return {"ended": ended}
+
+
+@app.get("/v1/auth/sessions")
+def my_sessions(principal: Principal = Depends(authenticated)) -> list[dict]:
+    """This person's live sessions, so an unfamiliar one can be spotted.
+
+    Deliberately thin. Recognising your own session is the job; building a
+    record of where a customer works is not, so there is no device
+    fingerprint here and no history of addresses.
+    """
+    out = sessions.for_user(principal.user_id)
+    for row in out:
+        row["current"] = row["id"] == str(principal.session_id)
+    return out
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -271,8 +324,14 @@ def login(body: LoginRequest, request: Request) -> TokenResponse:
 
         membership, tenant = rows[0]
         succeeded(email)
-        token = issue_token(user.id, user.email, tenant.id, membership.role)
-        return TokenResponse(access_token=token, tenant_id=tenant.id, role=membership.role)
+        user_id, tenant_id, role = user.id, tenant.id, membership.role
+        address = user.email
+
+    session_id, expires_at = sessions.begin(user_id, tenant_id, created_from=client_ip(request))
+    token = issue_token(
+        user_id, address, tenant_id, role, session_id=session_id, expires_at=expires_at
+    )
+    return TokenResponse(access_token=token, tenant_id=tenant_id, role=role)
 
 
 # ── Tenant & fleet ────────────────────────────────────────────────────────────

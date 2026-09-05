@@ -7,6 +7,49 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — Phase 6.7: sessions that can be ended
+
+D56 shipped with 6.5 as a stated limitation: a password reset changed the
+password and could not evict a session already running, because tokens were
+stateless JWTs with a sixty-minute life. Somebody resetting their password is
+very often doing it *because* they think somebody else is in their account, and
+the product's answer was to change the lock and leave the intruder inside.
+
+Every request now resolves its session against a table — one indexed lookup on
+a connection that was going to be opened anyway (D65). The plan named refresh
+tokens; this is a session table instead, because refresh tokens exist to make
+*stateless* validation cheap and nothing here is stateless, and because with a
+stateless access token revocation still waits for it to expire.
+
+What that bought, beyond closing the gap:
+
+- Signing out ends the session at once. Before, it dropped a cookie and left
+  the token working for the rest of its hour.
+- Role, membership, and both active flags are read live. A demoted or
+  deactivated user used to keep their rights until their token expired.
+- The sixty-minute hard expiry is gone, replaced by a fourteen-day idle window
+  that slides with use and a ninety-day cap that does not. That was the
+  "support burden at scale" the plan named.
+- "Sign out everywhere else" exists, and keeps the session doing the asking —
+  the alternative signs you out on the machine you were worried about.
+
+**A test had to be rewritten, and the reason is the interesting part.** It
+minted a token asserting `role: viewer` for a user id that did not exist, and
+passed, because the role used to be whatever the token said. A token can no
+longer claim a role: it comes from the membership row. Escalation now needs a
+database write rather than a signature.
+
+Verified in the browser end to end: three other sessions listed on the settings
+page, one click, all three gone, the current one untouched.
+
+669 tests, none skipped.
+
+**Staff sessions are not covered.** Staff tokens are a separate world with a
+thirty-minute life and no table behind them; a compromised one has fleet-wide
+reach for those thirty minutes. The mechanism to fix it is now built.
+
+---
+
 ## 2026-09-05 — Phase 6.2: a backup that has been restored, not one that exists
 
 Every backup is restored into a scratch database and interrogated before it

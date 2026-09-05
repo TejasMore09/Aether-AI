@@ -14,13 +14,13 @@ the backtest showed the 80% intervals covering only 52% on a random walk and
 12% on a curve, so `fit` now refuses both shapes rather than quoting a
 confidence it has not earned (D53).
 
-**Phase 6 is where "production-level" actually lives.** 5 of 10 items open.
+**Phase 6 is where "production-level" actually lives.** 4 of 10 items open.
 Both finished items closed holes nobody was looking for: 6.5 found the *test
 suite* sending real email through the live Resend key, stopped only by an
 unverified sending domain (D55); 6.3 found that a fault could never learn
 which tenant it belonged to, because sync endpoints run in a threadpool and a
 context variable set there never comes back (D58). Phase 5 needs no new data
-(two bands already sit in `reference/`) and can follow. 648 tests, none
+(two bands already sit in `reference/`) and can follow. 669 tests, none
 skipped.
 
 Keep this line in step with `roadmap/README.md`.
@@ -241,7 +241,13 @@ cheap now and painful later.
   which 6.4 had deliberately held down. **Does not revoke live sessions** —
   JWTs are stateless; that gap belongs to 6.7
 - [ ] **6.6** MFA, at least for owners
-- [ ] **6.7** Refresh tokens; 60-minute hard expiry is a support burden at scale
+- [x] **6.7** Sessions in a table rather than refresh tokens (D65), because
+  refresh tokens make *stateless* validation cheap and nothing here is
+  stateless — and because they leave revocation waiting for an expiry. Closes
+  D56: a password reset now ends every session. Role and membership are read
+  live, so a token can no longer claim a role. Idle window replaces the
+  60-minute hard expiry. **Staff sessions are not covered** — still 30-minute
+  tokens with nothing behind them
 - [ ] **6.8** GDPR: export and delete, as an obligation not a feature
 - [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence
 - [ ] **6.10** Billing and subscription tiers

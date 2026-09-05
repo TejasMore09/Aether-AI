@@ -3,14 +3,16 @@ import { api, type SectorOption, type TenantInfo } from '@/lib/api'
 import { readSession } from '@/lib/session'
 
 import { BusinessForm } from './BusinessForm'
+import { SessionList, type SessionRow } from './SessionList'
 
 export const metadata = { title: 'Settings · Aether' }
 
 export default async function SettingsPage() {
   const session = await readSession()
-  const [tenant, sectors] = await Promise.all([
+  const [tenant, sectors, mySessions] = await Promise.all([
     api.control<TenantInfo>('/v1/tenant'),
     api.control<SectorOption[]>('/v1/sectors', { auth: false }),
+    api.control<SessionRow[]>('/v1/auth/sessions'),
   ])
 
   if (!tenant.ok) {
@@ -45,6 +47,20 @@ export default async function SettingsPage() {
           />
         ) : (
           <ErrorNote message={sectors.message} />
+        )}
+      </Panel>
+
+      <Panel>
+        <div className="flex items-baseline justify-between px-4 pt-4">
+          <SectionTitle>Where you are signed in</SectionTitle>
+          <span className="text-[11.5px]" style={{ color: 'var(--color-ink-faint)' }}>
+            signing out ends a session immediately
+          </span>
+        </div>
+        {mySessions.ok ? (
+          <SessionList sessions={mySessions.data} />
+        ) : (
+          <ErrorNote message={mySessions.message} />
         )}
       </Panel>
     </>

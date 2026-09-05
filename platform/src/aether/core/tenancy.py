@@ -10,10 +10,11 @@ Usage in routes:
 """
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from fastapi import Depends, HTTPException, Request
 
-from aether.core import errors
+from aether.core import errors, sessions
 from aether.core.apikeys import resolve_key, touch_key
 from aether.core.models import Role
 from aether.core.security import Principal, PrincipalKind, TokenError, verify_token
@@ -29,6 +30,31 @@ def authenticated(request: Request) -> Principal:
         principal = verify_token(header.removeprefix("Bearer ").strip())
     except TokenError as exc:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
+
+    # A genuine signature is not a signed-in caller. Tokens issued before 6.7
+    # carry no session and are refused rather than trusted: a token whose
+    # session cannot be checked is exactly the thing that phase removed.
+    if principal.session_id is None:
+        raise HTTPException(status_code=401, detail="Session ended. Please sign in again.")
+
+    try:
+        live = sessions.load(principal.session_id)
+    except sessions.SessionInvalid as exc:
+        # The reason is not returned. Whether a session was revoked, expired,
+        # or belongs to a deactivated account is more than a caller holding a
+        # token they should not have needs to learn.
+        raise HTTPException(status_code=401, detail="Session ended. Please sign in again.") from exc
+
+    # Read from the tables, not from the token. Role, membership and both
+    # active flags used to be frozen at login, so a demotion or a deactivation
+    # took effect whenever the token happened to expire.
+    principal = replace(
+        principal,
+        email=live.email,
+        tenant_id=live.tenant_id,
+        role=live.role,
+    )
+
     # So a fault raised later in this request can say which tenant hit it.
     # One tenant broken and every tenant broken are different emergencies, and
     # this is the only place the answer is known for certain.

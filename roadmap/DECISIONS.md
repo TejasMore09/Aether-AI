@@ -1452,3 +1452,60 @@ architecture that makes a reader assume caching exists somewhere.
 
 Removed rather than left with a comment. If a later phase needs a cache or a
 queue, adding it back is a three-line change and it will arrive with a caller.
+
+
+---
+
+## D65 — Sessions in a table, not refresh tokens
+
+The plan named refresh tokens and gave two reasons: a sixty-minute hard expiry
+is a support burden, and — from D56 — a password reset cannot sign out a
+session that is already running. This is a session table instead, and the
+substitution is deliberate rather than incidental.
+
+Refresh tokens exist so an access token can be short without forcing a login,
+in systems where validating that access token is **stateless and cheap**.
+Nothing about this platform is stateless: every endpoint opens a transaction
+and sets `app.tenant_id` before it can read a row. The saving refresh tokens
+are designed to protect does not exist here, and their cost — rotation, reuse
+detection, a second credential in the cookie — is real.
+
+More importantly they only half-solve the second problem. With a stateless
+access token, revocation still waits for that token to expire. "Your password
+is changed and the intruder is out in fifteen minutes" is a worse promise than
+"they are out now", and the person resetting their password is very often
+doing it *because* they think somebody else is in their account.
+
+So every request resolves its session against the table. One indexed lookup on
+a connection that was going to be opened anyway, and in exchange:
+
+- **Revocation takes effect on the next request.** D56's gap, closed.
+- **Role, membership, account-active and organisation-active are read live.**
+  They used to be frozen into the JWT at login, so a demoted or deactivated
+  user kept their rights until it expired. A test that minted a token
+  asserting `role: viewer` for a user id that did not exist had to be
+  rewritten against a real membership — under the old design a token could
+  claim a role, and now it cannot.
+- **The hard expiry can go**, replaced by an idle window that slides with use
+  and an absolute cap that does not. Two expiries because one is always wrong:
+  the first stops an abandoned session lingering, the second stops an active
+  one becoming permanent.
+
+**The JWT does not go away.** It still carries the signature that makes a
+session id unforgeable — without it anyone could name a session and the lookup
+would find it. It simply stops being the only thing consulted, and the two
+questions are now separate: `security` answers "is this token genuine",
+`sessions` answers "is the session behind it still good".
+
+**The write is throttled, not skipped.** Bumping `last_seen_at` on every
+request would put a row lock in the path of every call and turn a read-heavy
+dashboard into a write-heavy one. It is bumped at most every five minutes,
+which makes `last_seen_at` approximate — and it is only used to decide expiry
+and to show somebody their own sessions, both of which tolerate minutes.
+
+**Staff sessions are not covered, and that is a stated gap rather than an
+oversight.** Staff tokens are a separate world with a thirty-minute life and
+no table behind them. The mitigation is that thirty minutes is short and every
+break-glass grant is already separately revocable, but a compromised staff
+token has fleet-wide reach for those thirty minutes and nothing can stop it.
+The mechanism built here is the one that would fix it.
