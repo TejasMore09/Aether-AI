@@ -33,16 +33,16 @@ export async function signIn(_prev: FormState, form: FormData): Promise<FormStat
 }
 
 /**
- * Sign out of the console.
+ * Sign out of the console, on the brain as well as in this browser.
  *
- * Drops the cookie and nothing else, which is deliberate rather than an
- * oversight: staff tokens are a separate world with a thirty-minute life and
- * no session table behind them yet. 6.7 gave customer sessions revocation;
- * staff sessions still expire rather than end, and the mitigation is that
- * thirty minutes is short and every break-glass grant is separately
- * revocable. Recorded here so the asymmetry is visible where it matters.
+ * Dropping the cookie was the whole of this until 6.6, and it ended nothing:
+ * the token stayed valid, and a staff token reaches every tenant on the
+ * platform. The API call is the part that matters; the cookie is the
+ * cosmetic half and is cleared either way, because somebody who asked to
+ * leave should leave.
  */
 export async function signOut(): Promise<void> {
+  await brain<void>('/v1/staff/logout', { method: 'POST' })
   await destroySession()
   redirect('/login')
 }

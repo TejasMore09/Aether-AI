@@ -24,8 +24,13 @@ export type StaffSession = {
   expiresAt: number
 }
 
-// Matches AETHER_STAFF_JWT_TTL_MINUTES (30) on the brain.
-const SESSION_MAX_AGE_SECONDS = 30 * 60
+// The absolute cap on a staff session, not the idle window.
+//
+// This was thirty minutes because that was the token's whole life. Since 6.6
+// a staff session is a row that slides forward while somebody is working and
+// can be ended from the brain, so the cookie no longer has to be the short
+// one — the idle window is, and the brain enforces it.
+const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60
 
 export async function createSession(
   session: Omit<StaffSession, 'expiresAt'>,

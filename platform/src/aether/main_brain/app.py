@@ -36,14 +36,18 @@ from aether.core.staff import (
     StaffTokenError,
     active_grant,
     authenticate_staff,
+    begin_staff_session,
     create_admin,
     end_grant,
     fleet_health,
     has_role,
     issue_staff_token,
     list_grants,
+    load_staff_session,
     read_staff_trail,
     record,
+    revoke_staff_session,
+    revoke_staff_sessions_for,
     verify_staff_token,
 )
 from aether.core.throttle import client_ip, guard, refused, succeeded
@@ -94,7 +98,16 @@ def staff_authenticated(request: Request) -> StaffPrincipal:
     if not header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     try:
-        return verify_staff_token(header.removeprefix("Bearer ").strip())
+        principal = verify_staff_token(header.removeprefix("Bearer ").strip())
+        # A genuine signature is not a signed-in member of staff. Tokens minted
+        # before 6.6 carry no session and are refused rather than trusted —
+        # a staff credential that cannot be revoked is the thing this removed.
+        if principal.session_id is None:
+            raise StaffTokenError("no session")
+        # Role and is_active come from the row, not the token, so demoting or
+        # deactivating somebody applies to their next request. For a credential
+        # that reaches every tenant, that difference is the feature.
+        return load_staff_session(principal.session_id)
     except StaffTokenError as exc:
         # A tenant user's token lands here too, and is refused for the same
         # reason as a forged one: it is not a staff token.
@@ -134,12 +147,51 @@ def staff_login(body: StaffLogin, request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     succeeded(f"staff:{email}")
     record(admin.email, "staff.login")
+
+    session_id, expires_at = begin_staff_session(admin, created_from=client_ip(request))
     return {
-        "access_token": issue_staff_token(admin),
+        "access_token": issue_staff_token(admin, session_id=session_id, expires_at=expires_at),
         "token_type": "bearer",
         "email": admin.email,
         "role": admin.role.value,
     }
+
+
+@app.post("/v1/staff/logout", status_code=204)
+def staff_logout(principal: StaffPrincipal = Depends(staff_authenticated)) -> Response:
+    """End this staff session now.
+
+    Before 6.6 signing out of the console dropped a cookie and left the token
+    valid — a credential with reach across every tenant, still working."""
+    if principal.session_id:
+        revoke_staff_session(principal.session_id)
+    record(principal.email, "staff.logout")
+    return Response(status_code=204)
+
+
+@app.post("/v1/staff/{admin_id}/sessions/revoke")
+def revoke_staff_access(
+    admin_id: uuid.UUID,
+    principal: StaffPrincipal = Depends(require_staff_role(StaffRole.admin)),
+) -> dict[str, int]:
+    """End every session belonging to one member of staff.
+
+    The capability that matters most in this file. A staff credential believed
+    to be compromised reaches every tenant on the platform, and until now the
+    only available answer was to wait for it to expire — or to deactivate the
+    account, which is a different and more permanent thing to do to a colleague
+    at two in the morning on a suspicion.
+
+    Admin-only, and recorded: ending another person's access is exactly the
+    sort of act the staff trail exists to make answerable.
+    """
+    ended = revoke_staff_sessions_for(admin_id, reason="revoked_by_admin")
+    record(
+        principal.email,
+        "staff.revoke_sessions",
+        details={"admin_id": str(admin_id), "ended": ended},
+    )
+    return {"ended": ended}
 
 
 class StaffCreate(BaseModel):

@@ -1509,3 +1509,41 @@ no table behind them. The mitigation is that thirty minutes is short and every
 break-glass grant is already separately revocable, but a compromised staff
 token has fleet-wide reach for those thirty minutes and nothing can stop it.
 The mechanism built here is the one that would fix it.
+
+
+---
+
+## D66 — Staff sessions get the same table, because they had the most reach
+
+6.7 made customer sessions revocable and recorded, as a stated gap, that staff
+sessions were not: thirty-minute tokens with nothing behind them.
+
+Stated gaps are still gaps, and this one was the wrong way round. A customer
+token reaches one organisation. A staff token reaches **every tenant on the
+platform**. The surface with the most reach was the one that could not be
+stopped, and the mitigation on offer — "thirty minutes is short" — is a
+sentence, not a control.
+
+`staff_sessions` is a separate table rather than a nullable column on
+`sessions`. A staff session has no tenant and no membership; a customer
+session is meaningless without both. Sharing one table would mean a nullable
+`tenant_id` and a query that has to remember which kind of row it holds — and
+those joins are the security-relevant part, so hiding them behind a branch is
+exactly the wrong economy.
+
+**Far shorter than a customer's**: thirty minutes idle against fourteen days,
+twelve hours absolute against ninety. Fourteen days is right for somebody
+running their business and wrong for somebody who signed in to look at an
+incident. A test asserts the ratio rather than the numbers, so tuning one
+cannot quietly make them equal.
+
+**An admin can end another staff member's sessions**, and that is the point of
+the feature rather than a convenience. Until now the answers to "I think that
+credential is compromised" were "wait twelve hours" and "deactivate your
+colleague's account" — the second being a permanent thing to do to somebody on
+a suspicion at two in the morning. It is admin-only and written to the staff
+trail, because ending a colleague's access is exactly what that trail is for.
+
+Twenty-four existing tests failed on this change, all for the same reason and
+all correctly: they minted staff tokens with no session behind them. Under the
+old design that was a valid credential. It is not one now.

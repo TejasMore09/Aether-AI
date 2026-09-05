@@ -21,6 +21,7 @@ from aether.core.models import AuditLog, GrantScope, StaffRole
 from aether.core.staff import (
     STAFF_ISSUER,
     active_grant,
+    begin_staff_session,
     create_admin,
     fleet_health,
     issue_staff_token,
@@ -69,7 +70,13 @@ def _new_org(cp) -> tuple[uuid.UUID, dict]:
 def _staff(role: StaffRole = StaffRole.engineer) -> tuple[str, dict]:
     email = f"{role.value}-{uuid.uuid4().hex[:10]}@aether.io"
     admin = create_admin(email, STAFF_PASSWORD, role)
-    return email, {"Authorization": f"Bearer {issue_staff_token(admin)}"}
+    # A real session, not a bare token. Since 6.6 a staff token without one is
+    # refused at the door — a credential reaching every tenant that nothing
+    # could revoke was the asymmetry that phase removed, and a test minting one
+    # would be exercising a path no caller can reach.
+    session_id, expires_at = begin_staff_session(admin)
+    token = issue_staff_token(admin, session_id=session_id, expires_at=expires_at)
+    return email, {"Authorization": f"Bearer {token}"}
 
 
 # ── The two token worlds do not meet ──────────────────────────────────────────

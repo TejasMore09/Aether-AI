@@ -27,7 +27,7 @@ from aether.core import errors, health, mail, scrub
 from aether.core.db import get_engine
 from aether.core.db import session as plain_session
 from aether.core.models import StaffRole
-from aether.core.staff import create_admin, issue_staff_token
+from aether.core.staff import begin_staff_session, create_admin, issue_staff_token
 
 pytestmark = pytest.mark.postgres
 
@@ -404,7 +404,9 @@ def brain(database) -> TestClient:
 def staff(role: StaffRole) -> tuple[str, dict]:
     email = f"{role.value}-{uuid.uuid4().hex[:10]}@aether.io"
     admin = create_admin(email, "staff-password-long-enough", role)
-    return email, {"Authorization": f"Bearer {issue_staff_token(admin)}"}
+    session_id, expires_at = begin_staff_session(admin)
+    token = issue_staff_token(admin, session_id=session_id, expires_at=expires_at)
+    return email, {"Authorization": f"Bearer {token}"}
 
 
 def test_an_observer_sees_that_something_broke_and_never_the_words(brain):

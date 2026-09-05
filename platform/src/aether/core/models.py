@@ -196,6 +196,29 @@ class Session(Base):
     created_from: Mapped[str] = mapped_column(String(64), default="")
 
 
+class StaffSession(Base):
+    """One signed-in member of platform staff, which can be ended.
+
+    Separate from `sessions` because a staff session has no tenant and no
+    membership, and a customer session is meaningless without both. See
+    migration 0020 and D66.
+    """
+
+    __tablename__ = "staff_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    absolute_expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
+    )
+    revoked_reason: Mapped[str] = mapped_column(String(40), default="")
+    created_from: Mapped[str] = mapped_column(String(64), default="")
+
+
 class Role(enum.StrEnum):
     owner = "owner"
     operator = "operator"

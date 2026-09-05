@@ -25,6 +25,7 @@ presented where the other is expected -- see verify_staff_token.
 from __future__ import annotations
 
 import datetime
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -49,6 +50,12 @@ STAFF_ISSUER = "aether-main-brain"
 
 _ROLE_ORDER = {StaffRole.observer: 0, StaffRole.engineer: 1, StaffRole.admin: 2}
 
+# How stale a staff session's `last_seen_at` may get before it earns a write.
+# Shorter than the customer equivalent because the whole idle window is.
+STAFF_TOUCH_AFTER = datetime.timedelta(minutes=2)
+
+logger = logging.getLogger(__name__)
+
 
 def utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
@@ -62,13 +69,27 @@ class StaffPrincipal:
     admin_id: uuid.UUID
     email: str
     role: StaffRole
+    # Which session this came from, so it can be ended. None only for a token
+    # minted before 6.6, which `staff_authenticated` refuses outright.
+    session_id: uuid.UUID | None = None
 
 
 class StaffTokenError(Exception):
     pass
 
 
-def issue_staff_token(admin: PlatformAdmin) -> str:
+def issue_staff_token(
+    admin: PlatformAdmin,
+    *,
+    session_id: uuid.UUID | None = None,
+    expires_at: datetime.datetime | None = None,
+) -> str:
+    """Sign a token for one staff session.
+
+    As with customer tokens, the signature is what makes a session id
+    unforgeable and is no longer the only thing consulted — `load_staff_session`
+    decides whether the session behind it is still good (D66).
+    """
     s = get_settings()
     now = utcnow()
     payload = {
@@ -76,9 +97,11 @@ def issue_staff_token(admin: PlatformAdmin) -> str:
         "email": admin.email,
         "role": admin.role.value,
         "iat": now,
-        "exp": now + datetime.timedelta(minutes=s.staff_jwt_ttl_minutes),
+        "exp": expires_at or (now + datetime.timedelta(minutes=s.staff_jwt_ttl_minutes)),
         "iss": STAFF_ISSUER,
     }
+    if session_id is not None:
+        payload["sid"] = str(session_id)
     return jwt.encode(payload, s.staff_jwt_secret, algorithm=s.jwt_algorithm)
 
 
@@ -101,10 +124,12 @@ def verify_staff_token(token: str) -> StaffPrincipal:
     except jwt.PyJWTError as exc:
         raise StaffTokenError(str(exc)) from exc
     try:
+        raw_session = payload.get("sid")
         return StaffPrincipal(
             admin_id=uuid.UUID(payload["sub"]),
             email=payload["email"],
             role=StaffRole(payload["role"]),
+            session_id=uuid.UUID(raw_session) if raw_session else None,
         )
     except (KeyError, ValueError) as exc:
         raise StaffTokenError(f"malformed claims: {exc}") from exc
@@ -414,3 +439,140 @@ def list_grants(limit: int = 50, only_live: bool = False) -> list[dict]:
             }
             for g, email, name, slug in db.execute(q).all()
         ]
+
+
+# ── Staff sessions ────────────────────────────────────────────────────────────
+#
+# 6.7 made customer sessions revocable and left staff sessions as thirty-minute
+# tokens with nothing behind them — the surface with the most reach was the one
+# that could not be stopped. This closes that (D66).
+#
+# The policy constants are shared with `core.sessions`; the query is not. The
+# joins differ (an admin has no tenant and no membership) and they are the
+# security-relevant part, so abstracting them behind a branch would hide the
+# thing most worth reading.
+
+
+def begin_staff_session(
+    admin: PlatformAdmin, *, created_from: str = ""
+) -> tuple[uuid.UUID, datetime.datetime]:
+    """Start a staff session. Returns its id and the absolute expiry."""
+    settings = get_settings()
+    now = utcnow()
+    idle = now + datetime.timedelta(minutes=settings.staff_session_idle_minutes)
+    absolute = now + datetime.timedelta(hours=settings.staff_session_absolute_hours)
+
+    session_id = uuid.uuid4()
+    with plain_session() as db:
+        db.execute(
+            text("""
+                INSERT INTO staff_sessions (
+                    id, admin_id, created_at, last_seen_at,
+                    expires_at, absolute_expires_at, created_from
+                ) VALUES (:id, :admin, :now, :now, :expires, :absolute, :created_from)
+                """),
+            {
+                "id": session_id,
+                "admin": admin.id,
+                "now": now,
+                "expires": min(idle, absolute),
+                "absolute": absolute,
+                "created_from": created_from[:64],
+            },
+        )
+    return session_id, absolute
+
+
+_STAFF_LOOKUP = """
+SELECT s.id, s.admin_id, s.expires_at, s.absolute_expires_at, s.last_seen_at,
+       s.revoked_at, a.email, a.role, a.is_active
+FROM staff_sessions s
+JOIN platform_admins a ON a.id = s.admin_id
+WHERE s.id = :id
+"""
+
+
+def load_staff_session(session_id: uuid.UUID) -> StaffPrincipal:
+    """Resolve a staff session, or refuse.
+
+    The join is the point: role and `is_active` are read now rather than taken
+    from the token, so demoting or deactivating a member of staff applies to
+    their next request instead of whenever their token expires. For a
+    credential with fleet-wide reach that difference is the whole feature.
+    """
+    now = utcnow()
+    with plain_session() as db:
+        row = db.execute(text(_STAFF_LOOKUP), {"id": session_id}).mappings().first()
+
+        if row is None:
+            raise StaffTokenError("unknown session")
+        if row["revoked_at"] is not None:
+            raise StaffTokenError("session ended")
+        if row["expires_at"] <= now or row["absolute_expires_at"] <= now:
+            raise StaffTokenError("session expired")
+        if not row["is_active"]:
+            raise StaffTokenError("staff account deactivated")
+
+        # Slide, throttled, for the same reason as customer sessions: a write
+        # per request would put a row lock in front of every call.
+        if now - row["last_seen_at"] > STAFF_TOUCH_AFTER:
+            settings = get_settings()
+            db.execute(
+                text("""
+                    UPDATE staff_sessions
+                    SET last_seen_at = :now,
+                        expires_at = LEAST(:idle, absolute_expires_at)
+                    WHERE id = :id
+                    """),
+                {
+                    "now": now,
+                    "idle": now + datetime.timedelta(minutes=settings.staff_session_idle_minutes),
+                    "id": session_id,
+                },
+            )
+
+        return StaffPrincipal(
+            admin_id=row["admin_id"],
+            email=row["email"],
+            role=StaffRole(row["role"]),
+            session_id=row["id"],
+        )
+
+
+def revoke_staff_session(session_id: uuid.UUID, *, reason: str = "signed_out") -> bool:
+    """End one staff session. Returns whether it was live."""
+    with plain_session() as db:
+        changed = db.execute(
+            text("""
+                UPDATE staff_sessions SET revoked_at = :now, revoked_reason = :reason
+                WHERE id = :id AND revoked_at IS NULL
+                RETURNING id
+                """),
+            {"now": utcnow(), "reason": reason[:40], "id": session_id},
+        ).first()
+        return changed is not None
+
+
+def revoke_staff_sessions_for(
+    admin_id: uuid.UUID, *, reason: str, keep: uuid.UUID | None = None
+) -> int:
+    """End every live session a member of staff has. Returns how many.
+
+    The capability that matters here is one admin evicting another: a staff
+    credential believed to be compromised has fleet-wide reach, and "wait
+    twelve hours" was previously the only available answer.
+    """
+    with plain_session() as db:
+        rows = db.execute(
+            text("""
+                UPDATE staff_sessions SET revoked_at = :now, revoked_reason = :reason
+                WHERE admin_id = :admin
+                  AND revoked_at IS NULL
+                  AND (CAST(:keep AS uuid) IS NULL OR id <> CAST(:keep AS uuid))
+                RETURNING id
+                """),
+            {"now": utcnow(), "reason": reason[:40], "admin": admin_id, "keep": keep},
+        ).all()
+        if rows:
+            logger.info("revoked %s staff session(s): %s", len(rows), reason)
+        return len(rows)

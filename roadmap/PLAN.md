@@ -240,14 +240,16 @@ cheap now and painful later.
   login lockout. Raised the account lockout cap from 15 minutes to an hour,
   which 6.4 had deliberately held down. **Does not revoke live sessions** —
   JWTs are stateless; that gap belongs to 6.7
-- [ ] **6.6** MFA, at least for owners
+- [~] **6.6** MFA, at least for owners. **Staff sessions are done first** and
+  are part of this item: 6.7 left them as unrevocable tokens, which was the
+  wrong way round since a staff credential reaches every tenant (D66). An admin
+  can now end a colleague's sessions, and role and is_active are read live
 - [x] **6.7** Sessions in a table rather than refresh tokens (D65), because
   refresh tokens make *stateless* validation cheap and nothing here is
   stateless — and because they leave revocation waiting for an expiry. Closes
   D56: a password reset now ends every session. Role and membership are read
   live, so a token can no longer claim a role. Idle window replaces the
-  60-minute hard expiry. **Staff sessions are not covered** — still 30-minute
-  tokens with nothing behind them
+  60-minute hard expiry. Staff sessions followed in 6.6 (D66)
 - [ ] **6.8** GDPR: export and delete, as an obligation not a feature
 - [ ] **6.9** Load test at 30 tenants; size the connection pools from evidence
 - [ ] **6.10** Billing and subscription tiers

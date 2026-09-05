@@ -36,7 +36,15 @@ class Settings(BaseSettings):
     # identity with reach across the whole fleet. Sharing one secret would
     # make those two failures the same failure.
     staff_jwt_secret: str = "dev-only-staff-secret-do-not-deploy"
-    staff_jwt_ttl_minutes: int = 30  # shorter: staff sessions are for incidents
+    # The staff signature's own life. Like the customer one, no longer what
+    # bounds a session — every staff request resolves against `staff_sessions`.
+    staff_jwt_ttl_minutes: int = 60 * 12
+
+    # Deliberately far shorter than a customer's fourteen days. Fourteen days
+    # of idle life is right for somebody running their business and wrong for
+    # somebody who signed in to look at an incident.
+    staff_session_idle_minutes: int = 30
+    staff_session_absolute_hours: int = 12
 
     # Ceiling on how long one break-glass grant can last. Not a default --
     # the requester picks a duration and this caps it. An incident that
