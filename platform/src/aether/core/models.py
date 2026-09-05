@@ -142,6 +142,33 @@ class ErrorEvent(Base):
     resolved_by: Mapped[str] = mapped_column(String(320), default="")
 
 
+class BackupRun(Base):
+    """One backup attempt, and whether anyone proved it could be restored.
+
+    `verified` is separate from `status` deliberately: producing a file and
+    being able to recover from it are different claims, and folding them
+    together is how "we have backups" comes to mean nothing. See migration
+    0018 and D63.
+    """
+
+    __tablename__ = "backup_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    started_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    finished_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20))
+    path: Mapped[str] = mapped_column(Text, default="")
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    checks: Mapped[dict] = mapped_column(JSONB, default=dict)
+    detail: Mapped[str] = mapped_column(Text, default="")
+
+
 class Role(enum.StrEnum):
     owner = "owner"
     operator = "operator"

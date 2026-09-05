@@ -1386,3 +1386,69 @@ persistent volume. What fits is Oracle Cloud Always Free (4 ARM cores, 24 GB,
 genuinely free, though the images have only been built for x86 so far) or a
 $10–20 VPS. Saying "free tier" and meaning "a trial that expires" would be the
 kind of plan that removes the prompt that would have corrected it.
+
+
+---
+
+## D63 — A backup counts only once it has been restored and questioned
+
+The plan asked for "automated backups with a *tested* restore, not merely
+configured", and building it turned that emphasis from a preference into the
+only defensible design. Three things were measured, none guessed:
+
+1. **`pg_dump` run as the application role writes a plausible backup with none
+   of anyone's data in it.** Row-level security does exactly what it was built
+   to do: the dump hits a policy, prints one error, **exits 0**, and leaves a
+   54 KB file containing the schema and the non-tenant tables. Every customer
+   row is missing and nothing downstream would notice.
+2. **`pg_restore` also prints errors and exits 0.** A version-skewed client
+   emits `SET transaction_timeout` at a server that does not know it, reports
+   the error, and returns success.
+3. **`pg_stat_user_tables.n_live_tup` is an estimate, not a count.** It read
+   4,331 rows in the source against 55,839 in a restore of that same source —
+   stale statistics on one side and fresh ones on the other.
+
+So the exit code of either tool is worth nothing as evidence, and a row count
+taken the cheap way can be wrong by an order of magnitude. Verification means
+restoring the file into a scratch database and asking it questions.
+
+Five are asked. The Alembic revision matches; no table is missing; **every
+table carrying a row-level-security policy in the source carries one in the
+restore**; no table that has rows came back empty; pgvector is present.
+
+The third matters most and is the one whose absence would be invisible: a
+restored database with the tables but not the policies is a database where
+every tenant can read every other tenant, and it looks entirely normal from
+the outside. The fourth is what catches finding (1), and it is deliberately
+**not** an equality check on counts — the source is live and moves on after
+the snapshot, so demanding equality would fail honest backups and teach people
+to ignore the result.
+
+`verified` is a separate column from `status` for the same reason. Producing a
+file and being able to recover from it are different claims, and folding them
+together is how "we have backups" comes to mean nothing.
+
+**What this does not protect against, stated where it will be read.** The
+dumps are a volume on the same machine as the database. This survives a
+dropped table, a bad migration, a corrupted index and a careless DELETE, and
+does not survive losing the host. Off-site copying is not implemented; when it
+is, the copy must be encrypted before it leaves, because a dump is every
+customer's operating data in one file and the only artefact of this platform
+that carries no access control of its own.
+
+---
+
+## D64 — Redis was removed, because nothing had ever used it
+
+It was in both compose files and had a setting in `config.py`. It had no
+client library in `pyproject.toml`, and `redis_url` appeared in exactly one
+place in the repository: its own definition.
+
+Found by asking 6.2's first question — what has to be backed up — and finding
+that the answer for this component was "nothing, because nothing writes to
+it". A datastore that no code touches is not neutral: it is memory, an open
+port on the internal network, an image to keep patched, and a line in the
+architecture that makes a reader assume caching exists somewhere.
+
+Removed rather than left with a comment. If a later phase needs a cache or a
+queue, adding it back is a three-line change and it will arrive with a caller.

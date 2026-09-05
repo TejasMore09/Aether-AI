@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     # Row-Level Security, so connecting as the owner would silently disable
     # tenant isolation. Migrations use the owner URL (see migrations/env.py).
     database_url: str = "postgresql+psycopg://aether_app:aether_app_dev_only@localhost:5433/aether"
-    redis_url: str = "redis://localhost:6379/0"
 
     jwt_secret: str = "dev-only-secret-do-not-deploy"
     jwt_ttl_minutes: int = 60
@@ -71,6 +70,25 @@ class Settings(BaseSettings):
     # (see domains/reference.py); the container image sets it explicitly,
     # because an installed package has no repository around it.
     reference_dir: str = ""
+
+    # The database owner connection, used by migrations and by backups. Both
+    # need what the application role deliberately lacks: the owner can alter
+    # schema, and — the part that is easy to miss — the owner is not filtered
+    # by row-level security. A dump taken as the application role errors,
+    # exits 0, and contains not one row belonging to any tenant (D63).
+    migration_database_url: str = ""
+
+    # Where dumps are written. A Docker volume in the deployment; anywhere
+    # with room in a checkout.
+    backup_dir: str = "/var/lib/aether/backups"
+
+    # How many dumps to keep. A count rather than an age, so a backup system
+    # that has been broken for a month does not quietly delete the last good
+    # file it made.
+    backup_keep: int = 14
+
+    # Hours between runs. One day, with the staleness alarm at two.
+    backup_interval_hours: float = 24.0
 
     # Temporal (durable workflow engine) — the autonomous monitor loop.
     temporal_address: str = "localhost:7233"

@@ -19,14 +19,6 @@ services:
       timeout: 3s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: aether-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - aether_redis:/data
-
   # Durable workflow engine for the autonomous Nano monitor loop.
   # auto-setup provisions its own `temporal` + `temporal_visibility` databases
   # inside the same Postgres instance (separate DBs, not Aether's schema).
@@ -57,4 +49,3 @@ services:
 
 volumes:
   aether_pgdata:
-  aether_redis:

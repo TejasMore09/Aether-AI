@@ -18,9 +18,11 @@ database, and returns 503 when it cannot. This is the one a load balancer
 should route on and the one an uptime monitor should watch.
 
 `snapshot()` is the fuller picture for the staff console: what is configured,
-what is broken, and — the part that is easy to leave out — whether the alerting
-path itself is set up. An alerting system that is not configured looks exactly
-like an alerting system with nothing to report.
+what is broken, and — the parts that are easy to leave out — whether the
+alerting path itself is set up, and when a backup was last *proven restorable*
+rather than merely taken. An alerting system that is not configured looks
+exactly like an alerting system with nothing to report, and a backup system
+that has silently stopped looks exactly like one with nothing to do.
 """
 
 from __future__ import annotations
@@ -76,11 +78,30 @@ def snapshot(service: str) -> dict:
             out["errors"] = errors.summary()
         except Exception as exc:  # noqa: BLE001
             out["errors"] = {"unavailable": f"{type(exc).__name__}: {exc}"[:200]}
+        try:
+            # Imported here rather than at module scope: `ops.backup` reaches
+            # for postgres command-line tools, and a web process that never
+            # takes a backup should not fail to start because they are absent.
+            from aether.ops import backup
+
+            out["backups"] = backup.status()
+        except Exception as exc:  # noqa: BLE001
+            out["backups"] = {"unavailable": f"{type(exc).__name__}: {exc}"[:200], "stale": True}
     else:
         # Said explicitly rather than reported as zero errors, which is what a
         # missing key would be read as — and "no errors" is the most dangerous
         # possible thing to say while the database is down.
         out["errors"] = {"unavailable": "database unreachable"}
+        out["backups"] = {"unavailable": "database unreachable", "stale": True}
 
-    out["healthy"] = ok and out["mail_configured"] and out["alerts_configured"]
+    # "Healthy" means every question this endpoint can answer came back well,
+    # including the operational ones. A platform that is serving requests
+    # while nothing has been backed up for a week is not healthy; it is
+    # working, which is a different word.
+    out["healthy"] = (
+        ok
+        and out["mail_configured"]
+        and out["alerts_configured"]
+        and not out["backups"].get("stale", True)
+    )
     return out

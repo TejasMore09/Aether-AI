@@ -34,7 +34,6 @@ x-platform-image: &platform-image
 x-platform-env: &platform-env
   AETHER_ENV: ${AETHER_ENV:-production}
   AETHER_DATABASE_URL: postgresql+psycopg://aether_app:${APP_DB_PASSWORD:?set APP_DB_PASSWORD}@db:5432/aether
-  AETHER_REDIS_URL: redis://redis:6379/0
   AETHER_JWT_SECRET: ${AETHER_JWT_SECRET:?set AETHER_JWT_SECRET}
   AETHER_STAFF_JWT_SECRET: ${AETHER_STAFF_JWT_SECRET:?set AETHER_STAFF_JWT_SECRET}
   AETHER_TEMPORAL_ADDRESS: temporal:7233
@@ -78,12 +77,6 @@ services:
     # and from an SSH tunnel, and from nothing else. Postgres on a public
     # interface with password authentication is a brute-force target that
     # never sleeps.
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redisdata:/data
 
   temporal:
     image: temporalio/auto-setup:1.25.2
@@ -174,6 +167,29 @@ services:
     environment: *platform-env
     command: ["python", "-m", "aether.worker"]
 
+  # Backups, on a loop, each one restored into a scratch database and queried
+  # before it is called a backup (D63).
+  #
+  # It connects as the *owner*, not the application role. That is the whole
+  # reason this is a separate service with its own environment: `pg_dump` run
+  # as the application role hits row-level security, prints an error, exits 0,
+  # and writes a file containing not one row belonging to any tenant.
+  backup:
+    <<: *platform-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *platform-env
+      AETHER_MIGRATION_DATABASE_URL: postgresql+psycopg://aether:${OWNER_DB_PASSWORD:?set OWNER_DB_PASSWORD}@db:5432/aether
+      AETHER_BACKUP_DIR: /var/lib/aether/backups
+      AETHER_BACKUP_KEEP: ${AETHER_BACKUP_KEEP:-14}
+      AETHER_BACKUP_INTERVAL_HOURS: ${AETHER_BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - backups:/var/lib/aether/backups
+    command: ["python", "-m", "aether.ops", "schedule"]
+
   web:
     image: aether/web:${AETHER_VERSION:-latest}
     build:
@@ -231,6 +247,10 @@ services:
 
 volumes:
   pgdata:
-  redisdata:
+  # Dumps. A named volume survives `docker compose down` and is destroyed by
+  # `docker compose down -v` along with the database it was protecting — which
+  # is the sharpest argument in deploy/README.md for why a volume on this
+  # machine is not yet a backup.
+  backups:
   caddydata:
   caddyconfig:

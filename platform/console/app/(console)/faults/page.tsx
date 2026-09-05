@@ -56,7 +56,7 @@ export default async function FaultsPage({
       ) : (
         <Panel>
           <PanelHead title="Platform" />
-          <div className="grid grid-cols-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 md:grid-cols-5">
             <Stat
               label="Database"
               value={health.data.database.ok ? 'reachable' : 'down'}
@@ -73,6 +73,18 @@ export default async function FaultsPage({
               value={health.data.alerts_configured ? 'configured' : 'not configured'}
               tone={health.data.alerts_configured ? 'ok' : 'critical'}
             />
+            {/* Deliberately the *verified* date, not the taken date. A backup
+                nobody has restored is a hypothesis, and this is the only place
+                anyone would notice the difference before needing it. */}
+            <Stat
+              label="Backup verified"
+              value={
+                health.data.backups.last_verified_at
+                  ? ago(health.data.backups.last_verified_at)
+                  : 'never'
+              }
+              tone={health.data.backups.stale ? 'critical' : 'ok'}
+            />
           </div>
           {!health.data.alerts_configured && (
             /* Said out loud, because an alerting system nobody set up looks
@@ -83,6 +95,16 @@ export default async function FaultsPage({
             >
               No alert address is set (<code>AETHER_ALERT_EMAIL</code>), so faults are recorded
               here and nothing is pushed to anyone. This page is the only way anyone finds out.
+            </p>
+          )}
+          {health.data.backups.stale && (
+            <p
+              className="border-t px-4 py-3 text-[12px]"
+              style={{ borderColor: 'var(--line)', color: 'var(--ink-faint)' }}
+            >
+              {health.data.backups.last_success_at
+                ? 'No backup has been verified in the last two days. A backup system that stops is silent by nature — nothing errors, the files simply stop appearing.'
+                : 'Nothing has ever been backed up on this deployment. Every dump is restored into a scratch database and queried before it counts, so this figure means recovery has been demonstrated rather than configured.'}
             </p>
           )}
           {!health.data.mail_configured && (

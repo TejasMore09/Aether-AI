@@ -59,8 +59,32 @@ FROM python:3.12-slim AS runtime
 
 # curl for the container healthcheck, which asks /readyz rather than assuming
 # that a listening socket means a working service (D59).
+#
+# postgresql-client **16**, matching the server, from PostgreSQL's own
+# repository because Debian does not ship 16 in every release.
+#
+# The version match is not incidental. A newer pg_restore against an older
+# server emits `SET transaction_timeout`, which the server does not recognise
+# — and then exits 0 anyway. That was measured during 6.2 with a 18 client
+# against this 16 server. The restore survives it, but a backup tool whose
+# ordinary output contains errors is a tool whose output nobody reads.
+#
+# The codename is read from the base image rather than written down. Hardcoding
+# `bookworm` is how the first version of this line failed: python:3.12-slim had
+# moved to trixie underneath it.
+ARG PG_MAJOR=16
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsS https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "postgresql-client-${PG_MAJOR}" \
+    && apt-get purge -y gnupg \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 aether
 
@@ -89,6 +113,12 @@ COPY platform/migrations/ migrations/
 # exist once the package is installed, so every sector would have silently
 # lost its bands in here. AETHER_REFERENCE_DIR above is the fix.
 COPY reference/ reference/
+
+# Where dumps land. Created and owned here so that a volume mounted over it
+# inherits the ownership, rather than arriving root-owned and unwritable —
+# which is the ordinary way a backup container fails on its first night and
+# not before.
+RUN install -d -o aether -g aether /var/lib/aether/backups
 
 USER aether
 

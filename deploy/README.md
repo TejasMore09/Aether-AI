@@ -8,8 +8,10 @@ cp .env.example .env      # fill it in — nothing has a working default
 docker compose up -d --build
 ```
 
-Ten containers: Postgres with pgvector, Redis, Temporal, the three APIs, the
-monitor worker, both front ends, and Caddy in front holding the certificates.
+Ten long-running containers: Postgres with pgvector, Temporal, the three APIs,
+the monitor worker, the backup loop, both front ends, and Caddy in front
+holding the certificates. Plus a one-shot `migrate` that everything else waits
+on.
 
 **`--build` is not optional the first time, and forgetting it is the first
 mistake this made.** Compose reuses an image that already exists under the
@@ -29,11 +31,11 @@ Measured, with the full stack idle on a laptop:
 
 | | |
 |---|---|
-| Memory, all ten containers | **~690 MiB** resident |
-| Disk, images | **~2.6 GB** |
+| Memory, all ten containers | **~730 MiB** resident |
+| Disk, images | **~2.7 GB** |
 | Disk, volumes at rest | ~280 MB and growing with the database |
 
-The platform image alone is 1.1 GB, and that is mostly not our code: litellm
+The platform image alone is 1.18 GB, and that is mostly not our code: litellm
 is 115 MB and drags in botocore and the OpenAI SDK for a product that calls
 one provider, onnxruntime is 66 MB, temporalio 57 MB, numpy 71 MB. The
 embedding model adds 65 MB and is deliberately baked in rather than downloaded
@@ -102,9 +104,8 @@ aether.core.config.Misconfigured: refusing to start with this configuration:
 
 ## What is exposed, and what is not
 
-Only the proxy binds a public port. The database, Redis, Temporal, all three
-APIs and both Next.js servers are reachable on the compose network and nowhere
-else.
+Only the proxy binds a public port. The database, Temporal, all three APIs and
+both Next.js servers are reachable on the compose network and nowhere else.
 
 That is load-bearing in two ways.
 
@@ -151,6 +152,75 @@ create_admin('you@example.com', 'a-long-password-you-chose', StaffRole.admin)"
 
 ---
 
+## Backups
+
+A backup runs every 24 hours, and **each one is restored into a scratch
+database and queried before it counts as a backup**. That is the whole design,
+and it exists because three things were measured while building it:
+
+- `pg_dump` run as the *application* role hits row-level security, prints one
+  error, **exits 0**, and writes a plausible 54 KB file containing not one row
+  belonging to any tenant;
+- `pg_restore` prints errors and **exits 0** as well;
+- so neither tool's exit code is evidence of anything, and the only honest
+  check is to load the file and ask the database what arrived (D63).
+
+Five questions are asked of every restore: the Alembic revision matches, no
+table is missing, **every table that carries a row-level-security policy in the
+source carries one in the restore**, no table that has rows came back empty,
+and pgvector is present. The third is the one that matters most — a restored
+database with the tables and not the policies is one where every tenant can
+read every other tenant, and nothing about it looks wrong.
+
+```bash
+docker compose run --rm backup python -m aether.ops backup        # one now
+docker compose run --rm backup python -m aether.ops verify <file> # prove one
+docker compose logs backup
+```
+
+The staff console's Faults page shows when a backup was last *verified*, not
+when one was last taken, and says so loudly when that was never or was more
+than two days ago. `AETHER_BACKUP_KEEP` (default 14) is a count rather than an
+age, so a backup system that has been broken for a month cannot quietly delete
+the last good file it made.
+
+### Restoring, for real
+
+```bash
+docker compose stop control-plane agent-runtime main-brain worker
+docker compose exec db psql -U aether -d postgres -c 'CREATE DATABASE aether_new'
+docker compose run --rm backup pg_restore \
+  --dbname "postgresql://aether:$OWNER_DB_PASSWORD@db:5432/aether_new" \
+  --no-owner --no-privileges /var/lib/aether/backups/<file>.dump
+```
+
+Then check it the way the verifier does — revision, policies, counts — before
+renaming it into place. **Roles are not in the dump.** They live in the
+cluster, not the database, so a restore onto a fresh machine needs
+`aether_app` to exist first; running the `migrate` container creates it and
+sets its password.
+
+### What this does not protect against
+
+**Losing the host.** The dumps are a Docker volume on the same machine as the
+database. This survives a dropped table, a bad migration, a corrupted index
+and a careless `DELETE` — and does not survive the disk, the machine or the
+account going away. `docker compose down -v` destroys the backups along with
+the database they were protecting.
+
+Off-site copying is **not implemented**. When it is, the copy must be
+encrypted before it leaves the host: a dump is every customer's operating data
+in one file and is the one artefact of this platform that carries no access
+control of its own. The dumps are written `0600`, which stops another user on
+the box reading them and does nothing about anyone holding the volume.
+
+Temporal's own databases are not backed up either. Workflows in flight would
+be lost and the monitor loop would restart from the tenants' stored state,
+which is recoverable; deciding that properly is worth doing before this is
+relied on.
+
+---
+
 ## Upgrading
 
 ```bash
@@ -177,7 +247,8 @@ is worse than no guide.
   machine: the stack comes up, serves HTTPS, the rate limit fires, the
   forwarded address reaches the throttle. None of that is the same as a month
   of uptime on the internet.
-- **No backups.** That is 6.2, and it is the next thing.
+- **Backups live on the same machine.** Verified restores, yes; off-site, no.
+  See above — that is the largest remaining gap in this file.
 - **One machine, no failover.** A compose file is the right size for one
   machine and the wrong tool for two. When there is a second, this decision is
   worth reopening rather than extending.

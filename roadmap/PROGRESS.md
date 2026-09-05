@@ -7,6 +7,57 @@ wins is a log that stops being read.
 
 ---
 
+## 2026-09-05 — Phase 6.2: a backup that has been restored, not one that exists
+
+Every backup is restored into a scratch database and interrogated before it
+counts as a backup. That is the feature, and three measurements made it the
+only defensible design (D63):
+
+- `pg_dump` run as the **application** role hits row-level security, prints one
+  error, **exits 0**, and writes a plausible 54 KB file with not one row
+  belonging to any tenant. Nothing downstream would have noticed.
+- `pg_restore` prints errors and exits 0 as well.
+- `n_live_tup`, the cheap way to count rows, read 4,331 against a true 55,839
+  on this database — the first version of the row check used it, and an
+  estimate that reads zero for a populated table makes the emptiness check
+  silently skip the table it exists to protect.
+
+So neither tool's exit code is evidence. Five questions are asked of the
+restored database instead: the revision matches, no table is missing, **every
+table with a row-level-security policy in the source has one in the restore**,
+no table that had rows came back empty, and pgvector is present. The third is
+the one whose absence would be invisible — a restore with the tables and not
+the policies is one where every tenant can read every other tenant.
+
+Verified in the container, not just on the host: `ok: verified — no problems`,
+with a version-matched pg_dump producing no restore noise at all. The tests
+hand the verifier a dump taken as the application role, a truncated file, and
+a file that is not an archive, and insist it says so — a verifier that only
+ever reports success is indistinguishable from one that returns True.
+
+**Redis was removed** (D64). It was in both compose files with a setting in
+config, no client library, and `redis_url` appearing in exactly one place in
+the repository: its own definition. Found by asking what needs backing up and
+finding the answer was "nothing, because nothing writes to it".
+
+The staff console now shows when a backup was last *verified* rather than last
+taken, and `snapshot()["healthy"]` is false while that is stale. A platform
+serving requests with nothing backed up for a week is working, which is a
+different word.
+
+Also fixed on the way: the Dockerfile hardcoded `bookworm` for the PostgreSQL
+apt repository and `python:3.12-slim` had moved to trixie underneath it, so the
+image build failed. The codename is read from the base image now.
+
+648 tests, none skipped.
+
+**The gap that remains, and it is the big one**: the dumps sit on the same
+machine as the database. This survives a dropped table, a bad migration and a
+careless DELETE. It does not survive losing the host, and off-site copying is
+not implemented — when it is, the copy must be encrypted before it leaves.
+
+---
+
 ## 2026-09-05 — Phase 6.1: the platform runs as a deployment, not as instructions
 
 Ten containers from one compose file: Postgres with pgvector, Redis, Temporal,

@@ -193,6 +193,17 @@ export type OpsHealth = {
   alerts_configured: boolean
   healthy: boolean
   errors: { open?: number; active_last_hour?: number; occurrences_last_day?: number; unavailable?: string }
+  // `last_verified_at` is the one that means anything. A backup that was taken
+  // and never restored is a hypothesis, and the two dates differing is exactly
+  // the state worth seeing.
+  backups: {
+    last_success_at?: string | null
+    last_verified_at?: string | null
+    last_attempt_at?: string | null
+    failures?: number
+    stale: boolean
+    unavailable?: string
+  }
 }
 
 export type TrailEntry = {
